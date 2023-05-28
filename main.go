@@ -2,9 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +21,6 @@ var (
 		SilenceUsage:     false,
 		TraverseChildren: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Hello, world!")
 			p := tea.NewProgram(initialModel())
 			if _, err := p.Run(); err != nil {
 				fmt.Printf("Alas, there's been an error: %v", err)
@@ -32,7 +36,14 @@ type issue struct {
 	author      string
 	title       string
 
+	metadata []tag
+
 	conversation []card
+}
+
+type tag struct {
+	key    string
+	values []string
 }
 
 type card struct {
@@ -44,19 +55,152 @@ type card struct {
 
 func initialModel() issue {
 	return issue{
-		// Our to-do list is a grocery list
-		//choices:  []string{"Buy carrots", "Buy celery", "Buy kohlrabi"},
+		//
+		id:          "00000",
+		dateCreated: "2023-05-26T23:35:36-0400",
+		author:      "brendanberg",
+		title:       "What is ish?",
 
+		metadata: []tag{
+			{
+				key:    "state",
+				values: []string{"open"},
+			},
+			{
+				key:    "assignees",
+				values: []string{"brendanberg", "jhc"},
+			},
+		},
 		// A map which indicates which choices are selected. We're using
 		// the  map like a mathematical set. The keys refer to the indexes
 		// of the `choices` slice, above.
-		conversation: make([]card, 2),
+		//conversation: make([]card, 2),
+		conversation: []card{
+			{
+				id:          "001",
+				dateCreated: "2023-05-27T13:41:50-0400",
+				author:      "brendanberg",
+				content:     "**ish** is a file format convention and a set of utilities for distributed, file-based issue tracking.",
+			},
+			{
+				id:          "002",
+				dateCreated: "2023-05-27T23:37:18-0400",
+				author:      "brendanberg",
+				content: `An **ish** installation consists of a library and a command line utility.
+The library provides a directory scanner, parser, and database API,
+while the command line app provides a terminal UI to interact with issues.
+
+## TODO:
+
+- [x] Learn the basics of the charmbracelet tools
+- [ ] Write parser
+- [ ] Build ish DB
+- [ ] Create ish commands
+  - [ ] ish init
+  - [ ] ish new [TITLE]
+  - [ ] ish list [QUERY]
+  - [ ] ish edit [HASH]`,
+			},
+		},
 	}
 }
 
 func (i issue) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
+}
+
+func (ish issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
+	switch msg := msg.(type) {
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return ish, tea.Quit
+		}
+	}
+
+	return ish, nil
+}
+
+const (
+	ISO8601  = "2006-01-02T15:04:05Z0700"
+	DateTime = "Jan 2, 2006" // 15:04:05 MST"
+)
+
+var titleStyle = lipgloss.NewStyle().
+	Margin(0, 0, 0, 2).
+	Padding(0, 1).
+	Bold(true).
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("5"))
+
+var bylineBlockStyle = lipgloss.NewStyle().
+	Margin(1, 0, 0, 2).
+	Padding(0)
+
+var bylineStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("11"))
+
+var bylineEmphasisStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("11")).
+	Bold(true)
+
+var blockStyle = lipgloss.NewStyle().
+	// Border(lipgloss.RoundedBorder(), true).
+	Margin(0, 0, 1).
+	Padding(1) //.Background(lipgloss.Color("2"))
+
+var cardStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder(), true).
+	BorderForeground(lipgloss.Color("11")).
+	Foreground(lipgloss.Color("15")).
+	Padding(0, 1).
+	MarginBottom(0)
+
+// var selectedCardStyle = cardStyle.Copy().BorderForeground(lipgloss.Color("15"))
+
+func (ish issue) View() string {
+	t, err := time.Parse(ISO8601, ish.dateCreated)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	c := make([]string, 0)
+
+	c = append(c, titleStyle.Render(fmt.Sprintf("[%s] %s", ish.id, ish.title)))
+	c = append(c, bylineBlockStyle.Render(
+		bylineEmphasisStyle.Render(ish.author)+
+			bylineStyle.Render(" opened this issue on "+t.Format(DateTime)),
+	))
+
+	// TODO: include issue tags
+
+	for _, card := range ish.conversation {
+		t, err := time.Parse(ISO8601, card.dateCreated)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		c = append(c, bylineBlockStyle.Render(
+			bylineEmphasisStyle.Render(card.author)+
+				bylineStyle.Render(" commented on "+t.Format(DateTime)),
+		))
+
+		content, err := glamour.Render(card.content, "default.json")
+
+		if err == nil {
+			c = append(c, cardStyle.Render(strings.TrimRight(content, "\n")))
+		} else {
+			c = append(c, cardStyle.Render(card.content))
+		}
+
+	}
+
+	return blockStyle.Render(lipgloss.JoinVertical(lipgloss.Left, c...))
 }
 
 func main() {
