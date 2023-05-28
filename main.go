@@ -81,15 +81,21 @@ func initialModel() issue {
 				id:          "001",
 				dateCreated: "2023-05-27T13:41:50-0400",
 				author:      "brendanberg",
-				content:     "**ish** is a file format convention and a set of utilities for distributed, file-based issue tracking.",
+				content: `**ish** is a file format convention and a set of utilities for distributed, file-based issue tracking.
+
+**ish** consists of a library and a command line utility.
+The library provides a directory scanner, parser, and database API,
+while the command line app provides a terminal UI to interact with issues.`,
 			},
 			{
 				id:          "002",
 				dateCreated: "2023-05-27T23:37:18-0400",
 				author:      "brendanberg",
-				content: `An **ish** installation consists of a library and a command line utility.
-The library provides a directory scanner, parser, and database API,
-while the command line app provides a terminal UI to interact with issues.
+				content: `The **ish** command line tools rely on go modules from [charmbracelet](https://github.com/charmbracelet):
+
+- [Bubbletea](https://github.com/charmbracelet/bubbletea), a terminal UI framework
+- [Glamour](https://github.com/charmbracelet/glamour), a markdown formatting tool
+- [Lipgloss](https://github.com/charmbracelet/lipgloss), a terminal style library
 
 ## TODO:
 
@@ -161,17 +167,17 @@ var cardStyle = lipgloss.NewStyle().
 	MarginBottom(0)
 
 var tagStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("11")).
-	Bold(true)
+	Foreground(lipgloss.Color("11"))
 
 var valueStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("7"))
 
 var greenStyle = valueStyle.Copy().Background(lipgloss.Color("2")).Padding(0, 1)
-var yellowStyle = lipgloss.NewStyle().Background(lipgloss.Color("3")).Padding(0, 1)
-var blueStyle = lipgloss.NewStyle().Background(lipgloss.Color("4")).Padding(0, 1)
-var magentaStyle = lipgloss.NewStyle().Background(lipgloss.Color("5")).Padding(0, 1)
-var aquaStyle = lipgloss.NewStyle().Background(lipgloss.Color("6")).Padding(0, 1)
+var yellowStyle = valueStyle.Copy().Background(lipgloss.Color("3")).Padding(0, 1)
+var blueStyle = valueStyle.Copy().Background(lipgloss.Color("4")).Padding(0, 1)
+var magentaStyle = valueStyle.Copy().Background(lipgloss.Color("5")).Padding(0, 1)
+var aquaStyle = valueStyle.Copy().Background(lipgloss.Color("6")).Padding(0, 1)
+var greyStyle = valueStyle.Copy().Background(lipgloss.Color("10")).Padding(0, 1)
 
 // var selectedCardStyle = cardStyle.Copy().BorderForeground(lipgloss.Color("15"))
 
@@ -185,7 +191,7 @@ func (ish issue) View() string {
 	c := make([]string, 0)
 
 	c = append(c, titleStyle.Render(fmt.Sprintf("[%s] %s", ish.id, ish.title)))
-	c = append(c, bylineBlockStyle.Render(
+	c = append(c, bylineBlockStyle.Copy().MarginBottom(1).Render(
 		bylineEmphasisStyle.Render(ish.author)+
 			bylineStyle.Render(" opened this issue on "+t.Format(DateTime)),
 	))
@@ -194,6 +200,12 @@ func (ish issue) View() string {
 		vals := slice.Map(tag.values, func(s string) string {
 			switch s {
 			case "open":
+				return greyStyle.Render(s)
+			case "in progress":
+				return blueStyle.Render(s)
+			case "in review":
+				return blueStyle.Render(s)
+			case "closed":
 				return greenStyle.Render(s)
 			default:
 				return valueStyle.Render(s)
@@ -201,7 +213,7 @@ func (ish issue) View() string {
 		})
 
 		s := strings.Join(vals, ", ")
-		c = append(c, "- "+tagStyle.Render(tag.key+": ")+s)
+		c = append(c, "• "+tagStyle.Render(tag.key+": ")+s)
 	}
 
 	for _, card := range ish.conversation {
