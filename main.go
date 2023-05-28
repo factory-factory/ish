@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/akrennmair/slice"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -159,6 +160,19 @@ var cardStyle = lipgloss.NewStyle().
 	Padding(0, 1).
 	MarginBottom(0)
 
+var tagStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("11")).
+	Bold(true)
+
+var valueStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("7"))
+
+var greenStyle = valueStyle.Copy().Background(lipgloss.Color("2")).Padding(0, 1)
+var yellowStyle = lipgloss.NewStyle().Background(lipgloss.Color("3")).Padding(0, 1)
+var blueStyle = lipgloss.NewStyle().Background(lipgloss.Color("4")).Padding(0, 1)
+var magentaStyle = lipgloss.NewStyle().Background(lipgloss.Color("5")).Padding(0, 1)
+var aquaStyle = lipgloss.NewStyle().Background(lipgloss.Color("6")).Padding(0, 1)
+
 // var selectedCardStyle = cardStyle.Copy().BorderForeground(lipgloss.Color("15"))
 
 func (ish issue) View() string {
@@ -176,7 +190,19 @@ func (ish issue) View() string {
 			bylineStyle.Render(" opened this issue on "+t.Format(DateTime)),
 	))
 
-	// TODO: include issue tags
+	for _, tag := range ish.metadata {
+		vals := slice.Map(tag.values, func(s string) string {
+			switch s {
+			case "open":
+				return greenStyle.Render(s)
+			default:
+				return valueStyle.Render(s)
+			}
+		})
+
+		s := strings.Join(vals, ", ")
+		c = append(c, "- "+tagStyle.Render(tag.key+": ")+s)
+	}
 
 	for _, card := range ish.conversation {
 		t, err := time.Parse(ISO8601, card.dateCreated)

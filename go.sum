@@ -1,3 +1,5 @@
+github.com/akrennmair/slice v0.0.0-20220105203817-49445747ab81 h1:HnuAxArB0uUxqjRvZdjhBxE3uPXNeJvNNbuaV4QhHMU=
+github.com/akrennmair/slice v0.0.0-20220105203817-49445747ab81/go.mod h1:jk5mJ+KFznfxbCEsOPgmJkozvBfVGeaqIMs31NhXlv0=
 github.com/alecthomas/chroma v0.10.0 h1:7XDcGkCQopCNKjZHfYrNLraA+M7e0fMiJ/Mfikbfjek=
 github.com/alecthomas/chroma v0.10.0/go.mod h1:jtJATyUxlIORhUOFNA9NZDWGAQ8wpxQQqNSB4rjA/1s=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=

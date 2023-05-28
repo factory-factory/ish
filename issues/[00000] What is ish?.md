@@ -13,5 +13,5 @@
 
 ## What do we mean when we talk about issue tracking?
 
-In most software projects, we want to enumerate tasks (whether features, bugs, or improvements), and track progress. Very often we rely on
+In most software projects, we want to enumerate tasks (features, bugs, or improvements) and track progress. For large projects, there are enterprise tools that wrap the
 The ish command line utilities consist of a parser and database as well as a
