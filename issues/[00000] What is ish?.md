@@ -3,7 +3,7 @@
 [<brendan@berg.industries> 2023-05-26T23:35:36-0400]
 
 - state: open
-- assignee: brendanberg, jhc
+- assignees: brendanberg, jhc
 
 ---
 

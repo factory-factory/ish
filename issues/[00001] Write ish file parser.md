@@ -2,8 +2,10 @@
 
 [<brendan@berg.industries> 2023-05-28T11:55:23-0400]
 
-- state: open
-- assignee: brendanberg
+- state
+  - in progress
+- assignees: brendanberg
+- estimate: 8h
 
 ---
 
