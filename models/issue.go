@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,22 +12,24 @@ import (
 )
 
 type Issue struct {
-	id          string
-	dateCreated string
-	author      string
-	title       string
+	Id          string
+	DateCreated string
+	Author      string
+	Title       string
 
-	metadata []Tag
+	Metadata []Tag
 
-	conversation []Card
+	Conversation []Card
 
 	selectedComment int
 	cursor          int
 }
 
 const (
-	ISO8601  = "2006-01-02T15:04:05Z0700"
-	DateTime = "Jan 2, 2006" // 15:04:05 MST"
+	ISO8601A  = "2006-01-02 15:04:05Z0700"
+	ISO8601B  = "2006-01-02T15:04:05Z0700"
+	Timestamp = "2006-01-02 15:04:05 -0700" // Local time :sweat-smile:
+	DateTime  = "Jan 2, 2006"               // 15:04:05 MST"
 )
 
 // type Cursor struct {
@@ -38,56 +41,37 @@ const (
 func InitialModel() Issue {
 	return Issue{
 		//
-		id:          "00000",
-		dateCreated: "2023-05-26T23:35:36-0400",
-		author:      "brendanberg",
-		title:       "What is ish?",
+		Id:          "00000",
+		DateCreated: "2023-05-26T23:35:36-0400",
+		Author:      "brendanberg",
+		Title:       "What is ish?",
 
-		metadata: []Tag{
+		Metadata: []Tag{
 			{
-				key:    "state",
-				values: []string{"open"},
+				Key:    "state",
+				Values: []string{"in progress"},
 			},
 			{
-				key:    "assignees",
-				values: []string{"brendanberg", "jhc"},
+				Key:    "assignees",
+				Values: []string{"brendanberg", "jhc"},
 			},
 		},
 		// A map which indicates which choices are selected. We're using
 		// the  map like a mathematical set. The keys refer to the indexes
 		// of the `choices` slice, above.
 		//conversation: make([]card, 2),
-		conversation: []Card{
+		Conversation: []Card{
 			{
-				id:          "001",
-				dateCreated: "2023-05-27T13:41:50-0400",
-				author:      "brendanberg",
-				content: `**ish** is a file format convention and a set of utilities for distributed, file-based issue tracking.
-
-**ish** consists of a library and a command line utility.
-The library provides a directory scanner, parser, and database API,
-while the command line app provides a terminal UI to interact with issues.`,
+				Id:          "001",
+				DateCreated: "2023-05-27T13:41:50-0400",
+				Author:      "brendanberg",
+				Content:     nil,
 			},
 			{
-				id:          "002",
-				dateCreated: "2023-05-27T23:37:18-0400",
-				author:      "brendanberg",
-				content: `The **ish** command line tools rely on go modules from [charmbracelet](https://github.com/charmbracelet):
-
-- [Bubbletea](https://github.com/charmbracelet/bubbletea), a terminal UI framework
-- [Glamour](https://github.com/charmbracelet/glamour), a markdown formatting tool
-- [Lipgloss](https://github.com/charmbracelet/lipgloss), a terminal style library
-
-## TODO:
-
-- [x] Learn the basics of the charmbracelet tools
-- [ ] Write parser
-- [ ] Build ish DB
-- [ ] Create ish commands
-  - [ ] ish init
-  - [ ] ish new [TITLE]
-  - [ ] ish list [QUERY]
-  - [ ] ish edit [HASH]`,
+				Id:          "002",
+				DateCreated: "2023-05-27T23:37:18-0400",
+				Author:      "brendanberg",
+				Content:     nil,
 			},
 		},
 
@@ -102,7 +86,6 @@ func (ish Issue) Init() tea.Cmd {
 }
 
 func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
@@ -110,29 +93,37 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return ish, tea.Quit
 
-		case "tab":
-			metaLen := len(ish.metadata)
-			convLen := len(ish.conversation)
+		case "tab", "shift+tab":
+			metaLen := len(ish.Metadata)
+			convLen := len(ish.Conversation)
 			c := ish.cursor
 
 			switch {
 			case c >= 2 && c < metaLen+2:
-				meta, _ := ish.metadata[c-2].Update(SelectMsg(false))
-				ish.metadata[c-2] = meta.(Tag)
+				meta, _ := ish.Metadata[c-2].Update(SelectMsg(false))
+				ish.Metadata[c-2] = meta.(Tag)
 			case c >= metaLen+2 && c < metaLen+convLen+2:
-				comment, _ := ish.conversation[c-metaLen-2].Update(SelectMsg(false))
-				ish.conversation[c-metaLen-2] = comment.(Card)
+				comment, _ := ish.Conversation[c-metaLen-2].Update(SelectMsg(false))
+				ish.Conversation[c-metaLen-2] = comment.(Card)
 			}
 
-			c += 1
+			switch msg.String() {
+			case "tab":
+				c += 1
+			case "shift+tab":
+				c -= 1
+				if c < 0 {
+					c = metaLen + convLen + 1
+				}
+			}
 
 			switch {
 			case c >= 2 && c < metaLen+2:
-				meta, _ := ish.metadata[c-2].Update(SelectMsg(true))
-				ish.metadata[c-2] = meta.(Tag)
+				meta, _ := ish.Metadata[c-2].Update(SelectMsg(true))
+				ish.Metadata[c-2] = meta.(Tag)
 			case c >= metaLen+2 && c < metaLen+convLen+2:
-				comment, _ := ish.conversation[c-metaLen-2].Update(SelectMsg(true))
-				ish.conversation[c-metaLen-2] = comment.(Card)
+				comment, _ := ish.Conversation[c-metaLen-2].Update(SelectMsg(true))
+				ish.Conversation[c-metaLen-2] = comment.(Card)
 			case c >= metaLen+convLen+2:
 				c = 0
 			}
@@ -147,7 +138,19 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (ish Issue) View() string {
-	t, err := time.Parse(ISO8601, ish.dateCreated)
+	t, err := time.Parse(time.RFC3339, ish.DateCreated)
+
+	if err != nil {
+		t, err = time.Parse(ISO8601A, ish.DateCreated)
+	}
+
+	if err != nil {
+		t, err = time.Parse(ISO8601B, ish.DateCreated)
+	}
+
+	if err != nil {
+		t, err = time.Parse(Timestamp, ish.DateCreated)
+	}
 
 	if err != nil {
 		log.Fatal(err)
@@ -155,21 +158,47 @@ func (ish Issue) View() string {
 
 	c := make([]string, 0)
 
-	c = append(c, ish.getTitleStyle().Render(fmt.Sprintf("[%s] %s", ish.id, ish.title)))
+	c = append(c, ish.getTitleStyle().Render(fmt.Sprintf("[%s] %s", ish.Id, ish.Title)))
 	c = append(c, styles.BylineBlock.Copy().MarginBottom(1).Render(
-		styles.BylineEmphasis.Render(ish.author)+
+		styles.BylineEmphasis.Render(ish.Author)+
 			styles.Byline.Render(" opened this issue on "+t.Format(DateTime)),
 	))
 
-	for _, tag := range ish.metadata {
+	for _, tag := range ish.Metadata {
 		c = append(c, tag.View())
 	}
 
-	for _, card := range ish.conversation {
+	for _, card := range ish.Conversation {
 		c = append(c, card.View())
 	}
 
 	return styles.Block.Render(lipgloss.JoinVertical(lipgloss.Left, c...))
+}
+
+func (ish Issue) Print() {
+	fmt.Printf("Title: %s\n", ish.Title)
+	fmt.Printf("Author: %s\n", ish.Author)
+	fmt.Printf("Date: %s\n", ish.DateCreated)
+
+	if len(ish.Metadata) > 0 {
+		fmt.Print("Metadata:\n")
+		for _, elt := range ish.Metadata {
+			fmt.Printf("  Key('%s'):", elt.Key)
+			for _, val := range elt.Values {
+				fmt.Printf(" Value('%s')", val)
+			}
+			fmt.Print("\n")
+		}
+	}
+
+	for _, card := range ish.Conversation {
+		fmt.Print("-----\n")
+		fmt.Printf("Author: %s\n", card.Author)
+		fmt.Printf("Date: %s\n", card.DateCreated)
+		fmt.Print("Content:\n  ")
+		fmt.Print(strings.ReplaceAll(*card.Content, "\n", "\n  "))
+	}
+
 }
 
 func (ish Issue) getTitleStyle() lipgloss.Style {

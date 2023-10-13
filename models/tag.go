@@ -9,8 +9,8 @@ import (
 )
 
 type Tag struct {
-	key    string
-	values []string
+	Key    string
+	Values []string
 
 	selected bool
 }
@@ -31,7 +31,7 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t Tag) View() string {
-	vals := slice.Map(t.values, func(s string) string {
+	vals := slice.Map(t.Values, func(s string) string {
 		switch s {
 		case "open":
 			return styles.Grey.Render(s)
@@ -50,8 +50,8 @@ func (t Tag) View() string {
 
 	switch t.selected {
 	case true:
-		return "• " + styles.TagSelected.Render(t.key+": ") + s
+		return styles.TagSelected.Render("• "+t.Key+": ") + s
 	default:
-		return "• " + styles.Tag.Render(t.key+": ") + s
+		return styles.Tag.Render("• "+t.Key+": ") + s
 	}
 }

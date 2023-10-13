@@ -11,6 +11,11 @@ require (
 )
 
 require (
+	github.com/alecthomas/participle v0.7.1 // indirect
+	github.com/alecthomas/participle/v2 v2.0.0 // indirect
+)
+
+require (
 	github.com/akrennmair/slice v0.0.0-20220105203817-49445747ab81
 	github.com/alecthomas/chroma v0.10.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

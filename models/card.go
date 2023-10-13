@@ -4,18 +4,21 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/iridescent-software/ish/styles"
+	"github.com/muesli/termenv"
 )
 
 type Card struct {
-	id          string
-	dateCreated string
-	author      string
-	content     string
+	Id          string
+	DateCreated string
+	Author      string
+	Content     *string
 
 	selected bool
 	// editing  bool
@@ -39,25 +42,67 @@ func (c Card) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (c Card) View() string {
-	t, err := time.Parse(ISO8601, c.dateCreated)
+	t, err := time.Parse(time.RFC3339, c.DateCreated)
+
+	if err != nil {
+		t, err = time.Parse(ISO8601A, c.DateCreated)
+	}
+
+	if err != nil {
+		t, err = time.Parse(ISO8601B, c.DateCreated)
+	}
+
+	if err != nil {
+		t, err = time.Parse(Timestamp, c.DateCreated)
+	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	byline := styles.BylineBlock.Render(
-		styles.BylineEmphasis.Render(c.author) +
+		styles.BylineEmphasis.Render(c.Author) +
 			styles.Byline.Render(" commented on "+t.Format(DateTime)),
 	)
 
-	content, err := glamour.Render(c.content, "default.json")
+	var style ansi.StyleConfig
+
+	if termenv.HasDarkBackground() {
+		style = glamour.DarkStyleConfig
+	} else {
+		style = glamour.LightStyleConfig
+	}
+
+	*style.Document.Margin = 0
+	style.Document.BlockPrefix = ""
+	style.Document.BlockSuffix = ""
+
+	if termenv.HasDarkBackground() {
+		glamour.DarkStyleConfig = style
+	} else {
+		glamour.LightStyleConfig = style
+	}
+
+	var content string
+
+	if c.Content == nil {
+		content, err = glamour.Render("", "auto")
+	} else {
+		content, err = glamour.Render(*c.Content, "auto")
+	}
 
 	var comment string
 
 	if err == nil {
-		comment = c.getStyle().Render(strings.TrimRight(content, "\n"))
+		content = strings.TrimRight(content, "\n\t ")
+
+		if utf8.RuneCountInString(content) == 0 {
+			content = strings.Repeat(" ", 80)
+		}
+
+		comment = c.getStyle().Render(content)
 	} else {
-		comment = c.getStyle().Render(c.content)
+		comment = c.getStyle().Render(*c.Content)
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, byline, comment)

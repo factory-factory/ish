@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iridescent-software/ish/models"
+	"github.com/iridescent-software/ish/parse"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -18,9 +18,9 @@ var (
 		SilenceUsage:     false,
 		TraverseChildren: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			p := tea.NewProgram(models.InitialModel())
+			p := tea.NewProgram(parse.InitialModel())
 			if _, err := p.Run(); err != nil {
-				fmt.Printf("Alas, there's been an error: %v", err)
+				fmt.Printf("Oh no, an error:\n%v", err)
 				os.Exit(1)
 			}
 		},
