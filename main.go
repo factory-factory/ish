@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iridescent-software/ish/parse"
+	"github.com/factory-factory/ish/parse"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 )
 

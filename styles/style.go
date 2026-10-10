@@ -1,7 +1,7 @@
 package styles
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var Title = lipgloss.NewStyle().
@@ -25,9 +25,11 @@ var BylineEmphasis = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("11")).
 	Bold(true)
 
-var Block = lipgloss.NewStyle().
-	Margin(0, 0, 1).
+var Header = lipgloss.NewStyle().
 	Padding(1)
+
+var Body = lipgloss.NewStyle().
+	Padding(0, 1)
 
 var cardBase = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("15")).

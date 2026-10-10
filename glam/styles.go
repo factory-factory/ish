@@ -3,7 +3,7 @@ package glam
 //go:generate go run ./internal/generate-style-json
 
 import (
-	"github.com/charmbracelet/glamour/ansi"
+	"charm.land/glamour/v2/ansi"
 )
 
 var (

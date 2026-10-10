@@ -9,8 +9,8 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/iridescent-software/ish/glam"
-	"github.com/iridescent-software/ish/models"
+	"github.com/factory-factory/ish/glam"
+	"github.com/factory-factory/ish/models"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"

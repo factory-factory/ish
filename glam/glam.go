@@ -16,7 +16,7 @@ import (
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
 
-	"github.com/charmbracelet/glamour/ansi"
+	"charm.land/glamour/v2/ansi"
 )
 
 // A TermRendererOption sets an option on a TermRenderer.
@@ -71,8 +71,7 @@ func NewTermRenderer(options ...TermRendererOption) (*TermRenderer, error) {
 			),
 		),
 		ansiOptions: ansi.Options{
-			WordWrap:     80,
-			ColorProfile: termenv.TrueColor,
+			WordWrap: 80,
 		},
 	}
 	for _, o := range options {
@@ -95,15 +94,6 @@ func NewTermRenderer(options ...TermRendererOption) (*TermRenderer, error) {
 func WithBaseURL(baseURL string) TermRendererOption {
 	return func(tr *TermRenderer) error {
 		tr.ansiOptions.BaseURL = baseURL
-		return nil
-	}
-}
-
-// WithColorProfile sets the TermRenderer's color profile
-// (TrueColor / ANSI256 / ANSI).
-func WithColorProfile(profile termenv.Profile) TermRendererOption {
-	return func(tr *TermRenderer) error {
-		tr.ansiOptions.ColorProfile = profile
 		return nil
 	}
 }

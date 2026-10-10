@@ -3,9 +3,9 @@ package models
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/akrennmair/slice"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/iridescent-software/ish/styles"
+	"github.com/factory-factory/ish/styles"
 )
 
 type Tag struct {
@@ -30,7 +30,7 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return t, nil
 }
 
-func (t Tag) View() string {
+func (t Tag) View() tea.View {
 	vals := slice.Map(t.Values, func(s string) string {
 		switch s {
 		case "open":
@@ -50,8 +50,8 @@ func (t Tag) View() string {
 
 	switch t.selected {
 	case true:
-		return styles.TagSelected.Render("• "+t.Key+": ") + s
+		return tea.NewView(styles.TagSelected.Render("• "+t.Key+": ") + s)
 	default:
-		return styles.Tag.Render("• "+t.Key+": ") + s
+		return tea.NewView(styles.Tag.Render("• "+t.Key+": ") + s)
 	}
 }

@@ -6,11 +6,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/ansi"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/iridescent-software/ish/styles"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/ansi"
+	glamstyles "charm.land/glamour/v2/styles"
+	"charm.land/lipgloss/v2"
+	"github.com/factory-factory/ish/styles"
 	"github.com/muesli/termenv"
 )
 
@@ -41,7 +42,7 @@ func (c Card) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, nil
 }
 
-func (c Card) View() string {
+func (c Card) View() tea.View {
 	t, err := time.Parse(time.RFC3339, c.DateCreated)
 
 	if err != nil {
@@ -68,27 +69,26 @@ func (c Card) View() string {
 	var style ansi.StyleConfig
 
 	if termenv.HasDarkBackground() {
-		style = glamour.DarkStyleConfig
+		style = glamstyles.DarkStyleConfig
 	} else {
-		style = glamour.LightStyleConfig
+		style = glamstyles.LightStyleConfig
 	}
 
-	*style.Document.Margin = 0
+	margin := uint(0)
+	style.Document.Margin = &margin
 	style.Document.BlockPrefix = ""
 	style.Document.BlockSuffix = ""
 
-	if termenv.HasDarkBackground() {
-		glamour.DarkStyleConfig = style
-	} else {
-		glamour.LightStyleConfig = style
-	}
-
 	var content string
 
-	if c.Content == nil {
-		content, err = glamour.Render("", "auto")
-	} else {
-		content, err = glamour.Render(*c.Content, "auto")
+	r, err := glamour.NewTermRenderer(glamour.WithStyles(style))
+
+	if err == nil {
+		if c.Content == nil {
+			content, err = r.Render("")
+		} else {
+			content, err = r.Render(*c.Content)
+		}
 	}
 
 	var comment string
@@ -105,7 +105,7 @@ func (c Card) View() string {
 		comment = c.getStyle().Render(*c.Content)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, byline, comment)
+	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, comment))
 }
 
 func (c Card) getStyle() lipgloss.Style {
