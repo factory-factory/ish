@@ -31,10 +31,11 @@ var currentUserName = func() (string, error) {
 	return u.Username, nil
 }
 
-// currentUser returns the author of new issues created in dir: git's
-// user.email, or the name of the user running ish if that isn't set. Bylines
-// separate the author from the date with a space, so spaces are removed.
-func currentUser(dir string) string {
+// CurrentUser returns the author of new issues and comments created in dir:
+// git's user.email, or the name of the user running ish if that isn't set.
+// Bylines separate the author from the date with a space, so spaces are
+// removed.
+func CurrentUser(dir string) string {
 	author, err := gitUserEmail(dir)
 
 	if err != nil || author == "" {

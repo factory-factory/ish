@@ -67,6 +67,52 @@ type Issue struct {
 	// saveErr is the error from the last attempt to save the issue. While
 	// it's set, closing the issue or quitting discards unsaved changes.
 	saveErr error
+
+	// author is the author of new comments. See SetAuthor.
+	author string
+
+	// newComment reports whether the card being edited is a comment that was
+	// just added, which is removed if its first edit is cancelled or empty.
+	newComment bool
+}
+
+// now returns the current time. Tests replace it.
+var now = time.Now
+
+// SetAuthor sets the author of comments added to the issue. Without one,
+// comments can't be added.
+func (ish *Issue) SetAuthor(author string) {
+	ish.author = author
+}
+
+// addComment appends an empty comment by the issue's author, selects it, and
+// starts editing it.
+func (ish *Issue) addComment() tea.Cmd {
+	content := ""
+
+	ish.Conversation = append(ish.Conversation, Card{
+		Author:      ish.author,
+		DateCreated: now().Format(time.RFC3339),
+		Content:     &content,
+	})
+
+	ish.syncViewport()
+	ish.setCursor(ish.firstCard() + len(ish.Conversation) - 1)
+	cmd := ish.startEdit()
+	ish.newComment = true
+
+	return cmd
+}
+
+// removeNewComment removes the comment that was just added, and selects the
+// comment before it, if any.
+func (ish *Issue) removeNewComment() {
+	ish.Conversation = ish.Conversation[:len(ish.Conversation)-1]
+	ish.cursor = 0
+
+	if len(ish.Conversation) > 0 {
+		ish.setCursor(ish.firstCard() + len(ish.Conversation) - 1)
+	}
 }
 
 // SaveFunc writes an issue to storage.
@@ -110,6 +156,7 @@ func (ish *Issue) SetClosable(closable bool) {
 func (ish Issue) keyMap() keyMap {
 	k := keys
 	k.Edit.SetEnabled(ish.cursor > 0)
+	k.Comment.SetEnabled(ish.author != "")
 	k.Back.SetEnabled(ish.closable)
 
 	if i := ish.cardIndex(); i >= 0 {
@@ -316,6 +363,10 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keys.Edit):
 			cmd := ish.startEdit()
+			return ish, cmd
+
+		case key.Matches(msg, keys.Comment):
+			cmd := ish.addComment()
 			return ish, cmd
 
 		case key.Matches(msg, keys.Todos):
@@ -548,14 +599,22 @@ func (ish *Issue) stopEdit(save bool) {
 		}
 
 	case ish.cardIndex() >= 0:
-		if save {
-			ish.dirty = ish.Conversation[ish.cardIndex()].commitEdit() || ish.dirty
-		} else {
-			ish.Conversation[ish.cardIndex()].cancelEdit()
+		card := &ish.Conversation[ish.cardIndex()]
+
+		switch {
+		// A new comment that's cancelled or left empty is removed.
+		case ish.newComment && (!save || strings.TrimSpace(card.editor.Value()) == ""):
+			card.cancelEdit()
+			ish.removeNewComment()
+		case save:
+			ish.dirty = card.commitEdit() || ish.dirty
+		default:
+			card.cancelEdit()
 		}
 	}
 
 	ish.editing = false
+	ish.newComment = false
 	ish.resize()
 
 	if i := ish.cardIndex(); i >= 0 {

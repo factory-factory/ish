@@ -252,7 +252,7 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m.show(models.NewIssue(id, currentUser(m.dir), now()))
+	return m.show(models.NewIssue(id, CurrentUser(m.dir), now()))
 }
 
 // show switches to the view of issue, which is saved to the list's directory
@@ -261,6 +261,7 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
+	issue.SetAuthor(CurrentUser(m.dir))
 	m.issue = issue
 	m.openId = issue.Id
 

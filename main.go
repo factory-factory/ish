@@ -30,6 +30,7 @@ var (
 				issue.SetSave(func(issue models.Issue) error {
 					return parse.SaveIssue(parse.IssuesDir, issue)
 				})
+				issue.SetAuthor(app.CurrentUser(parse.IssuesDir))
 				model = issue
 			} else {
 				issues, err := parse.ListIssues(parse.IssuesDir)

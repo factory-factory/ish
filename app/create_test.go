@@ -167,8 +167,8 @@ func TestCurrentUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stubUser(t, tt.email, tt.emailErr, tt.user, tt.userErr)
 
-			if got := currentUser(t.TempDir()); got != tt.want {
-				t.Errorf("currentUser() = %q, want %q", got, tt.want)
+			if got := CurrentUser(t.TempDir()); got != tt.want {
+				t.Errorf("CurrentUser() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -210,5 +210,32 @@ func TestExistingIssueDoesNotOpenEditing(t *testing.T) {
 
 	if issue := m.issue.(models.Issue); issue.Title != "First" {
 		t.Errorf("Title = %q, want it unchanged", issue.Title)
+	}
+}
+
+func TestCommentInOpenedIssueIsSaved(t *testing.T) {
+	stubUser(t, "alice@example.com", nil, "alice", nil)
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	// Open the issue, add a comment, and go back.
+	m = update(t, m, enter, tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m = typeText(t, m, "Looks good")
+	m = update(t, m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m = closeIssue(t, m, esc)
+
+	saved, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatalf("LoadIssue() error = %v", err)
+	}
+
+	last := saved.Conversation[len(saved.Conversation)-1]
+
+	if last.Author != "alice@example.com" || *last.Content != "Looks good" {
+		t.Errorf("last comment = %q by %q, want %q by alice@example.com", *last.Content, last.Author, "Looks good")
+	}
+	// The comment is dated when it was added.
+	if date, err := time.Parse(time.RFC3339, last.DateCreated); err != nil || time.Since(date) > time.Minute {
+		t.Errorf("last comment date = %q, want the current time in RFC 3339 format", last.DateCreated)
 	}
 }

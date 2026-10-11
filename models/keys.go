@@ -17,6 +17,7 @@ type keyMap struct {
 	Next         key.Binding
 	Prev         key.Binding
 	Edit         key.Binding
+	Comment      key.Binding
 	Todos        key.Binding
 	Back         key.Binding
 	Help         key.Binding
@@ -55,6 +56,13 @@ var keys = func() keyMap {
 			key.WithHelp("enter", "edit"),
 			key.WithDisabled(),
 		),
+		// Comment is enabled only for issues with an author for new comments.
+		// See Issue.SetAuthor.
+		Comment: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "comment"),
+			key.WithDisabled(),
+		),
 		// Todos is enabled only while the cursor is on a card with todo
 		// items.
 		Todos: key.NewBinding(
@@ -81,12 +89,12 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Todos, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.Todos, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Todos},
+		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.Todos},
 		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
