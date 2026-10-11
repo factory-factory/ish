@@ -86,7 +86,6 @@ const keyPrefix = "• "
 func (t *Tag) startKeyEdit(width int, isDark bool) tea.Cmd {
 	t.keyInput = textinput.New()
 	t.keyInput.Prompt = ""
-	t.keyInput.Placeholder = "key"
 	t.keyInput.SetStyles(textinput.DefaultStyles(isDark))
 	t.sizeEditor(width)
 	t.editingKey = true

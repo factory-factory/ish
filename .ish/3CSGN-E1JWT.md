@@ -48,3 +48,20 @@ Other details:
 - Added and deleted fields mark the issue as changed, and they're written to the file when the issue is closed or the program quits, like other edits. An unfinished new tag is discarded when quitting.
 - The help footer lists `m add field` and, with a tag selected, `⌫ delete field`. While confirming a delete it shows `⌫ delete field • any other key cancel`.
 - Added tests for adding a tag (key, then values), spaces in keys, empty values, each way of abandoning a new tag, quitting while adding one, saving it, deleting with both keys, deleting the last tags, cancelling with another key or by moving away, and the delete key elsewhere. There's also an end-to-end test that adds and deletes fields in an issue file through the list.
+
+---
+
+[brendan@berg.industries 2026-10-11T11:22:32-07:00]
+
+I've tested the new behavior in a freshly built binary. It largely looks good. I'm curious about something I've noticed though: when a new tag is created, it looks like there's a `k` under the cursor when edting the key attribute. It appears to be a rendering issue, as the key reflects what the user types when saved.
+
+---
+
+[Claude 2026-10-11T11:31:04-07:00]
+
+Good catch: it was a rendering issue, and it's fixed. Moved back to `in review`.
+
+- Cause: I'd given the new tag's key input a grey placeholder, `key`, as a hint. The input draws its cursor over the first character of the placeholder, and the rest of the placeholder wasn't drawn, so all you saw was a `k` under the cursor. Typing replaces the placeholder, which is why the saved key was always right.
+- Fix: the placeholder is removed, so the cursor sits on an empty field. The bullet and the help footer already show that the field is being edited.
+- Added a test that the new tag's line shows only the bullet before anything is typed, and the typed key afterwards. I checked that it fails with the placeholder put back (it shows ` • k`, matching what you saw).
+- Checked in the real app: after the bullet, the terminal now draws the cursor on an empty space, with no `k`.

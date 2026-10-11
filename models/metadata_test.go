@@ -302,3 +302,37 @@ func TestDeleteKeyElsewhere(t *testing.T) {
 		t.Errorf("tags = %v, want state with one character deleted", ish.Metadata)
 	}
 }
+
+// newTagLine returns the line of the issue's view showing the tag being
+// added, without ANSI escape sequences.
+func newTagLine(t *testing.T, ish Issue) string {
+	t.Helper()
+
+	lines := strings.Split(plain(ish), "\n")
+
+	for i, line := range lines {
+		if strings.Contains(line, "• state:") {
+			return strings.TrimRight(lines[i+1], " ")
+		}
+	}
+
+	t.Fatalf("no tag line in view:\n%s", plain(ish))
+	return ""
+}
+
+func TestNewTagKeyStartsEmpty(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish = update(t, ish, mKey)
+
+	// Only the bullet and the cursor are shown, with no stray characters
+	// such as a placeholder under the cursor.
+	if got := newTagLine(t, ish); got != " •" {
+		t.Errorf("new tag line = %q, want only the bullet before anything is typed", got)
+	}
+
+	ish = typeText(t, ish, "priority")
+
+	if got := newTagLine(t, ish); !strings.HasSuffix(got, "• priority") {
+		t.Errorf("new tag line = %q, want the typed key", got)
+	}
+}
