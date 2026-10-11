@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -25,16 +26,32 @@ type Byline struct {
 }
 
 // func main() {
-// 	issue := InitialModel()
+// 	issue := InitialModel("01AN4Z07BY")
 // 	issue.Print()
 // }
 
-func InitialModel() models.Issue {
-	issueId := "01AN4Z07BY" //"79KA1307SR"
-	file, err := os.Open(fmt.Sprintf("./issues/%s.md", issueId))
+// IssuesDir is the directory issue files are read from.
+const IssuesDir = "./issues"
+
+// InitialModel loads and parses the issue with the given ID from the issues
+// directory.
+func InitialModel(issueId string) models.Issue {
+	issue, err := LoadIssue(IssuesDir, issueId)
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	return *issue
+}
+
+// LoadIssue reads and parses the issue with the given ID from dir.
+func LoadIssue(dir, issueId string) (*models.Issue, error) {
+	path := filepath.Join(dir, issueId+".md")
+	file, err := os.Open(path)
+
+	if err != nil {
+		return nil, err
 	}
 
 	defer file.Close()
@@ -42,12 +59,42 @@ func InitialModel() models.Issue {
 	issue, err := ParseIssue(file)
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
 	issue.Id = issueId
 
-	return *issue
+	return issue, nil
+}
+
+// ListIssues reads and parses every issue file in dir, ordered by ID.
+func ListIssues(dir string) ([]models.Issue, error) {
+	entries, err := os.ReadDir(dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	issues := make([]models.Issue, 0, len(entries))
+
+	// ReadDir returns entries sorted by file name, and so by issue ID.
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if entry.IsDir() || filepath.Ext(name) != ".md" {
+			continue
+		}
+
+		issue, err := LoadIssue(dir, strings.TrimSuffix(name, ".md"))
+
+		if err != nil {
+			return nil, err
+		}
+
+		issues = append(issues, *issue)
+	}
+
+	return issues, nil
 }
 
 // markdown parses issue files with the same extensions glamour uses to render

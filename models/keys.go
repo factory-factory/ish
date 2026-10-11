@@ -16,6 +16,7 @@ type keyMap struct {
 	HalfPageDown key.Binding
 	Next         key.Binding
 	Prev         key.Binding
+	Back         key.Binding
 	Help         key.Binding
 	Quit         key.Binding
 }
@@ -46,6 +47,13 @@ var keys = func() keyMap {
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "previous field"),
 		),
+		// Back is enabled only for issues that can be closed. See
+		// Issue.SetClosable.
+		Back: key.NewBinding(
+			key.WithKeys("esc", "w"),
+			key.WithHelp("esc/w", "back"),
+			key.WithDisabled(),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "more keys"),
@@ -58,13 +66,13 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Quit, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Next, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Next, k.Prev},
 		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
-		{k.Help, k.Quit},
+		{k.Back, k.Help, k.Quit},
 	}
 }

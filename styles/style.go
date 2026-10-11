@@ -38,6 +38,9 @@ var Body = lipgloss.NewStyle().
 var Footer = lipgloss.NewStyle().
 	Padding(0, 2)
 
+var Error = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("9"))
+
 var cardBase = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("15")).
 	MarginBottom(0).

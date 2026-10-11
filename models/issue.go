@@ -38,6 +38,28 @@ type Issue struct {
 
 	help  help.Model
 	ready bool
+
+	// closable reports whether the back key closes the issue. See
+	// SetClosable.
+	closable bool
+}
+
+// CloseMsg is sent when the user closes an issue with the back key.
+type CloseMsg struct{}
+
+// SetClosable sets whether the back key closes the issue by sending a
+// CloseMsg, for when the issue is shown by a model that can return to a
+// previous view.
+func (ish *Issue) SetClosable(closable bool) {
+	ish.closable = closable
+}
+
+// keyMap returns the issue's key bindings, with the back key enabled if the
+// issue can be closed.
+func (ish Issue) keyMap() keyMap {
+	k := keys
+	k.Back.SetEnabled(ish.closable)
+	return k
 }
 
 const (
@@ -120,9 +142,14 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return ish, nil
 
 	case tea.KeyPressMsg:
+		keys := ish.keyMap()
+
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return ish, tea.Quit
+
+		case key.Matches(msg, keys.Back):
+			return ish, func() tea.Msg { return CloseMsg{} }
 
 		case key.Matches(msg, keys.Help):
 			ish.help.ShowAll = !ish.help.ShowAll
@@ -393,7 +420,7 @@ func (ish Issue) renderCards() (string, []span) {
 
 // renderFooter renders the key binding help shown below the viewport.
 func (ish Issue) renderFooter() string {
-	return styles.Footer.Render(ish.help.View(keys))
+	return styles.Footer.Render(ish.help.View(ish.keyMap()))
 }
 
 func (ish Issue) View() tea.View {
@@ -415,6 +442,18 @@ func (ish Issue) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 
 	return v
+}
+
+// State returns the values of the issue's state tag, or an empty string if
+// it has none.
+func (ish Issue) State() string {
+	for _, tag := range ish.Metadata {
+		if tag.Key == "state" {
+			return strings.Join(tag.Values, ", ")
+		}
+	}
+
+	return ""
 }
 
 func (ish Issue) Print() {

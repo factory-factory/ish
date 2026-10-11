@@ -2,6 +2,7 @@ package parse
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -155,4 +156,89 @@ func TestParseIssueSampleKeepsNestedList(t *testing.T) {
 	}
 
 	t.Errorf("no card contains the nested list %q", want)
+}
+
+// writeIssues writes each issue source to a file named for its ID in a new
+// temporary directory, which it returns.
+func writeIssues(t *testing.T, sources map[string]string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	for id, source := range sources {
+		if err := os.WriteFile(filepath.Join(dir, id+".md"), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return dir
+}
+
+func TestLoadIssue(t *testing.T) {
+	dir := writeIssues(t, map[string]string{"ABC123": header})
+
+	issue, err := LoadIssue(dir, "ABC123")
+
+	if err != nil {
+		t.Fatalf("LoadIssue() error = %v", err)
+	}
+	if issue.Id != "ABC123" || issue.Title != "Title" {
+		t.Errorf("LoadIssue() = Id %q, Title %q, want %q, %q", issue.Id, issue.Title, "ABC123", "Title")
+	}
+}
+
+func TestLoadIssueErrors(t *testing.T) {
+	dir := writeIssues(t, map[string]string{"BAD": "Not an issue\n"})
+
+	if _, err := LoadIssue(dir, "MISSING"); err == nil {
+		t.Error("LoadIssue() of a missing file: error = nil, want an error")
+	}
+
+	_, err := LoadIssue(dir, "BAD")
+
+	if err == nil || !strings.Contains(err.Error(), "BAD.md") {
+		t.Errorf("LoadIssue() of an invalid file: error = %v, want an error naming BAD.md", err)
+	}
+}
+
+func TestListIssues(t *testing.T) {
+	dir := writeIssues(t, map[string]string{
+		"BBB": strings.Replace(header, "# Title", "# Second", 1),
+		"AAA": strings.Replace(header, "# Title", "# First", 1),
+	})
+
+	// Files that aren't markdown, and directories, are ignored.
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "sub.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	issues, err := ListIssues(dir)
+
+	if err != nil {
+		t.Fatalf("ListIssues() error = %v", err)
+	}
+
+	var got []string
+	for _, issue := range issues {
+		got = append(got, issue.Id+" "+issue.Title)
+	}
+
+	if want := []string{"AAA First", "BBB Second"}; strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("ListIssues() = %q, want %q", got, want)
+	}
+}
+
+func TestListIssuesErrors(t *testing.T) {
+	if _, err := ListIssues(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Error("ListIssues() of a missing directory: error = nil, want an error")
+	}
+
+	dir := writeIssues(t, map[string]string{"AAA": header, "BAD": "Not an issue\n"})
+
+	if _, err := ListIssues(dir); err == nil {
+		t.Error("ListIssues() with an invalid file: error = nil, want an error")
+	}
 }

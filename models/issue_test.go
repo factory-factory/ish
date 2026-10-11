@@ -80,6 +80,8 @@ var (
 	shiftTab = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	pageDown = tea.KeyPressMsg{Code: tea.KeyPgDown}
 	question = tea.KeyPressMsg{Code: '?', Text: "?"}
+	esc      = tea.KeyPressMsg{Code: tea.KeyEscape}
+	w        = tea.KeyPressMsg{Code: 'w', Text: "w"}
 )
 
 func TestViewPinsHeaderAndFooter(t *testing.T) {
@@ -305,5 +307,61 @@ func TestHeaderRuleSeparatesCards(t *testing.T) {
 	}
 	if rule >= headerHeight {
 		t.Errorf("rule on line %d, want above the viewport at line %d", rule, headerHeight)
+	}
+}
+
+func TestState(t *testing.T) {
+	ish := newTestIssue()
+
+	if got := ish.State(); got != "open" {
+		t.Errorf("State() = %q, want %q", got, "open")
+	}
+
+	ish.Metadata = []Tag{
+		{Key: "assignees", Values: []string{"alice"}},
+		{Key: "state", Values: []string{"in progress", "blocked"}},
+	}
+	if got := ish.State(); got != "in progress, blocked" {
+		t.Errorf("State() = %q, want %q", got, "in progress, blocked")
+	}
+
+	ish.Metadata = nil
+	if got := ish.State(); got != "" {
+		t.Errorf("State() with no state tag = %q, want empty", got)
+	}
+}
+
+func TestBackKeyDisabledByDefault(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(1)), 10)
+
+	for _, msg := range []tea.KeyPressMsg{esc, w} {
+		if _, cmd := ish.Update(msg); cmd != nil {
+			t.Errorf("%s on an issue that can't be closed returned a command", msg)
+		}
+	}
+
+	if footer := ish.renderFooter(); strings.Contains(footer, "back") {
+		t.Errorf("footer %q lists the back key on an issue that can't be closed", footer)
+	}
+}
+
+func TestBackKeyClosesClosableIssue(t *testing.T) {
+	ish := newTestIssue(lines(1))
+	ish.SetClosable(true)
+	ish = resize(t, ish, 10)
+
+	for _, msg := range []tea.KeyPressMsg{esc, w} {
+		_, cmd := ish.Update(msg)
+
+		if cmd == nil {
+			t.Fatalf("%s returned no command, want one sending CloseMsg", msg)
+		}
+		if got, ok := cmd().(CloseMsg); !ok {
+			t.Errorf("%s sent %T, want CloseMsg", msg, got)
+		}
+	}
+
+	if footer := ish.renderFooter(); !strings.Contains(footer, "esc/w") {
+		t.Errorf("footer %q doesn't list the back key", footer)
 	}
 }
