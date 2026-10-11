@@ -31,7 +31,7 @@ type Byline struct {
 // }
 
 // IssuesDir is the directory issue files are read from.
-const IssuesDir = "./issues"
+const IssuesDir = "./.ish"
 
 // InitialModel loads and parses the issue with the given ID from the issues
 // directory.

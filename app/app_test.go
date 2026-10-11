@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -552,5 +553,100 @@ func TestUnwritableEditKeepsIssueOpen(t *testing.T) {
 
 	if m.issue != nil {
 		t.Error("issue still open after leaving again")
+	}
+}
+
+// escapes matches ANSI escape sequences.
+var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+// issueWithMetadata returns the source of an issue with the given title,
+// metadata lines, and no comments.
+func issueWithMetadata(title string, metadata ...string) string {
+	source := "# " + title + "\n\n[author 2023-05-26T23:35:36-0400]\n"
+
+	if len(metadata) > 0 {
+		source += "\n" + strings.Join(metadata, "\n") + "\n"
+	}
+
+	return source
+}
+
+func TestAssigneeColumn(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueWithMetadata("First", "- state: open", "- assignees: alice, bob"),
+		"BBB": issueWithMetadata("Second", "- assignees: carol", "- state: closed"),
+		"CCC": issueWithMetadata("Third", "- state: open"),
+		"DDD": issueWithMetadata("Fourth", "- assignee: dave", "- state: open"),
+	})
+
+	// The assignee column is to the right of the title, and left of the state.
+	header := ""
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if strings.Contains(line, "Title") {
+			header = escapes.ReplaceAllString(line, "")
+			break
+		}
+	}
+
+	title, assignee, state := strings.Index(header, "Title"), strings.Index(header, "Assignee"), strings.Index(header, "State")
+
+	if !(title >= 0 && title < assignee && assignee < state) {
+		t.Errorf("header %q, want Title, Assignee, and State in that order", header)
+	}
+
+	for _, want := range []struct{ id, title, assignee, state string }{
+		{"AAA", "First", "alice, bob", "open"},
+		{"BBB", "Second", "carol", "closed"},
+	} {
+		line := escapes.ReplaceAllString(row(t, m, want.id), "")
+
+		if i := strings.Index(line, want.assignee); i < 0 || i < strings.Index(line, want.title) || i > strings.Index(line, want.state) {
+			t.Errorf("row %q, want assignee %q between the title and state", line, want.assignee)
+		}
+
+		// Values line up under their headings.
+		if got := strings.Index(line, want.assignee); got != assignee {
+			t.Errorf("assignee in row %q at column %d, want %d under its heading", line, got, assignee)
+		}
+	}
+
+	if line := row(t, m, "CCC"); strings.Contains(line, "alice") || strings.Contains(line, "carol") {
+		t.Errorf("row %q for an issue without assignees shows an assignee", line)
+	}
+
+	// Only the standard assignees key is shown.
+	if line := row(t, m, "DDD"); strings.Contains(line, "dave") {
+		t.Errorf("row %q shows a value from the nonstandard assignee key", line)
+	}
+}
+
+func TestLongAssigneesAreTruncated(t *testing.T) {
+	many := "alice@example.com, bob@example.com, carol@example.com"
+	m := newTestModel(t, map[string]string{
+		"AAA": issueWithMetadata("A title", "- assignees: "+many),
+	})
+
+	columns := m.table.Columns()
+
+	if columns[2].Title != "Assignee" || columns[2].Width != maxAssigneeWidth {
+		t.Errorf("column 2 = %q width %d, want Assignee width %d", columns[2].Title, columns[2].Width, maxAssigneeWidth)
+	}
+
+	line := row(t, m, "AAA")
+
+	if strings.Contains(line, many) || !strings.Contains(line, "…") {
+		t.Errorf("row %q, want the assignees truncated", line)
+	}
+	if !strings.Contains(line, "A title") {
+		t.Errorf("row %q, want the full title", line)
+	}
+
+	// The title takes the remaining width.
+	total := 0
+	for _, column := range columns {
+		total += column.Width
+	}
+	if padding := 2 * len(columns); total+padding != m.table.Width() {
+		t.Errorf("columns fill %d of the table's %d columns", total+padding, m.table.Width())
 	}
 }

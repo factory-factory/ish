@@ -133,7 +133,7 @@ func TestParseIssueRequiresBreakBetweenCards(t *testing.T) {
 }
 
 func TestParseIssueSamplesKeepCardSource(t *testing.T) {
-	paths, err := filepath.Glob("../issues/*.md")
+	paths, err := filepath.Glob(filepath.Join("..", IssuesDir, "*.md"))
 
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no sample issues found (err = %v)", err)

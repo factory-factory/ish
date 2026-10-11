@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -832,13 +833,27 @@ func (ish Issue) View() tea.View {
 // State returns the values of the issue's state tag, or an empty string if
 // it has none.
 func (ish Issue) State() string {
+	return ish.tagValues("state")
+}
+
+// Assignees returns the values of the issue's assignees tag, or an empty
+// string if it has none.
+func (ish Issue) Assignees() string {
+	return ish.tagValues("assignees")
+}
+
+// tagValues returns the values of the issue's tags with any of the given
+// keys, separated by commas.
+func (ish Issue) tagValues(keys ...string) string {
+	var values []string
+
 	for _, tag := range ish.Metadata {
-		if tag.Key == "state" {
-			return strings.Join(tag.Values, ", ")
+		if slices.Contains(keys, tag.Key) {
+			values = append(values, tag.Values...)
 		}
 	}
 
-	return ""
+	return strings.Join(values, ", ")
 }
 
 func (ish Issue) Print() {

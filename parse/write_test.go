@@ -53,7 +53,7 @@ func TestFormatIssueRoundTrip(t *testing.T) {
 }
 
 func TestFormatIssueSampleFiles(t *testing.T) {
-	issues, err := ListIssues("../issues")
+	issues, err := ListIssues(filepath.Join("..", IssuesDir))
 
 	if err != nil {
 		t.Fatal(err)

@@ -160,7 +160,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func rows(issues []models.Issue) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.Id, issue.Title, issue.State()}
+		r[i] = table.Row{issue.Id, issue.Title, issue.Assignees(), issue.State()}
 	}
 	return r
 }
@@ -277,27 +277,35 @@ func (m *Model) resize() {
 	m.table.SetHeight(max(m.height-chrome, 0))
 }
 
-// columns returns the table columns, giving the title whatever width the ID
-// and state columns leave over. If width is zero, the title column is as wide
-// as the longest title.
+// maxAssigneeWidth limits the width of the assignee column, so long lists of
+// assignees don't crowd out titles. Wider values are truncated.
+const maxAssigneeWidth = 30
+
+// columns returns the table columns, giving the title whatever width the
+// other columns leave over. If width is zero, the title column is as wide as
+// the longest title.
 func (m Model) columns(width int) []table.Column {
-	id, title, state := len("ID"), len("Title"), len("State")
+	id, title, assignee, state := len("ID"), len("Title"), len("Assignee"), len("State")
 
 	for _, issue := range m.issues {
 		id = max(id, lipgloss.Width(issue.Id))
 		title = max(title, lipgloss.Width(issue.Title))
+		assignee = max(assignee, lipgloss.Width(issue.Assignees()))
 		state = max(state, lipgloss.Width(issue.State()))
 	}
 
+	assignee = min(assignee, maxAssigneeWidth)
+
 	if width > 0 {
 		// Each cell is padded by one column on either side.
-		padding := 3 * table.DefaultStyles().Cell.GetHorizontalPadding()
-		title = max(width-id-state-padding, len("Title"))
+		padding := 4 * table.DefaultStyles().Cell.GetHorizontalPadding()
+		title = max(width-id-assignee-state-padding, len("Title"))
 	}
 
 	return []table.Column{
 		{Title: "ID", Width: id},
 		{Title: "Title", Width: title},
+		{Title: "Assignee", Width: assignee},
 		{Title: "State", Width: state},
 	}
 }

@@ -397,3 +397,31 @@ func TestNewIssue(t *testing.T) {
 		t.Errorf("View() = %q, want the issue ID", view)
 	}
 }
+
+func TestAssignees(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata []Tag
+		want     string
+	}{
+		{"assignees", []Tag{{Key: "assignees", Values: []string{"alice", "bob"}}}, "alice, bob"},
+		{"among other tags", []Tag{
+			{Key: "state", Values: []string{"open"}},
+			{Key: "assignees", Values: []string{"bob"}},
+		}, "bob"},
+		// The key is standardized on assignees.
+		{"singular key", []Tag{{Key: "assignee", Values: []string{"alice"}}}, ""},
+		{"none", []Tag{{Key: "state", Values: []string{"open"}}}, ""},
+		{"no metadata", nil, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ish := Issue{Metadata: tt.metadata}
+
+			if got := ish.Assignees(); got != tt.want {
+				t.Errorf("Assignees() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
