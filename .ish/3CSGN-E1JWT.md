@@ -4,6 +4,7 @@
 
 - state: in review
 - assignees: brendan@berg.industries
+- type: feature
 
 ---
 
