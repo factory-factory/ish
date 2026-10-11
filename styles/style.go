@@ -59,6 +59,10 @@ var Tag = lipgloss.NewStyle().
 
 var TagSelected = Tag.Copy().Foreground(lipgloss.Color("4")).Bold(true)
 
+var TodoSelected = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("4"))
+
 var Value = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("7"))
 

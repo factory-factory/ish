@@ -110,7 +110,77 @@ func (ish Issue) keyMap() keyMap {
 	k := keys
 	k.Edit.SetEnabled(ish.cursor > 0)
 	k.Back.SetEnabled(ish.closable)
+
+	if i := ish.cardIndex(); i >= 0 {
+		k.Todos.SetEnabled(len(ish.Conversation[i].todos()) > 0)
+	}
+
 	return k
+}
+
+// selectingTodo reports whether the todo items of the card under the cursor
+// are being selected.
+func (ish Issue) selectingTodo() bool {
+	i := ish.cardIndex()
+	return i >= 0 && ish.Conversation[i].selectingTodo
+}
+
+// updateTodos handles a key press while a card's todo items are being
+// selected, reporting whether it was handled. Other keys work as they do in
+// the issue view.
+func (ish *Issue) updateTodos(msg tea.KeyPressMsg) bool {
+	i := ish.cardIndex()
+	card := &ish.Conversation[i]
+
+	switch {
+	case key.Matches(msg, todoKeys.Up):
+		card.moveTodo(-1)
+
+	case key.Matches(msg, todoKeys.Down):
+		card.moveTodo(1)
+
+	case key.Matches(msg, todoKeys.Toggle):
+		card.toggleTodo()
+		ish.dirty = true
+		// After a failed save, a new change may fix the problem, so the next
+		// exit tries to save again.
+		ish.saveErr = nil
+
+	case key.Matches(msg, todoKeys.Done):
+		card.stopTodos()
+
+	default:
+		return false
+	}
+
+	ish.syncViewport()
+	ish.revealTodo()
+
+	return true
+}
+
+// revealTodo scrolls the viewport so the selected todo item is visible.
+func (ish *Issue) revealTodo() {
+	i := ish.cardIndex()
+
+	if i < 0 {
+		return
+	}
+
+	row := ish.Conversation[i].todoRow()
+
+	if row < 0 {
+		return
+	}
+
+	line := ish.spans[i].top + row
+	top, area := ish.viewport.YOffset(), ish.viewport.Height()
+
+	if line < top {
+		ish.viewport.SetYOffset(line)
+	} else if line >= top+area {
+		ish.viewport.SetYOffset(line - area + 1)
+	}
 }
 
 // editKeyMap returns the key bindings for editing the field under the
@@ -228,6 +298,10 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return ish, nil
 
 	case tea.KeyPressMsg:
+		if ish.selectingTodo() && ish.updateTodos(msg) {
+			return ish, nil
+		}
+
 		keys := ish.keyMap()
 
 		switch {
@@ -242,6 +316,12 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Edit):
 			cmd := ish.startEdit()
 			return ish, cmd
+
+		case key.Matches(msg, keys.Todos):
+			ish.Conversation[ish.cardIndex()].startTodos()
+			ish.syncViewport()
+			ish.revealTodo()
+			return ish, nil
 
 		case key.Matches(msg, keys.Help):
 			ish.help.ShowAll = !ish.help.ShowAll
@@ -704,8 +784,11 @@ func (ish Issue) renderCards() (string, []span) {
 func (ish Issue) renderFooter() string {
 	help := ish.help.View(ish.keyMap())
 
-	if ish.editing {
+	switch {
+	case ish.editing:
 		help = ish.help.View(ish.editKeyMap())
+	case ish.selectingTodo():
+		help = ish.help.View(todoKeys)
 	}
 
 	if ish.saveErr == nil {

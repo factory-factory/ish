@@ -29,6 +29,11 @@ type Card struct {
 	// editor.
 	editing bool
 	editor  textarea.Model
+
+	// selectingTodo reports whether the card's todo items are being
+	// selected, and todo is the index of the selected item.
+	selectingTodo bool
+	todo          int
 }
 
 type SelectMsg bool
@@ -43,6 +48,11 @@ func (c Card) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SelectMsg:
 		c.selected = bool(msg)
+
+		if !c.selected {
+			c.stopTodos()
+		}
+
 		return c, nil
 	}
 
@@ -143,6 +153,25 @@ func (c Card) View() tea.View {
 		return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, editor))
 	}
 
+	content, _ := c.renderContent()
+	comment := c.getStyle().Render(content)
+
+	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, comment))
+}
+
+// renderContent renders the card's markdown, highlighting the selected todo
+// item if todo items are being selected. It returns the rendered content and
+// the index of the highlighted line, or -1 if there isn't one.
+func (c Card) renderContent() (string, int) {
+	source := ""
+	if c.Content != nil {
+		source = *c.Content
+	}
+
+	if todos := c.todos(); c.selectingTodo && c.todo < len(todos) {
+		source = markTodo(source, todos[c.todo])
+	}
+
 	var style ansi.StyleConfig
 
 	if termenv.HasDarkBackground() {
@@ -161,28 +190,32 @@ func (c Card) View() tea.View {
 	r, err := glamour.NewTermRenderer(glamour.WithStyles(style))
 
 	if err == nil {
-		if c.Content == nil {
-			content, err = r.Render("")
-		} else {
-			content, err = r.Render(*c.Content)
-		}
+		content, err = r.Render(source)
 	}
 
-	var comment string
-
-	if err == nil {
-		content = strings.TrimRight(content, "\n\t ")
-
-		if utf8.RuneCountInString(content) == 0 {
-			content = strings.Repeat(" ", 80)
-		}
-
-		comment = c.getStyle().Render(content)
-	} else {
-		comment = c.getStyle().Render(*c.Content)
+	if err != nil {
+		content = source
 	}
 
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, comment))
+	content = strings.TrimRight(content, "\n\t ")
+
+	if utf8.RuneCountInString(content) == 0 {
+		content = strings.Repeat(" ", 80)
+	}
+
+	return highlightTodo(content)
+}
+
+// todoRow returns the line of the card's view showing the selected todo item,
+// or -1 if no todo item is selected.
+func (c Card) todoRow() int {
+	_, row := c.renderContent()
+
+	if row < 0 {
+		return -1
+	}
+
+	return lipgloss.Height(c.renderByline()) + c.getStyle().GetBorderTopSize() + row
 }
 
 func (c Card) getStyle() lipgloss.Style {
