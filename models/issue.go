@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -46,6 +47,10 @@ type Issue struct {
 
 	// light reports whether the terminal has a light background.
 	light bool
+
+	// shown reports whether the issue has been sized to the terminal, which
+	// happens before it's first shown.
+	shown bool
 
 	// editing reports whether the field under the cursor is being edited.
 	// Tags and cards hold their own editors, and the title is edited in
@@ -187,6 +192,12 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		ish.light = !msg.IsDark()
 		ish.help.Styles = help.DefaultStyles(msg.IsDark())
+
+		// An edit may have started before the background color was known.
+		if ish.editing {
+			ish.styleEditor()
+		}
+
 		return ish, nil
 
 	case tea.WindowSizeMsg:
@@ -201,6 +212,17 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if i := ish.cardIndex(); i >= 0 {
 			ish.reveal(ish.spans[i], true)
+		}
+
+		// A blank issue opens with its title ready to be named.
+		if !ish.shown {
+			ish.shown = true
+
+			if strings.TrimSpace(ish.Title) == "" && !ish.editing {
+				ish.setCursor(1)
+				cmd := ish.startEdit()
+				return ish, cmd
+			}
 		}
 
 		return ish, nil
@@ -457,6 +479,23 @@ func (ish *Issue) stopEdit(save bool) {
 
 	if i := ish.cardIndex(); i >= 0 {
 		ish.reveal(ish.spans[i], true)
+	}
+}
+
+// styleEditor styles the editor of the field under the cursor for the
+// terminal's background.
+func (ish *Issue) styleEditor() {
+	dark := !ish.light
+
+	switch {
+	case ish.cursor == 1:
+		ish.titleInput.SetStyles(textinput.DefaultStyles(dark))
+
+	case ish.tagIndex() >= 0:
+		ish.Metadata[ish.tagIndex()].input.SetStyles(textinput.DefaultStyles(dark))
+
+	case ish.cardIndex() >= 0:
+		ish.Conversation[ish.cardIndex()].editor.SetStyles(textarea.DefaultStyles(dark))
 	}
 }
 
@@ -751,5 +790,26 @@ func (ish Issue) getTitleStyle() lipgloss.Style {
 		return styles.TitleSelected
 	default:
 		return styles.Title
+	}
+}
+
+// NewIssue returns an empty issue with the given ID, created by author at
+// created, with one empty comment by the same author.
+func NewIssue(id, author string, created time.Time) Issue {
+	date := created.Format(time.RFC3339)
+	content := ""
+
+	return Issue{
+		Id:          id,
+		DateCreated: date,
+		Author:      author,
+		Metadata:    []Tag{},
+		Conversation: []Card{
+			{
+				DateCreated: date,
+				Author:      author,
+				Content:     &content,
+			},
+		},
 	}
 }

@@ -3,6 +3,7 @@ package models
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -363,5 +364,36 @@ func TestBackKeyClosesClosableIssue(t *testing.T) {
 
 	if footer := ish.renderFooter(); !strings.Contains(footer, "esc/w") {
 		t.Errorf("footer %q doesn't list the back key", footer)
+	}
+}
+
+func TestNewIssue(t *testing.T) {
+	created := time.Date(2026, 10, 10, 23, 7, 0, 0, time.UTC)
+	ish := NewIssue("ABCDEFGHJK", "alice@example.com", created)
+
+	if ish.Id != "ABCDEFGHJK" || ish.Title != "" || ish.Author != "alice@example.com" {
+		t.Errorf("Id, Title, Author = %q, %q, %q, want ABCDEFGHJK, empty, alice@example.com",
+			ish.Id, ish.Title, ish.Author)
+	}
+	if ish.DateCreated != "2026-10-10T23:07:00Z" {
+		t.Errorf("DateCreated = %q, want %q", ish.DateCreated, "2026-10-10T23:07:00Z")
+	}
+	if len(ish.Metadata) != 0 {
+		t.Errorf("Metadata = %v, want none", ish.Metadata)
+	}
+	if len(ish.Conversation) != 1 {
+		t.Fatalf("Conversation has %d cards, want 1", len(ish.Conversation))
+	}
+
+	card := ish.Conversation[0]
+
+	if card.Author != ish.Author || card.DateCreated != ish.DateCreated || card.Content == nil || *card.Content != "" {
+		t.Errorf("card = %+v, want an empty comment with the issue's byline", card)
+	}
+
+	// The new issue renders.
+	ish = resize(t, ish, 10)
+	if view := ish.View().Content; !strings.Contains(view, "[ABCDEFGHJK]") {
+		t.Errorf("View() = %q, want the issue ID", view)
 	}
 }

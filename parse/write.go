@@ -16,7 +16,11 @@ import (
 func FormatIssue(issue models.Issue) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# %s\n\n[%s %s]\n\n", issue.Title, issue.Author, issue.DateCreated)
+	fmt.Fprintf(&b, "# %s\n\n[%s %s]\n", issue.Title, issue.Author, issue.DateCreated)
+
+	if len(issue.Metadata) > 0 {
+		b.WriteString("\n")
+	}
 
 	for _, tag := range issue.Metadata {
 		fmt.Fprintf(&b, "- %s: %s\n", tag.Key, strings.Join(tag.Values, ", "))

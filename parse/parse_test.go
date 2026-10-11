@@ -242,3 +242,19 @@ func TestListIssuesErrors(t *testing.T) {
 		t.Error("ListIssues() with an invalid file: error = nil, want an error")
 	}
 }
+
+func TestParseIssueWithoutMetadata(t *testing.T) {
+	source := "# Title\n\n[author 2023-05-26T23:35:36-0400]\n\n---\n\n[carol 2023-05-27T13:41:50-0400]\n\nComment\n"
+
+	issue, err := ParseIssue(strings.NewReader(source))
+
+	if err != nil {
+		t.Fatalf("ParseIssue() error = %v", err)
+	}
+	if len(issue.Metadata) != 0 {
+		t.Errorf("Metadata = %v, want none", issue.Metadata)
+	}
+	if len(issue.Conversation) != 1 || *issue.Conversation[0].Content != "Comment" {
+		t.Errorf("Conversation = %v, want one card with %q", issue.Conversation, "Comment")
+	}
+}

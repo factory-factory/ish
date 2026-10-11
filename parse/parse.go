@@ -137,11 +137,18 @@ func parseIssue(document ast.Node, source []byte) (*models.Issue, error) {
 		return nil, err
 	}
 
+	// The metadata list is optional.
 	node = node.NextSibling()
-	metadata, err := matchMetadata(node, source)
+	metadata := []models.Tag{}
 
-	if err != nil {
-		return nil, err
+	if _, ok := node.(*ast.List); ok {
+		metadata, err = matchMetadata(node, source)
+
+		if err != nil {
+			return nil, err
+		}
+
+		node = node.NextSibling()
 	}
 
 	issue := &models.Issue{
@@ -152,7 +159,7 @@ func parseIssue(document ast.Node, source []byte) (*models.Issue, error) {
 		Conversation: []models.Card{},
 	}
 
-	for node = node.NextSibling(); node != nil; {
+	for node != nil {
 		card, next, err := parseCard(node, source)
 
 		if err != nil {

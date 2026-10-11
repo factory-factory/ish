@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/factory-factory/ish/models"
 )
@@ -175,5 +176,39 @@ func TestSaveIssueRefusesUnreadableIssues(t *testing.T) {
 				t.Errorf("file changed after a refused save:\n%s", source)
 			}
 		})
+	}
+}
+
+func TestFormatNewIssue(t *testing.T) {
+	created := time.Date(2026, 10, 10, 23, 7, 0, 0, time.FixedZone("", -4*60*60))
+	issue := models.NewIssue("ABCDEFGHJK", "alice@example.com", created)
+
+	want := "# \n\n[alice@example.com 2026-10-10T23:07:00-04:00]\n\n---\n\n[alice@example.com 2026-10-10T23:07:00-04:00]\n"
+
+	if got := FormatIssue(issue); got != want {
+		t.Errorf("FormatIssue() =\n%q\nwant\n%q", got, want)
+	}
+
+	// A new issue can be saved to a file that doesn't exist yet.
+	dir := t.TempDir()
+
+	if err := SaveIssue(dir, issue); err != nil {
+		t.Fatalf("SaveIssue() error = %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, "ABCDEFGHJK.md"))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Errorf("file mode = %v, want 0644", info.Mode().Perm())
+	}
+
+	saved := readIssue(t, dir, "ABCDEFGHJK")
+
+	if saved.Title != "" || saved.Author != "alice@example.com" || len(saved.Metadata) != 0 ||
+		len(saved.Conversation) != 1 || *saved.Conversation[0].Content != "" {
+		t.Errorf("saved issue = %+v, want the empty new issue", saved)
 	}
 }

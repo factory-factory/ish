@@ -1,6 +1,7 @@
 package models
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
@@ -269,5 +270,64 @@ func TestEditingFooter(t *testing.T) {
 	ish = editAt(t, ish, ish.firstCard())
 	if footer := escapes.ReplaceAllString(ish.renderFooter(), ""); !strings.Contains(footer, "ctrl+s save") {
 		t.Errorf("footer %q while editing a card, want ctrl+s to save", footer)
+	}
+}
+
+func TestBlankIssueOpensEditingTitle(t *testing.T) {
+	ish := newTestIssue(lines(1))
+	ish.Title = "  "
+
+	ish.initComponents()
+	header := len(strings.Split(ish.renderHeader(), "\n"))
+
+	m, cmd := ish.Update(tea.WindowSizeMsg{Width: 100, Height: header + 20})
+	ish = m.(Issue)
+
+	if !ish.editing || ish.cursor != 1 {
+		t.Fatalf("editing, cursor = %v, %d on first show, want true, 1", ish.editing, ish.cursor)
+	}
+	if cmd == nil {
+		t.Error("first show returned no command, want the title input's cursor to start")
+	}
+
+	// Cancelling leaves the title blank, and later resizes don't start
+	// editing again.
+	ish = update(t, ish, esc, tea.WindowSizeMsg{Width: 80, Height: header + 10})
+
+	if ish.editing {
+		t.Error("editing again after a resize")
+	}
+
+	ish = editAt(t, ish, 1)
+	ish = typeText(t, ish, "Named")
+	ish = update(t, ish, enter)
+
+	if ish.Title != "Named" || !ish.dirty {
+		t.Errorf("Title, dirty = %q, %v, want %q, true", ish.Title, ish.dirty, "Named")
+	}
+}
+
+func TestTitledIssueDoesNotOpenEditing(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(1)), 10)
+
+	if ish.editing || ish.cursor != 0 {
+		t.Errorf("editing, cursor = %v, %d on first show, want false, 0", ish.editing, ish.cursor)
+	}
+}
+
+func TestBackgroundColorRestylesEditor(t *testing.T) {
+	ish := resize(t, newTestIssue("Content"), 10)
+	ish = editAt(t, ish, ish.firstCard())
+
+	// Editing started with dark styles. Once the terminal reports a light
+	// background, the editor switches to light styles.
+	before := ish.Conversation[0].editor.View()
+	ish = update(t, ish, tea.BackgroundColorMsg{Color: color.White})
+
+	if !ish.light {
+		t.Fatal("light background not recorded")
+	}
+	if after := ish.Conversation[0].editor.View(); after == before {
+		t.Error("comment editor unchanged after a light background was reported, want light styles")
 	}
 }

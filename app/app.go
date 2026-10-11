@@ -23,8 +23,10 @@ type Model struct {
 	table table.Model
 	help  help.Model
 
-	// issue is the open issue's view, or nil while the list is shown.
-	issue tea.Model
+	// issue is the open issue's view, or nil while the list is shown, and
+	// openId is its ID.
+	issue  tea.Model
+	openId string
 
 	// err is the error from the last attempt to open an issue, if any.
 	err error
@@ -39,6 +41,7 @@ type keyMap struct {
 	Up   key.Binding
 	Down key.Binding
 	Open key.Binding
+	New  key.Binding
 	Quit key.Binding
 }
 
@@ -52,6 +55,10 @@ var keys = func() keyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "open"),
 		),
+		New: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
@@ -60,7 +67,7 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Open, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -112,6 +119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(models.CloseMsg); ok {
 			m.issue = nil
 			m.reload()
+			m.openId = ""
 			return m, nil
 		}
 
@@ -136,6 +144,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keys.Open):
 			return m.open()
+
+		case key.Matches(msg, keys.New):
+			return m.create()
 		}
 	}
 
@@ -154,10 +165,10 @@ func rows(issues []models.Issue) []table.Row {
 	return r
 }
 
-// reload loads the issues from disk again, keeping the selected issue
-// selected. If it's gone, the selection stays at the same position in the
-// list. If the issues fail to load, the list is left as it was and the error
-// is shown.
+// reload loads the issues from disk again, selecting the issue that was just
+// open, or keeping the selected issue selected. If it's gone, the selection
+// stays at the same position in the list. If the issues fail to load, the
+// list is left as it was and the error is shown.
 func (m *Model) reload() {
 	issues, err := parse.ListIssues(m.dir)
 
@@ -168,13 +179,16 @@ func (m *Model) reload() {
 	}
 
 	cursor := m.table.Cursor()
+	selected := m.openId
 
-	if row := m.table.SelectedRow(); row != nil {
-		for i, issue := range issues {
-			if issue.Id == row[0] {
-				cursor = i
-				break
-			}
+	if row := m.table.SelectedRow(); selected == "" && row != nil {
+		selected = row[0]
+	}
+
+	for i, issue := range issues {
+		if issue.Id == selected {
+			cursor = i
+			break
 		}
 	}
 
@@ -205,18 +219,41 @@ func (m Model) open() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	return m.show(*issue)
+}
+
+// create opens a new, empty issue with an unused ID, by the current user. It
+// isn't written to disk unless it's edited.
+func (m Model) create() (tea.Model, tea.Cmd) {
+	id, err := parse.NewIssueID(m.dir)
+
+	if err != nil {
+		m.err = err
+		m.resize()
+		return m, nil
+	}
+
+	return m.show(models.NewIssue(id, currentUser(m.dir), now()))
+}
+
+// show switches to the view of issue, which is saved to the list's directory
+// when it's closed.
+func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
-	m.issue = *issue
+	m.issue = issue
+	m.openId = issue.Id
 
 	// The issue view hasn't seen the terminal size, which is only sent when
 	// the program starts or the terminal is resized.
+	var cmd tea.Cmd
+
 	if m.width > 0 && m.height > 0 {
-		m.issue, _ = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		m.issue, cmd = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	}
 
-	return m, m.issue.Init()
+	return m, tea.Batch(m.issue.Init(), cmd)
 }
 
 // saveIssue writes an issue's changes to its file in the list's directory.
