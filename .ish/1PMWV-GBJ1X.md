@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2023-05-28 11:55:23 -0400]
 
-- state: in progress
+- state: in review
 - assignees: brendanberg
 - estimate: 8h
 
@@ -13,7 +13,7 @@
 Write a parser that scans the issues directory and extracts relevant metadata
 from **ish** files.
 
-See this issue #01AN4Z07BY
+See this issue #1PJRQ-WQMB1
 
 ## Header
 

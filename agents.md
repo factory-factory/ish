@@ -13,7 +13,12 @@ editing existing comments.
 
 - All code must be written in go.
 - Code must follow the [Google Go Style Guide](https://google.github.io/styleguide/go/)
-- Use the
+- Focus on the task described in one file at a time. When starting a task, if it is
+  currently in the `open` state, change the state to `in progress`.
+- Append comments in the issue markdown files to document changes and request clarification
+  when instructions are not clear.
+- When a task is complete and all questions have been answered, change the issue's state
+  to `in review`.
 
 ## Dependencies — APPROVED LIST
 
@@ -31,7 +36,8 @@ Only use dependencies from this list. Ask before adding anything new.
 ## Git Behavior
 
 - After completing each task, stage all changed files
-- Commit message format: "feat: [what was done]" or "test: [what was tested]"
+- Commit message format: "[issue number]: [what was done]" and reference the issue number
+  of the assigned task.
 - Do NOT push automatically. Leave push for the user.
 
 ## Architecture Rules
