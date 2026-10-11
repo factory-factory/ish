@@ -1,19 +1,21 @@
 package parse
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"regexp"
+	"strings"
+	"unicode"
 
-	"github.com/factory-factory/ish/glam"
 	"github.com/factory-factory/ish/models"
 
+	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -48,49 +50,48 @@ func InitialModel() models.Issue {
 	return *issue
 }
 
+// markdown parses issue files with the same extensions glamour uses to render
+// them.
+var markdown = goldmark.New(
+	goldmark.WithExtensions(
+		extension.GFM,
+		extension.DefinitionList,
+	),
+	goldmark.WithParserOptions(
+		parser.WithAutoHeadingID(),
+	),
+)
+
 func ParseIssue(r io.Reader) (*models.Issue, error) {
-	bytes, err := io.ReadAll(r)
+	source, err := io.ReadAll(r)
 
 	if err != nil {
 		return nil, err
 	}
 
-	reader := text.NewReader(bytes)
-	re, err := glam.NewTermRenderer(glam.WithStandardStyle("pink"))
-	//glamour.WithStylePath("auto"))
+	document := markdown.Parser().Parse(text.NewReader(source))
 
-	if err != nil {
-		return nil, err
-	}
-
-	document := re.Parser().Parse(reader)
-	issue, err := parseIssue(document, bytes, re.Renderer())
-
-	if err != nil {
-		return nil, err
-	}
-
-	return issue, nil
+	return parseIssue(document, source)
 }
 
-func parseIssue(document ast.Node, bytes []byte, r renderer.Renderer) (*models.Issue, error) {
+func parseIssue(document ast.Node, source []byte) (*models.Issue, error) {
 	node := document.FirstChild()
 
-	title, err := matchTitle(node, bytes)
+	title, err := matchTitle(node, source)
 
 	if err != nil {
 		return nil, err
 	}
 
 	node = node.NextSibling()
-	byline, err := matchByline(node, bytes)
+	byline, err := matchByline(node, source)
 
 	if err != nil {
 		return nil, err
 	}
 
 	node = node.NextSibling()
-	metadata, err := matchMetadata(node, bytes)
+	metadata, err := matchMetadata(node, source)
 
 	if err != nil {
 		return nil, err
@@ -104,82 +105,56 @@ func parseIssue(document ast.Node, bytes []byte, r renderer.Renderer) (*models.I
 		Conversation: []models.Card{},
 	}
 
-	for {
-		card, next, err := parseCard(node, bytes, r)
+	for node = node.NextSibling(); node != nil; {
+		card, next, err := parseCard(node, source)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if card == nil {
-			break
-		} else {
-			issue.Conversation = append(issue.Conversation, *card)
-		}
-
-		if next == nil {
-			break
-		}
+		issue.Conversation = append(issue.Conversation, *card)
 		node = next
 	}
 
 	return issue, nil
 }
 
-func parseCard(node ast.Node, b []byte, r renderer.Renderer) (*models.Card, ast.Node, error) {
-	node = node.NextSibling()
-
-	if node == nil {
-		return nil, node, nil
-	}
-
-	err := matchBreak(node, b)
+// parseCard parses the card that begins with the horizontal rule at node,
+// returning the card and the horizontal rule that begins the next card, if
+// any. The card's content is copied verbatim from the source, so it keeps
+// exactly the markdown that was written.
+func parseCard(node ast.Node, source []byte) (*models.Card, ast.Node, error) {
+	err := matchBreak(node, source)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	node = node.NextSibling()
-	byline, err := matchByline(node, b)
+	byline, err := matchByline(node, source)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	doc := ast.NewDocument()
+	lines := node.Lines()
+	start := lines.At(lines.Len() - 1).Stop
+	end := len(source)
 
-	for {
-		node = node.NextSibling()
+	next := node.NextSibling()
 
-		if node == nil {
-			break
-		} else if node.Kind().String() == "ThematicBreak" {
-			node = node.PreviousSibling()
-			break
-		} else {
-			next := node.NextSibling()
-			prev := node.PreviousSibling()
-
-			prev.SetNextSibling(next)
-
-			if next != nil {
-				next.SetPreviousSibling(prev)
-			}
-
-			parent := node.Parent()
-			parent.RemoveChild(parent, node)
-
-			doc.AppendChild(doc, node)
-
-			node = prev
-		}
+	for next != nil && next.Kind() != ast.KindThematicBreak {
+		next = next.NextSibling()
 	}
 
-	//doc.Dump(b, 0)
-	var buf bytes.Buffer
+	if next != nil {
+		end = next.Pos()
+	}
 
-	err = r.Render(&buf, b, doc)
-	content := string(buf.Bytes())
+	// Trim blank lines around the content, but keep the indentation of its
+	// first line, which may be significant.
+	content := strings.TrimLeft(string(source[start:end]), "\r\n")
+	content = strings.TrimRightFunc(content, unicode.IsSpace)
 
 	card := &models.Card{
 		Author:      *byline.Author,
@@ -187,7 +162,7 @@ func parseCard(node ast.Node, b []byte, r renderer.Renderer) (*models.Card, ast.
 		Content:     &content,
 	}
 
-	return card, node, nil
+	return card, next, nil
 }
 
 func matchTitle(n ast.Node, b []byte) (*string, error) {
