@@ -31,7 +31,7 @@ type Byline struct {
 // }
 
 // IssuesDir is the directory issue files are read from.
-const IssuesDir = "./issues"
+const IssuesDir = "./.ish"
 
 // InitialModel loads and parses the issue with the given ID from the issues
 // directory.
@@ -137,11 +137,18 @@ func parseIssue(document ast.Node, source []byte) (*models.Issue, error) {
 		return nil, err
 	}
 
+	// The metadata list is optional.
 	node = node.NextSibling()
-	metadata, err := matchMetadata(node, source)
+	metadata := []models.Tag{}
 
-	if err != nil {
-		return nil, err
+	if _, ok := node.(*ast.List); ok {
+		metadata, err = matchMetadata(node, source)
+
+		if err != nil {
+			return nil, err
+		}
+
+		node = node.NextSibling()
 	}
 
 	issue := &models.Issue{
@@ -152,7 +159,7 @@ func parseIssue(document ast.Node, source []byte) (*models.Issue, error) {
 		Conversation: []models.Card{},
 	}
 
-	for node = node.NextSibling(); node != nil; {
+	for node != nil {
 		card, next, err := parseCard(node, source)
 
 		if err != nil {
@@ -198,10 +205,7 @@ func parseCard(node ast.Node, source []byte) (*models.Card, ast.Node, error) {
 		end = next.Pos()
 	}
 
-	// Trim blank lines around the content, but keep the indentation of its
-	// first line, which may be significant.
-	content := strings.TrimLeft(string(source[start:end]), "\r\n")
-	content = strings.TrimRightFunc(content, unicode.IsSpace)
+	content := trimContent(string(source[start:end]))
 
 	card := &models.Card{
 		Author:      *byline.Author,
@@ -210,6 +214,13 @@ func parseCard(node ast.Node, source []byte) (*models.Card, ast.Node, error) {
 	}
 
 	return card, next, nil
+}
+
+// trimContent trims blank lines around card content, but keeps the
+// indentation of its first line, which may be significant.
+func trimContent(content string) string {
+	content = strings.TrimLeft(content, "\r\n")
+	return strings.TrimRightFunc(content, unicode.IsSpace)
 }
 
 func matchTitle(n ast.Node, b []byte) (*string, error) {

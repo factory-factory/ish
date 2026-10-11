@@ -3,6 +3,7 @@ package models
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -363,5 +364,104 @@ func TestBackKeyClosesClosableIssue(t *testing.T) {
 
 	if footer := ish.renderFooter(); !strings.Contains(footer, "esc/w") {
 		t.Errorf("footer %q doesn't list the back key", footer)
+	}
+}
+
+func TestNewIssue(t *testing.T) {
+	created := time.Date(2026, 10, 10, 23, 7, 0, 0, time.UTC)
+	ish := NewIssue("ABCDEFGHJK", "alice@example.com", created)
+
+	if ish.Id != "ABCDEFGHJK" || ish.Title != "" || ish.Author != "alice@example.com" {
+		t.Errorf("Id, Title, Author = %q, %q, %q, want ABCDEFGHJK, empty, alice@example.com",
+			ish.Id, ish.Title, ish.Author)
+	}
+	if ish.DateCreated != "2026-10-10T23:07:00Z" {
+		t.Errorf("DateCreated = %q, want %q", ish.DateCreated, "2026-10-10T23:07:00Z")
+	}
+	if len(ish.Metadata) != 0 {
+		t.Errorf("Metadata = %v, want none", ish.Metadata)
+	}
+	if len(ish.Conversation) != 1 {
+		t.Fatalf("Conversation has %d cards, want 1", len(ish.Conversation))
+	}
+
+	card := ish.Conversation[0]
+
+	if card.Author != ish.Author || card.DateCreated != ish.DateCreated || card.Content == nil || *card.Content != "" {
+		t.Errorf("card = %+v, want an empty comment with the issue's byline", card)
+	}
+
+	// The new issue renders.
+	ish = resize(t, ish, 10)
+	if view := ish.View().Content; !strings.Contains(view, "[ABCDEFGHJK]") {
+		t.Errorf("View() = %q, want the issue ID", view)
+	}
+}
+
+func TestAssignees(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata []Tag
+		want     string
+	}{
+		{"assignees", []Tag{{Key: "assignees", Values: []string{"alice", "bob"}}}, "alice, bob"},
+		{"among other tags", []Tag{
+			{Key: "state", Values: []string{"open"}},
+			{Key: "assignees", Values: []string{"bob"}},
+		}, "bob"},
+		// The key is standardized on assignees.
+		{"singular key", []Tag{{Key: "assignee", Values: []string{"alice"}}}, ""},
+		{"none", []Tag{{Key: "state", Values: []string{"open"}}}, ""},
+		{"no metadata", nil, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ish := Issue{Metadata: tt.metadata}
+
+			if got := ish.Assignees(); got != tt.want {
+				t.Errorf("Assignees() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDate(t *testing.T) {
+	want := time.Date(2023, 5, 28, 15, 55, 23, 0, time.UTC)
+
+	for _, s := range []string{
+		"2023-05-28T11:55:23-04:00", // RFC 3339
+		"2023-05-28 11:55:23-0400",  // ISO8601A
+		"2023-05-28T11:55:23-0400",  // ISO8601B
+		"2023-05-28 11:55:23 -0400", // Timestamp
+	} {
+		got, err := parseDate(s)
+
+		if err != nil {
+			t.Errorf("parseDate(%q) error = %v", s, err)
+			continue
+		}
+		if !got.Equal(want) {
+			t.Errorf("parseDate(%q) = %v, want %v", s, got, want)
+		}
+	}
+
+	if _, err := parseDate("yesterday"); err == nil {
+		t.Error(`parseDate("yesterday") error = nil, want an error`)
+	}
+}
+
+func TestOpened(t *testing.T) {
+	ish := Issue{DateCreated: "2026-10-11T08:59:23-07:00"}
+
+	got, err := ish.Opened()
+
+	if err != nil {
+		t.Fatalf("Opened() error = %v", err)
+	}
+
+	// The byline's time zone is kept.
+	if got.Format(time.RFC3339) != "2026-10-11T08:59:23-07:00" {
+		t.Errorf("Opened() = %v, want 2026-10-11T08:59:23-07:00", got)
 	}
 }

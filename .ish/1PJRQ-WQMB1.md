@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2023-05-26T23:35:36-0400]
 
-- state: open
+- state: in progress
 - assignees: brendanberg, jhc
 
 ---
@@ -28,9 +28,16 @@ The **ish** command line tools rely on go modules from [charmbracelet](https://g
 ## TODO:
 
 - [x] Learn the basics of the charmbracelet tools
-- [ ] Write parser
+- [x] Write parser
+- [ ] Build viewing and editing UI
+  - [x] Rendering issues
+  - [x] Navigating issue compontents
+  - [x] Editing components
+  - [x] Updating to-do items
+  - [ ] Appending comments
+  - [ ] Adding new metadata attributes
 - [ ] Build ish DB
-- [ ] Create ish commands
+- [ ] Create ish sub-commands
   - [ ] ish init
   - [ ] ish new [TITLE]
   - [ ] ish list [QUERY]

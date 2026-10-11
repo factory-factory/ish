@@ -3,6 +3,8 @@
 package app
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
@@ -23,8 +25,10 @@ type Model struct {
 	table table.Model
 	help  help.Model
 
-	// issue is the open issue's view, or nil while the list is shown.
-	issue tea.Model
+	// issue is the open issue's view, or nil while the list is shown, and
+	// openId is its ID.
+	issue  tea.Model
+	openId string
 
 	// err is the error from the last attempt to open an issue, if any.
 	err error
@@ -39,6 +43,7 @@ type keyMap struct {
 	Up   key.Binding
 	Down key.Binding
 	Open key.Binding
+	New  key.Binding
 	Quit key.Binding
 }
 
@@ -52,6 +57,10 @@ var keys = func() keyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "open"),
 		),
+		New: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
@@ -60,7 +69,7 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Open, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -112,6 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(models.CloseMsg); ok {
 			m.issue = nil
 			m.reload()
+			m.openId = ""
 			return m, nil
 		}
 
@@ -136,6 +146,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keys.Open):
 			return m.open()
+
+		case key.Matches(msg, keys.New):
+			return m.create()
 		}
 	}
 
@@ -149,15 +162,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func rows(issues []models.Issue) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.Id, issue.Title, issue.State()}
+		r[i] = table.Row{issue.Id, issue.Title, issue.Assignees(), opened(issue, now()), issue.State()}
 	}
 	return r
 }
 
-// reload loads the issues from disk again, keeping the selected issue
-// selected. If it's gone, the selection stays at the same position in the
-// list. If the issues fail to load, the list is left as it was and the error
-// is shown.
+// opened formats the date an issue was opened for the list: the month and
+// day if it's in the same year as now, and also the year otherwise. The date
+// is shown in the time zone of the issue's byline, as in the issue view. It's
+// empty if the byline's date can't be read.
+func opened(issue models.Issue, now time.Time) string {
+	t, err := issue.Opened()
+
+	switch {
+	case err != nil:
+		return ""
+	case t.Year() == now.Year():
+		return t.Format("Jan 2")
+	default:
+		return t.Format(models.DateTime)
+	}
+}
+
+// reload loads the issues from disk again, selecting the issue that was just
+// open, or keeping the selected issue selected. If it's gone, the selection
+// stays at the same position in the list. If the issues fail to load, the
+// list is left as it was and the error is shown.
 func (m *Model) reload() {
 	issues, err := parse.ListIssues(m.dir)
 
@@ -168,13 +198,16 @@ func (m *Model) reload() {
 	}
 
 	cursor := m.table.Cursor()
+	selected := m.openId
 
-	if row := m.table.SelectedRow(); row != nil {
-		for i, issue := range issues {
-			if issue.Id == row[0] {
-				cursor = i
-				break
-			}
+	if row := m.table.SelectedRow(); selected == "" && row != nil {
+		selected = row[0]
+	}
+
+	for i, issue := range issues {
+		if issue.Id == selected {
+			cursor = i
+			break
 		}
 	}
 
@@ -205,17 +238,46 @@ func (m Model) open() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	return m.show(*issue)
+}
+
+// create opens a new, empty issue with an unused ID, by the current user. It
+// isn't written to disk unless it's edited.
+func (m Model) create() (tea.Model, tea.Cmd) {
+	id, err := parse.NewIssueID(m.dir)
+
+	if err != nil {
+		m.err = err
+		m.resize()
+		return m, nil
+	}
+
+	return m.show(models.NewIssue(id, currentUser(m.dir), now()))
+}
+
+// show switches to the view of issue, which is saved to the list's directory
+// when it's closed.
+func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
-	m.issue = *issue
+	issue.SetSave(m.saveIssue)
+	m.issue = issue
+	m.openId = issue.Id
 
 	// The issue view hasn't seen the terminal size, which is only sent when
 	// the program starts or the terminal is resized.
+	var cmd tea.Cmd
+
 	if m.width > 0 && m.height > 0 {
-		m.issue, _ = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		m.issue, cmd = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	}
 
-	return m, m.issue.Init()
+	return m, tea.Batch(m.issue.Init(), cmd)
+}
+
+// saveIssue writes an issue's changes to its file in the list's directory.
+func (m Model) saveIssue(issue models.Issue) error {
+	return parse.SaveIssue(m.dir, issue)
 }
 
 // resize fits the table into the space left between the heading and the
@@ -234,27 +296,38 @@ func (m *Model) resize() {
 	m.table.SetHeight(max(m.height-chrome, 0))
 }
 
-// columns returns the table columns, giving the title whatever width the ID
-// and state columns leave over. If width is zero, the title column is as wide
-// as the longest title.
+// maxAssigneeWidth limits the width of the assignee column, so long lists of
+// assignees don't crowd out titles. Wider values are truncated.
+const maxAssigneeWidth = 30
+
+// columns returns the table columns, giving the title whatever width the
+// other columns leave over. If width is zero, the title column is as wide as
+// the longest title.
 func (m Model) columns(width int) []table.Column {
-	id, title, state := len("ID"), len("Title"), len("State")
+	id, title, assignee, date, state := len("ID"), len("Title"), len("Assignee"), len("Opened"), len("State")
+	today := now()
 
 	for _, issue := range m.issues {
 		id = max(id, lipgloss.Width(issue.Id))
 		title = max(title, lipgloss.Width(issue.Title))
+		assignee = max(assignee, lipgloss.Width(issue.Assignees()))
+		date = max(date, lipgloss.Width(opened(issue, today)))
 		state = max(state, lipgloss.Width(issue.State()))
 	}
 
+	assignee = min(assignee, maxAssigneeWidth)
+
 	if width > 0 {
 		// Each cell is padded by one column on either side.
-		padding := 3 * table.DefaultStyles().Cell.GetHorizontalPadding()
-		title = max(width-id-state-padding, len("Title"))
+		padding := 5 * table.DefaultStyles().Cell.GetHorizontalPadding()
+		title = max(width-id-assignee-date-state-padding, len("Title"))
 	}
 
 	return []table.Column{
 		{Title: "ID", Width: id},
 		{Title: "Title", Width: title},
+		{Title: "Assignee", Width: assignee},
+		{Title: "Opened", Width: date},
 		{Title: "State", Width: state},
 	}
 }

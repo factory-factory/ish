@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -433,5 +434,219 @@ func TestCloseWithReloadError(t *testing.T) {
 	}
 	if line := row(t, m, "BBB"); !strings.Contains(line, "Fixed") {
 		t.Errorf("row %q, want the fixed title", line)
+	}
+}
+
+// typeText sends a key press for each character in s.
+func typeText(t *testing.T, m Model, s string) Model {
+	t.Helper()
+
+	for _, r := range s {
+		m = update(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+
+	return m
+}
+
+var tab = tea.KeyPressMsg{Code: tea.KeyTab}
+
+func TestBackWritesEditsToFile(t *testing.T) {
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	// Open the issue, then edit its title.
+	m = update(t, m, enter, tab, enter)
+	m = typeText(t, m, " edited")
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	issue, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Title != "First edited" {
+		t.Errorf("title on disk = %q, want %q", issue.Title, "First edited")
+	}
+	if line := row(t, m, "AAA"); !strings.Contains(line, "First edited") {
+		t.Errorf("row %q, want the edited title", line)
+	}
+}
+
+func TestQuitWritesEditsToFile(t *testing.T) {
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	m = update(t, m, enter, tab, enter)
+	m = typeText(t, m, " edited")
+	m = update(t, m, enter)
+
+	_, cmd := m.Update(quit)
+
+	if cmd == nil {
+		t.Fatal("q returned no command, want tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("q returned %T, want tea.QuitMsg", cmd())
+	}
+
+	issue, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Title != "First edited" {
+		t.Errorf("title on disk = %q, want %q", issue.Title, "First edited")
+	}
+}
+
+func TestBackWithoutEditsLeavesFileUntouched(t *testing.T) {
+	// Not in the canonical format, so it would change if rewritten.
+	source := issueSource("First", "open") + "\n\n"
+	m := newTestModel(t, map[string]string{"AAA": source})
+
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	got, err := os.ReadFile(filepath.Join(m.dir, "AAA.md"))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != source {
+		t.Errorf("file = %q after closing without edits, want it unchanged", got)
+	}
+}
+
+func TestUnwritableEditKeepsIssueOpen(t *testing.T) {
+	source := issueSource("First", "open") + "\n---\n\n[bob 2023-05-27T13:41:50-0400]\n\nComment\n"
+	m := newTestModel(t, map[string]string{"AAA": source})
+
+	// Add a horizontal rule to the comment, which can't be written.
+	m = update(t, m, enter, down, enter)
+	m = update(t, m, enter, enter)
+	m = typeText(t, m, "---")
+	m = update(t, m, enter, enter, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+
+	next, cmd := m.Update(esc)
+	m = next.(Model)
+
+	if cmd != nil {
+		t.Fatalf("esc after an unwritable edit returned %T, want the issue to stay open", cmd())
+	}
+	if m.issue == nil {
+		t.Fatal("issue closed after an unwritable edit")
+	}
+	if view := m.View().Content; !strings.Contains(view, "Couldn't save changes") {
+		t.Errorf("View() = %q, want the save error", view)
+	}
+
+	got, err := os.ReadFile(filepath.Join(m.dir, "AAA.md"))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != source {
+		t.Errorf("file = %q after a refused save, want it unchanged", got)
+	}
+
+	// Leaving again discards the edit.
+	m = closeIssue(t, m, esc)
+
+	if m.issue != nil {
+		t.Error("issue still open after leaving again")
+	}
+}
+
+// escapes matches ANSI escape sequences.
+var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+// issueWithMetadata returns the source of an issue with the given title,
+// metadata lines, and no comments.
+func issueWithMetadata(title string, metadata ...string) string {
+	source := "# " + title + "\n\n[author 2023-05-26T23:35:36-0400]\n"
+
+	if len(metadata) > 0 {
+		source += "\n" + strings.Join(metadata, "\n") + "\n"
+	}
+
+	return source
+}
+
+func TestAssigneeColumn(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueWithMetadata("First", "- state: open", "- assignees: alice, bob"),
+		"BBB": issueWithMetadata("Second", "- assignees: carol", "- state: closed"),
+		"CCC": issueWithMetadata("Third", "- state: open"),
+		"DDD": issueWithMetadata("Fourth", "- assignee: dave", "- state: open"),
+	})
+
+	// The assignee column is to the right of the title, and left of the state.
+	header := ""
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if strings.Contains(line, "Title") {
+			header = escapes.ReplaceAllString(line, "")
+			break
+		}
+	}
+
+	title, assignee, state := strings.Index(header, "Title"), strings.Index(header, "Assignee"), strings.Index(header, "State")
+
+	if !(title >= 0 && title < assignee && assignee < state) {
+		t.Errorf("header %q, want Title, Assignee, and State in that order", header)
+	}
+
+	for _, want := range []struct{ id, title, assignee, state string }{
+		{"AAA", "First", "alice, bob", "open"},
+		{"BBB", "Second", "carol", "closed"},
+	} {
+		line := escapes.ReplaceAllString(row(t, m, want.id), "")
+
+		if i := strings.Index(line, want.assignee); i < 0 || i < strings.Index(line, want.title) || i > strings.Index(line, want.state) {
+			t.Errorf("row %q, want assignee %q between the title and state", line, want.assignee)
+		}
+
+		// Values line up under their headings.
+		if got := strings.Index(line, want.assignee); got != assignee {
+			t.Errorf("assignee in row %q at column %d, want %d under its heading", line, got, assignee)
+		}
+	}
+
+	if line := row(t, m, "CCC"); strings.Contains(line, "alice") || strings.Contains(line, "carol") {
+		t.Errorf("row %q for an issue without assignees shows an assignee", line)
+	}
+
+	// Only the standard assignees key is shown.
+	if line := row(t, m, "DDD"); strings.Contains(line, "dave") {
+		t.Errorf("row %q shows a value from the nonstandard assignee key", line)
+	}
+}
+
+func TestLongAssigneesAreTruncated(t *testing.T) {
+	many := "alice@example.com, bob@example.com, carol@example.com"
+	m := newTestModel(t, map[string]string{
+		"AAA": issueWithMetadata("A title", "- assignees: "+many),
+	})
+
+	columns := m.table.Columns()
+
+	if columns[2].Title != "Assignee" || columns[2].Width != maxAssigneeWidth {
+		t.Errorf("column 2 = %q width %d, want Assignee width %d", columns[2].Title, columns[2].Width, maxAssigneeWidth)
+	}
+
+	line := row(t, m, "AAA")
+
+	if strings.Contains(line, many) || !strings.Contains(line, "…") {
+		t.Errorf("row %q, want the assignees truncated", line)
+	}
+	if !strings.Contains(line, "A title") {
+		t.Errorf("row %q, want the full title", line)
+	}
+
+	// The title takes the remaining width.
+	total := 0
+	for _, column := range columns {
+		total += column.Width
+	}
+	if padding := 2 * len(columns); total+padding != m.table.Width() {
+		t.Errorf("columns fill %d of the table's %d columns", total+padding, m.table.Width())
 	}
 }

@@ -13,7 +13,18 @@ editing existing comments.
 
 - All code must be written in go.
 - Code must follow the [Google Go Style Guide](https://google.github.io/styleguide/go/)
-- Use the
+- Focus on the task described in one file at a time. When starting a task, if it is
+  currently in the `open` state, change the state to `in progress`.
+- You may edit only the issue file for the task you've been assigned, and in it
+  you may only:
+  - change the `state` line, and
+  - append comments at the end of the file.
+    Never edit the title, other metadata, or existing comments, including your own.
+- Sign appended comments with the byline `[Claude <RFC 3339 timestamp>]`.
+- Use comments to document changes and to ask for clarification when instructions
+  are unclear.
+- When the task is complete and all questions have been answered, change the
+  issue's state to `in review`.
 
 ## Dependencies — APPROVED LIST
 
@@ -31,7 +42,8 @@ Only use dependencies from this list. Ask before adding anything new.
 ## Git Behavior
 
 - After completing each task, stage all changed files
-- Commit message format: "feat: [what was done]" or "test: [what was tested]"
+- Commit message format: "[[issue number]] [what was done]" and reference the issue number
+  of the assigned task.
 - Do NOT push automatically. Leave push for the user.
 
 ## Architecture Rules
@@ -44,8 +56,10 @@ Only use dependencies from this list. Ask before adding anything new.
 
 ## Testing Rules
 
-- Example markdown files are in the `issues/` directory. DO NOT MODIFY THE FILES IN
-  THE `issues/` DIRECTORY.
+- Issue files are in the `.ish/` directory, and tests may read them as samples.
+  Tests must never write to `.ish/`; use a temporary directory instead.
+- Never create, rename, delete, or edit issue files, except as described under
+  Development Rules for the issue you've been assigned.
 - In keeping with go convention, tests should be in files colocated with the code they
   are testing, with a `_test.go` suffix.
 - Fix any test or type errors until the whole suite is green.
