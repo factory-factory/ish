@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2023-05-28 11:55:23 -0400]
 
-- state: in review
+- state: closed
 - assignees: brendanberg
 - estimate: 8h
 
