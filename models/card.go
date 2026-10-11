@@ -4,7 +4,6 @@ import (
 	"log"
 	"math"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textarea"
@@ -121,19 +120,7 @@ func (c *Card) cancelEdit() {
 
 // renderByline renders the comment's author and date.
 func (c Card) renderByline() string {
-	t, err := time.Parse(time.RFC3339, c.DateCreated)
-
-	if err != nil {
-		t, err = time.Parse(ISO8601A, c.DateCreated)
-	}
-
-	if err != nil {
-		t, err = time.Parse(ISO8601B, c.DateCreated)
-	}
-
-	if err != nil {
-		t, err = time.Parse(Timestamp, c.DateCreated)
-	}
+	t, err := parseDate(c.DateCreated)
 
 	if err != nil {
 		log.Fatal(err)

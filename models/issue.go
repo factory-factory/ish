@@ -712,19 +712,7 @@ func (ish *Issue) reveal(s span, down bool) {
 // renderHeader renders the title, byline, metadata tags, and the rule beneath
 // them, all of which stay pinned to the top of the screen.
 func (ish Issue) renderHeader() string {
-	t, err := time.Parse(time.RFC3339, ish.DateCreated)
-
-	if err != nil {
-		t, err = time.Parse(ISO8601A, ish.DateCreated)
-	}
-
-	if err != nil {
-		t, err = time.Parse(ISO8601B, ish.DateCreated)
-	}
-
-	if err != nil {
-		t, err = time.Parse(Timestamp, ish.DateCreated)
-	}
+	t, err := ish.Opened()
 
 	if err != nil {
 		log.Fatal(err)
@@ -828,6 +816,29 @@ func (ish Issue) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 
 	return v
+}
+
+// Opened returns the time the issue was opened, from its byline.
+func (ish Issue) Opened() (time.Time, error) {
+	return parseDate(ish.DateCreated)
+}
+
+// dateLayouts are the formats bylines' dates are written in.
+var dateLayouts = []string{time.RFC3339, ISO8601A, ISO8601B, Timestamp}
+
+// parseDate parses a byline's date, which may be in any of dateLayouts.
+func parseDate(s string) (time.Time, error) {
+	var err error
+
+	for _, layout := range dateLayouts {
+		var t time.Time
+
+		if t, err = time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, err
 }
 
 // State returns the values of the issue's state tag, or an empty string if

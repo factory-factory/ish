@@ -3,6 +3,8 @@
 package app
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
@@ -160,9 +162,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func rows(issues []models.Issue) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.Id, issue.Title, issue.Assignees(), issue.State()}
+		r[i] = table.Row{issue.Id, issue.Title, issue.Assignees(), opened(issue, now()), issue.State()}
 	}
 	return r
+}
+
+// opened formats the date an issue was opened for the list: the month and
+// day if it's in the same year as now, and also the year otherwise. The date
+// is shown in the time zone of the issue's byline, as in the issue view. It's
+// empty if the byline's date can't be read.
+func opened(issue models.Issue, now time.Time) string {
+	t, err := issue.Opened()
+
+	switch {
+	case err != nil:
+		return ""
+	case t.Year() == now.Year():
+		return t.Format("Jan 2")
+	default:
+		return t.Format(models.DateTime)
+	}
 }
 
 // reload loads the issues from disk again, selecting the issue that was just
@@ -285,12 +304,14 @@ const maxAssigneeWidth = 30
 // other columns leave over. If width is zero, the title column is as wide as
 // the longest title.
 func (m Model) columns(width int) []table.Column {
-	id, title, assignee, state := len("ID"), len("Title"), len("Assignee"), len("State")
+	id, title, assignee, date, state := len("ID"), len("Title"), len("Assignee"), len("Opened"), len("State")
+	today := now()
 
 	for _, issue := range m.issues {
 		id = max(id, lipgloss.Width(issue.Id))
 		title = max(title, lipgloss.Width(issue.Title))
 		assignee = max(assignee, lipgloss.Width(issue.Assignees()))
+		date = max(date, lipgloss.Width(opened(issue, today)))
 		state = max(state, lipgloss.Width(issue.State()))
 	}
 
@@ -298,14 +319,15 @@ func (m Model) columns(width int) []table.Column {
 
 	if width > 0 {
 		// Each cell is padded by one column on either side.
-		padding := 4 * table.DefaultStyles().Cell.GetHorizontalPadding()
-		title = max(width-id-assignee-state-padding, len("Title"))
+		padding := 5 * table.DefaultStyles().Cell.GetHorizontalPadding()
+		title = max(width-id-assignee-date-state-padding, len("Title"))
 	}
 
 	return []table.Column{
 		{Title: "ID", Width: id},
 		{Title: "Title", Width: title},
 		{Title: "Assignee", Width: assignee},
+		{Title: "Opened", Width: date},
 		{Title: "State", Width: state},
 	}
 }
