@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -42,6 +43,50 @@ type Issue struct {
 	// closable reports whether the back key closes the issue. See
 	// SetClosable.
 	closable bool
+
+	// light reports whether the terminal has a light background.
+	light bool
+
+	// editing reports whether the field under the cursor is being edited.
+	// Tags and cards hold their own editors, and the title is edited in
+	// titleInput.
+	editing    bool
+	titleInput textinput.Model
+
+	// save writes the issue when it's closed or the program quits, if dirty
+	// reports that it has unsaved changes. See SetSave.
+	save  SaveFunc
+	dirty bool
+
+	// saveErr is the error from the last attempt to save the issue. While
+	// it's set, closing the issue or quitting discards unsaved changes.
+	saveErr error
+}
+
+// SaveFunc writes an issue to storage.
+type SaveFunc func(Issue) error
+
+// SetSave sets the function used to save the issue's changes when it's closed
+// or the program quits. Without one, changes are discarded.
+func (ish *Issue) SetSave(save SaveFunc) {
+	ish.save = save
+}
+
+// exit saves any unsaved changes before returning cmd, which closes the issue
+// or quits. If the changes can't be saved, the error is shown and the issue
+// stays open; exiting again discards the changes.
+func (ish *Issue) exit(cmd tea.Cmd) tea.Cmd {
+	if ish.dirty && ish.save != nil && ish.saveErr == nil {
+		if err := ish.save(*ish); err != nil {
+			ish.saveErr = err
+			ish.resize()
+			return nil
+		}
+
+		ish.dirty = false
+	}
+
+	return cmd
 }
 
 // CloseMsg is sent when the user closes an issue with the back key.
@@ -58,8 +103,15 @@ func (ish *Issue) SetClosable(closable bool) {
 // issue can be closed.
 func (ish Issue) keyMap() keyMap {
 	k := keys
+	k.Edit.SetEnabled(ish.cursor > 0)
 	k.Back.SetEnabled(ish.closable)
 	return k
+}
+
+// editKeyMap returns the key bindings for editing the field under the
+// cursor.
+func (ish Issue) editKeyMap() editKeyMap {
+	return editKeys(ish.cardIndex() >= 0)
 }
 
 const (
@@ -124,9 +176,16 @@ func (ish Issue) Init() tea.Cmd {
 func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	ish.initComponents()
 
+	if ish.editing {
+		if cmd, handled := ish.updateEditing(msg); handled {
+			return ish, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 
 	case tea.BackgroundColorMsg:
+		ish.light = !msg.IsDark()
 		ish.help.Styles = help.DefaultStyles(msg.IsDark())
 		return ish, nil
 
@@ -134,6 +193,11 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ish.width = msg.Width
 		ish.height = msg.Height
 		ish.resize()
+
+		if ish.editing {
+			ish.sizeEditor()
+			ish.syncViewport()
+		}
 
 		if i := ish.cardIndex(); i >= 0 {
 			ish.reveal(ish.spans[i], true)
@@ -146,10 +210,16 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, keys.Quit):
-			return ish, tea.Quit
+			cmd := ish.exit(tea.Quit)
+			return ish, cmd
 
 		case key.Matches(msg, keys.Back):
-			return ish, func() tea.Msg { return CloseMsg{} }
+			cmd := ish.exit(func() tea.Msg { return CloseMsg{} })
+			return ish, cmd
+
+		case key.Matches(msg, keys.Edit):
+			cmd := ish.startEdit()
+			return ish, cmd
 
 		case key.Matches(msg, keys.Help):
 			ish.help.ShowAll = !ish.help.ShowAll
@@ -247,9 +317,178 @@ func (s span) bottom() int {
 }
 
 // firstCard is the cursor position of the first card in the conversation.
-// Positions before it belong to the title, the byline, and the metadata tags.
+// Position 0 selects nothing, position 1 is the title, and the positions
+// between the title and the first card are the metadata tags.
 func (ish Issue) firstCard() int {
 	return len(ish.Metadata) + 2
+}
+
+// tagIndex returns the index of the selected metadata tag, or -1 if the
+// cursor is not on a tag.
+func (ish Issue) tagIndex() int {
+	i := ish.cursor - 2
+	if i < 0 || i >= len(ish.Metadata) {
+		return -1
+	}
+	return i
+}
+
+// updateEditing handles a message while a field is being edited, reporting
+// whether it was handled. Keys other than those to save, cancel, or quit go
+// to the field's editor.
+func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg, tea.BackgroundColorMsg:
+		return nil, false
+
+	case tea.KeyPressMsg:
+		keys := ish.editKeyMap()
+
+		switch {
+		case key.Matches(msg, keys.Quit):
+			// The field being edited is discarded, but earlier edits are
+			// saved.
+			ish.stopEdit(false)
+			return ish.exit(tea.Quit), true
+
+		case key.Matches(msg, keys.Save):
+			ish.stopEdit(true)
+			return nil, true
+
+		case key.Matches(msg, keys.Cancel):
+			ish.stopEdit(false)
+			return nil, true
+		}
+	}
+
+	var cmd tea.Cmd
+
+	if i := ish.tagIndex(); i >= 0 {
+		var tag tea.Model
+		tag, cmd = ish.Metadata[i].Update(msg)
+		ish.Metadata[i] = tag.(Tag)
+	} else if i := ish.cardIndex(); i >= 0 {
+		var card tea.Model
+		card, cmd = ish.Conversation[i].Update(msg)
+		ish.Conversation[i] = card.(Card)
+
+		// The editor grows and shrinks with its content.
+		ish.syncViewport()
+		ish.reveal(ish.spans[i], true)
+	} else {
+		ish.titleInput, cmd = ish.titleInput.Update(msg)
+	}
+
+	return cmd, true
+}
+
+// startEdit begins editing the field under the cursor: the title text, the
+// values of a metadata tag, or the markdown content of a card.
+func (ish *Issue) startEdit() tea.Cmd {
+	var cmd tea.Cmd
+	dark := !ish.light
+
+	switch {
+	case ish.cursor == 1:
+		ish.titleInput = textinput.New()
+		ish.titleInput.Prompt = ""
+		ish.titleInput.SetStyles(textinput.DefaultStyles(dark))
+		ish.titleInput.SetValue(ish.Title)
+		ish.titleInput.CursorEnd()
+		cmd = ish.titleInput.Focus()
+
+	case ish.tagIndex() >= 0:
+		cmd = ish.Metadata[ish.tagIndex()].startEdit(ish.headerWidth(), dark)
+
+	case ish.cardIndex() >= 0:
+		width, height := ish.cardArea()
+		cmd = ish.Conversation[ish.cardIndex()].startEdit(width, height, dark)
+
+	default:
+		return nil
+	}
+
+	ish.editing = true
+	// After a failed save, a new edit may fix the problem, so the next exit
+	// tries to save again.
+	ish.saveErr = nil
+	ish.sizeEditor()
+	// The help footer changes while editing.
+	ish.resize()
+
+	if i := ish.cardIndex(); i >= 0 {
+		ish.reveal(ish.spans[i], true)
+	}
+
+	return cmd
+}
+
+// stopEdit stops editing the field under the cursor, keeping the edited value
+// if save is true and marking the issue as having unsaved changes if the
+// value changed. A title left blank is not kept.
+func (ish *Issue) stopEdit(save bool) {
+	switch {
+	case ish.cursor == 1:
+		title := strings.TrimSpace(ish.titleInput.Value())
+
+		if save && title != "" && title != ish.Title {
+			ish.Title = title
+			ish.dirty = true
+		}
+
+	case ish.tagIndex() >= 0:
+		if save {
+			ish.dirty = ish.Metadata[ish.tagIndex()].commitEdit() || ish.dirty
+		} else {
+			ish.Metadata[ish.tagIndex()].cancelEdit()
+		}
+
+	case ish.cardIndex() >= 0:
+		if save {
+			ish.dirty = ish.Conversation[ish.cardIndex()].commitEdit() || ish.dirty
+		} else {
+			ish.Conversation[ish.cardIndex()].cancelEdit()
+		}
+	}
+
+	ish.editing = false
+	ish.resize()
+
+	if i := ish.cardIndex(); i >= 0 {
+		ish.reveal(ish.spans[i], true)
+	}
+}
+
+// sizeEditor fits the editor of the field under the cursor to the screen.
+func (ish *Issue) sizeEditor() {
+	switch {
+	case ish.cursor == 1:
+		ish.titleInput.SetWidth(max(ish.headerWidth()-lipgloss.Width(ish.titleLabel()), 1))
+
+	case ish.tagIndex() >= 0:
+		ish.Metadata[ish.tagIndex()].sizeEditor(ish.headerWidth())
+
+	case ish.cardIndex() >= 0:
+		width, height := ish.cardArea()
+		ish.Conversation[ish.cardIndex()].sizeEditor(width, height)
+	}
+}
+
+// headerWidth returns the width available to the title and metadata.
+func (ish Issue) headerWidth() int {
+	return ish.width - styles.Header.GetHorizontalFrameSize()
+}
+
+// cardArea returns the size available to a card in the viewport.
+func (ish Issue) cardArea() (int, int) {
+	return ish.viewport.Width() - styles.Body.GetHorizontalFrameSize(), ish.viewport.Height()
+}
+
+// titleLabel renders the issue ID shown before the title while it's being
+// edited. The ID is never editable.
+func (ish Issue) titleLabel() string {
+	return styles.TitleSelected.Render(fmt.Sprintf("[%s]", ish.Id)) + " "
 }
 
 // cardIndex returns the index of the selected card, or -1 if the cursor is
@@ -373,7 +612,11 @@ func (ish Issue) renderHeader() string {
 
 	c := make([]string, 0)
 
-	c = append(c, ish.getTitleStyle().Render(fmt.Sprintf("[%s] %s", ish.Id, ish.Title)))
+	if ish.editing && ish.cursor == 1 {
+		c = append(c, ish.titleLabel()+ish.titleInput.View())
+	} else {
+		c = append(c, ish.getTitleStyle().Render(fmt.Sprintf("[%s] %s", ish.Id, ish.Title)))
+	}
 	c = append(c, styles.BylineBlock.Copy().MarginBottom(1).Render(
 		styles.BylineEmphasis.Render(ish.Author)+
 			styles.Byline.Render(" opened this issue on "+t.Format(DateTime)),
@@ -420,7 +663,27 @@ func (ish Issue) renderCards() (string, []span) {
 
 // renderFooter renders the key binding help shown below the viewport.
 func (ish Issue) renderFooter() string {
-	return styles.Footer.Render(ish.help.View(ish.keyMap()))
+	help := ish.help.View(ish.keyMap())
+
+	if ish.editing {
+		help = ish.help.View(ish.editKeyMap())
+	}
+
+	if ish.saveErr == nil {
+		return styles.Footer.Render(help)
+	}
+
+	message := styles.Footer
+	if ish.width > 0 {
+		message = message.Width(ish.width)
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		message.Render(styles.Error.Render(fmt.Sprintf(
+			"Couldn't save changes: %v. Leave again to discard them.", ish.saveErr,
+		))),
+		styles.Footer.Render(help),
+	)
 }
 
 func (ish Issue) View() tea.View {

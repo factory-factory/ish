@@ -16,6 +16,7 @@ type keyMap struct {
 	HalfPageDown key.Binding
 	Next         key.Binding
 	Prev         key.Binding
+	Edit         key.Binding
 	Back         key.Binding
 	Help         key.Binding
 	Quit         key.Binding
@@ -47,6 +48,12 @@ var keys = func() keyMap {
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "previous field"),
 		),
+		// Edit is enabled only while the cursor is on an editable field.
+		Edit: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "edit"),
+			key.WithDisabled(),
+		),
 		// Back is enabled only for issues that can be closed. See
 		// Issue.SetClosable.
 		Back: key.NewBinding(
@@ -66,13 +73,57 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev},
+		{k.Up, k.Down, k.Next, k.Prev, k.Edit},
 		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
+}
+
+// editKeyMap holds the key bindings used while a field is being edited. All
+// other keys are handled by the field's editor.
+type editKeyMap struct {
+	Save   key.Binding
+	Cancel key.Binding
+	Quit   key.Binding
+}
+
+// editKeys returns the key bindings for editing a field. Multiline fields
+// use enter for new lines, so they're saved with ctrl+s instead.
+func editKeys(multiline bool) editKeyMap {
+	save := key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "save"),
+	)
+
+	if multiline {
+		save = key.NewBinding(
+			key.WithKeys("ctrl+s"),
+			key.WithHelp("ctrl+s", "save"),
+		)
+	}
+
+	return editKeyMap{
+		Save: save,
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "quit"),
+		),
+	}
+}
+
+func (k editKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Save, k.Cancel}
+}
+
+func (k editKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Save, k.Cancel, k.Quit}}
 }

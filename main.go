@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/factory-factory/ish/app"
+	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 
 	tea "charm.land/bubbletea/v2"
@@ -25,7 +26,11 @@ var (
 			var model tea.Model
 
 			if len(args) == 1 {
-				model = parse.InitialModel(issueIdFromPath(args[0]))
+				issue := parse.InitialModel(issueIdFromPath(args[0]))
+				issue.SetSave(func(issue models.Issue) error {
+					return parse.SaveIssue(parse.IssuesDir, issue)
+				})
+				model = issue
 			} else {
 				issues, err := parse.ListIssues(parse.IssuesDir)
 				if err != nil {

@@ -435,3 +435,122 @@ func TestCloseWithReloadError(t *testing.T) {
 		t.Errorf("row %q, want the fixed title", line)
 	}
 }
+
+// typeText sends a key press for each character in s.
+func typeText(t *testing.T, m Model, s string) Model {
+	t.Helper()
+
+	for _, r := range s {
+		m = update(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+
+	return m
+}
+
+var tab = tea.KeyPressMsg{Code: tea.KeyTab}
+
+func TestBackWritesEditsToFile(t *testing.T) {
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	// Open the issue, then edit its title.
+	m = update(t, m, enter, tab, enter)
+	m = typeText(t, m, " edited")
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	issue, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Title != "First edited" {
+		t.Errorf("title on disk = %q, want %q", issue.Title, "First edited")
+	}
+	if line := row(t, m, "AAA"); !strings.Contains(line, "First edited") {
+		t.Errorf("row %q, want the edited title", line)
+	}
+}
+
+func TestQuitWritesEditsToFile(t *testing.T) {
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	m = update(t, m, enter, tab, enter)
+	m = typeText(t, m, " edited")
+	m = update(t, m, enter)
+
+	_, cmd := m.Update(quit)
+
+	if cmd == nil {
+		t.Fatal("q returned no command, want tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("q returned %T, want tea.QuitMsg", cmd())
+	}
+
+	issue, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Title != "First edited" {
+		t.Errorf("title on disk = %q, want %q", issue.Title, "First edited")
+	}
+}
+
+func TestBackWithoutEditsLeavesFileUntouched(t *testing.T) {
+	// Not in the canonical format, so it would change if rewritten.
+	source := issueSource("First", "open") + "\n\n"
+	m := newTestModel(t, map[string]string{"AAA": source})
+
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	got, err := os.ReadFile(filepath.Join(m.dir, "AAA.md"))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != source {
+		t.Errorf("file = %q after closing without edits, want it unchanged", got)
+	}
+}
+
+func TestUnwritableEditKeepsIssueOpen(t *testing.T) {
+	source := issueSource("First", "open") + "\n---\n\n[bob 2023-05-27T13:41:50-0400]\n\nComment\n"
+	m := newTestModel(t, map[string]string{"AAA": source})
+
+	// Add a horizontal rule to the comment, which can't be written.
+	m = update(t, m, enter, down, enter)
+	m = update(t, m, enter, enter)
+	m = typeText(t, m, "---")
+	m = update(t, m, enter, enter, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+
+	next, cmd := m.Update(esc)
+	m = next.(Model)
+
+	if cmd != nil {
+		t.Fatalf("esc after an unwritable edit returned %T, want the issue to stay open", cmd())
+	}
+	if m.issue == nil {
+		t.Fatal("issue closed after an unwritable edit")
+	}
+	if view := m.View().Content; !strings.Contains(view, "Couldn't save changes") {
+		t.Errorf("View() = %q, want the save error", view)
+	}
+
+	got, err := os.ReadFile(filepath.Join(m.dir, "AAA.md"))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != source {
+		t.Errorf("file = %q after a refused save, want it unchanged", got)
+	}
+
+	// Leaving again discards the edit.
+	m = closeIssue(t, m, esc)
+
+	if m.issue != nil {
+		t.Error("issue still open after leaving again")
+	}
+}

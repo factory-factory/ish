@@ -2,10 +2,12 @@ package models
 
 import (
 	"log"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/ansi"
@@ -22,7 +24,11 @@ type Card struct {
 	Content     *string
 
 	selected bool
-	// editing  bool
+
+	// editing reports whether the content is being edited as markdown in
+	// editor.
+	editing bool
+	editor  textarea.Model
 }
 
 type SelectMsg bool
@@ -37,12 +43,74 @@ func (c Card) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SelectMsg:
 		c.selected = bool(msg)
+		return c, nil
+	}
+
+	if c.editing {
+		var cmd tea.Cmd
+		c.editor, cmd = c.editor.Update(msg)
+		return c, cmd
 	}
 
 	return c, nil
 }
 
-func (c Card) View() tea.View {
+// maxEditorWidth matches the width glamour wraps rendered markdown to.
+const maxEditorWidth = 80
+
+// startEdit begins editing the card's content as markdown in a text area,
+// sized so the card fits within width and height.
+func (c *Card) startEdit(width, height int, isDark bool) tea.Cmd {
+	c.editor = textarea.New()
+	c.editor.Prompt = ""
+	c.editor.ShowLineNumbers = false
+	c.editor.DynamicHeight = true
+	// Allow any amount of content. MaxHeight only limits how much is shown.
+	c.editor.MaxContentHeight = math.MaxInt
+	c.editor.SetStyles(textarea.DefaultStyles(isDark))
+
+	if c.Content != nil {
+		c.editor.SetValue(*c.Content)
+	}
+
+	c.sizeEditor(width, height)
+	c.editor.MoveToBegin()
+	c.editing = true
+
+	return c.editor.Focus()
+}
+
+// sizeEditor fits the card, with its byline and border, within width and
+// height.
+func (c *Card) sizeEditor(width, height int) {
+	frame := c.getStyle().GetHorizontalFrameSize()
+	chrome := lipgloss.Height(c.renderByline()) + c.getStyle().GetVerticalFrameSize()
+
+	c.editor.MaxHeight = max(height-chrome, 1)
+	c.editor.SetWidth(min(max(width-frame, 1), maxEditorWidth))
+}
+
+// commitEdit replaces the card's content with the edited markdown,
+// reporting whether it changed.
+func (c *Card) commitEdit() bool {
+	content := c.editor.Value()
+	c.editing = false
+
+	if c.Content != nil && *c.Content == content || c.Content == nil && content == "" {
+		return false
+	}
+
+	c.Content = &content
+	return true
+}
+
+// cancelEdit stops editing, leaving the content unchanged.
+func (c *Card) cancelEdit() {
+	c.editing = false
+}
+
+// renderByline renders the comment's author and date.
+func (c Card) renderByline() string {
 	t, err := time.Parse(time.RFC3339, c.DateCreated)
 
 	if err != nil {
@@ -61,10 +129,19 @@ func (c Card) View() tea.View {
 		log.Fatal(err)
 	}
 
-	byline := styles.BylineBlock.Render(
+	return styles.BylineBlock.Render(
 		styles.BylineEmphasis.Render(c.Author) +
 			styles.Byline.Render(" commented on "+t.Format(DateTime)),
 	)
+}
+
+func (c Card) View() tea.View {
+	byline := c.renderByline()
+
+	if c.editing {
+		editor := c.getStyle().Render(c.editor.View())
+		return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, editor))
+	}
 
 	var style ansi.StyleConfig
 

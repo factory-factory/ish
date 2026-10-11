@@ -207,6 +207,7 @@ func (m Model) open() (tea.Model, tea.Cmd) {
 
 	m.err = nil
 	issue.SetClosable(true)
+	issue.SetSave(m.saveIssue)
 	m.issue = *issue
 
 	// The issue view hasn't seen the terminal size, which is only sent when
@@ -216,6 +217,11 @@ func (m Model) open() (tea.Model, tea.Cmd) {
 	}
 
 	return m, m.issue.Init()
+}
+
+// saveIssue writes an issue's changes to its file in the list's directory.
+func (m Model) saveIssue(issue models.Issue) error {
+	return parse.SaveIssue(m.dir, issue)
 }
 
 // resize fits the table into the space left between the heading and the
