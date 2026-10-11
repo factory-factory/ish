@@ -17,6 +17,9 @@ type keyMap struct {
 	Next         key.Binding
 	Prev         key.Binding
 	Edit         key.Binding
+	Comment      key.Binding
+	AddTag       key.Binding
+	DeleteTag    key.Binding
 	Todos        key.Binding
 	Back         key.Binding
 	Help         key.Binding
@@ -55,6 +58,24 @@ var keys = func() keyMap {
 			key.WithHelp("enter", "edit"),
 			key.WithDisabled(),
 		),
+		// Comment is enabled only for issues with an author for new comments.
+		// See Issue.SetAuthor.
+		Comment: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "comment"),
+			key.WithDisabled(),
+		),
+		AddTag: key.NewBinding(
+			key.WithKeys("m"),
+			key.WithHelp("m", "add field"),
+		),
+		// DeleteTag is enabled only while the cursor is on a metadata tag.
+		// Mac keyboards' delete key sends backspace.
+		DeleteTag: key.NewBinding(
+			key.WithKeys("backspace", "delete"),
+			key.WithHelp("⌫", "delete field"),
+			key.WithDisabled(),
+		),
 		// Todos is enabled only while the cursor is on a card with todo
 		// items.
 		Todos: key.NewBinding(
@@ -81,12 +102,12 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Todos, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Todos, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Todos},
+		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Todos},
 		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
@@ -171,5 +192,32 @@ func (k todoKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k todoKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{k.ShortHelp()}
+}
+
+// deleteKeyMap holds the key bindings used while confirming that a metadata
+// tag should be deleted. Any other key cancels.
+type deleteKeyMap struct {
+	Confirm key.Binding
+	Cancel  key.Binding
+}
+
+var deleteKeys = deleteKeyMap{
+	Confirm: key.NewBinding(
+		key.WithKeys("backspace", "delete"),
+		key.WithHelp("⌫", "delete field"),
+	),
+	// Cancel is only shown in the help footer; it matches no keys itself.
+	Cancel: key.NewBinding(
+		key.WithKeys("any"),
+		key.WithHelp("any other key", "cancel"),
+	),
+}
+
+func (k deleteKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Confirm, k.Cancel}
+}
+
+func (k deleteKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{k.ShortHelp()}
 }

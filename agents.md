@@ -41,9 +41,10 @@ Only use dependencies from this list. Ask before adding anything new.
 
 ## Git Behavior
 
-- After completing each task, stage all changed files
-- Commit message format: "[[issue number]] [what was done]" and reference the issue number
-  of the assigned task.
+- After completing each task, commit all changed files including changes to the
+  issue markdown.
+- Commit message format: "[[issue number]] [what was done]" and reference the
+  issue number of the assigned task.
 - Do NOT push automatically. Leave push for the user.
 
 ## Architecture Rules

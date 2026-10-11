@@ -34,7 +34,7 @@ The **ish** command line tools rely on go modules from [charmbracelet](https://g
   - [x] Navigating issue compontents
   - [x] Editing components
   - [x] Updating to-do items
-  - [ ] Appending comments
+  - [x] Appending comments
   - [ ] Adding new metadata attributes
 - [ ] Build ish DB
 - [ ] Create ish sub-commands

@@ -3,6 +3,7 @@ package models
 import (
 	"slices"
 	"strings"
+	"unicode"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -20,6 +21,15 @@ type Tag struct {
 	// editing reports whether the values are being edited in input.
 	editing bool
 	input   textinput.Model
+
+	// editingKey reports whether the key of a new tag is being edited in
+	// keyInput.
+	editingKey bool
+	keyInput   textinput.Model
+
+	// deleting reports whether the tag is highlighted, waiting for the user
+	// to confirm that it should be deleted.
+	deleting bool
 }
 
 func (t Tag) Init() tea.Cmd {
@@ -32,7 +42,23 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SelectMsg:
 		t.selected = bool(msg)
+
+		if !t.selected {
+			t.deleting = false
+		}
+
 		return t, nil
+	}
+
+	if t.editingKey {
+		// Keys are single words, so spaces aren't typed.
+		if msg, ok := msg.(tea.KeyPressMsg); ok && strings.ContainsFunc(msg.Text, unicode.IsSpace) {
+			return t, nil
+		}
+
+		var cmd tea.Cmd
+		t.keyInput, cmd = t.keyInput.Update(msg)
+		return t, cmd
 	}
 
 	if t.editing {
@@ -52,6 +78,33 @@ func (t Tag) label() string {
 	return styles.Tag.Render("• " + t.Key + ": ")
 }
 
+// keyPrefix is shown before a new tag's key while it's being edited.
+const keyPrefix = "• "
+
+// startKeyEdit begins editing the key of a new tag in an input that fits
+// within width.
+func (t *Tag) startKeyEdit(width int, isDark bool) tea.Cmd {
+	t.keyInput = textinput.New()
+	t.keyInput.Prompt = ""
+	t.keyInput.SetStyles(textinput.DefaultStyles(isDark))
+	t.sizeEditor(width)
+	t.editingKey = true
+
+	return t.keyInput.Focus()
+}
+
+// editedKey returns the key being edited, without any whitespace, which a key
+// can't contain.
+func (t Tag) editedKey() string {
+	return strings.Join(strings.Fields(t.keyInput.Value()), "")
+}
+
+// commitKey sets the tag's key to the edited key, and stops editing it.
+func (t *Tag) commitKey() {
+	t.Key = t.editedKey()
+	t.editingKey = false
+}
+
 // startEdit begins editing the tag's values as comma-separated text in an
 // input that fits, with the key, within width.
 func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
@@ -68,6 +121,11 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 
 // sizeEditor fits the input, with the key, within width.
 func (t *Tag) sizeEditor(width int) {
+	if t.editingKey {
+		t.keyInput.SetWidth(max(width-lipgloss.Width(keyPrefix), 1))
+		return
+	}
+
 	t.input.SetWidth(max(width-lipgloss.Width(t.label()), 1))
 }
 
@@ -105,6 +163,16 @@ func splitValues(s string) []string {
 }
 
 func (t Tag) View() tea.View {
+	if t.editingKey {
+		return tea.NewView(styles.TagSelected.Render(keyPrefix) + t.keyInput.View())
+	}
+
+	if t.deleting {
+		return tea.NewView(styles.TagDeleting.Render(
+			"• " + t.Key + ": " + strings.Join(t.Values, ", "),
+		))
+	}
+
 	if t.editing {
 		return tea.NewView(t.label() + t.input.View())
 	}
