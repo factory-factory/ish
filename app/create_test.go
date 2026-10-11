@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -54,8 +55,8 @@ func TestNewKeyOpensEmptyIssue(t *testing.T) {
 
 	m, issue := openNew(t, m)
 
-	if len(issue.Id) != 10 {
-		t.Errorf("Id = %q, want a 10 character ID", issue.Id)
+	if !regexp.MustCompile(`^[0-9A-Z]{5}-[0-9A-Z]{5}$`).MatchString(issue.Id) {
+		t.Errorf("Id = %q, want a timestamp and random part joined by -", issue.Id)
 	}
 	if issue.Title != "" || len(issue.Metadata) != 0 {
 		t.Errorf("Title, Metadata = %q, %v, want empty", issue.Title, issue.Metadata)

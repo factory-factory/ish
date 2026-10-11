@@ -132,30 +132,35 @@ func TestParseIssueRequiresBreakBetweenCards(t *testing.T) {
 	}
 }
 
-func TestParseIssueSampleKeepsNestedList(t *testing.T) {
-	f, err := os.Open("../issues/01AN4Z07BY.md")
+func TestParseIssueSamplesKeepCardSource(t *testing.T) {
+	paths, err := filepath.Glob("../issues/*.md")
 
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("no sample issues found (err = %v)", err)
 	}
 
-	defer f.Close()
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
 
-	issue, err := ParseIssue(f)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if err != nil {
-		t.Fatalf("ParseIssue() error = %v", err)
-	}
+		issue, err := ParseIssue(strings.NewReader(string(source)))
 
-	want := "- [ ] Create ish commands\n  - [ ] ish init\n"
+		if err != nil {
+			t.Errorf("%s: ParseIssue() error = %v", path, err)
+			continue
+		}
 
-	for _, card := range issue.Conversation {
-		if strings.Contains(*card.Content, want) {
-			return
+		// Each card's content is copied verbatim from the file, so nested
+		// lists and other indentation are kept.
+		for i, card := range issue.Conversation {
+			if !strings.Contains(string(source), *card.Content) {
+				t.Errorf("%s: card %d content isn't verbatim from the file:\n%s", path, i, *card.Content)
+			}
 		}
 	}
-
-	t.Errorf("no card contains the nested list %q", want)
 }
 
 // writeIssues writes each issue source to a file named for its ID in a new
