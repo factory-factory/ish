@@ -239,3 +239,45 @@ func TestCommentInOpenedIssueIsSaved(t *testing.T) {
 		t.Errorf("last comment date = %q, want the current time in RFC 3339 format", last.DateCreated)
 	}
 }
+
+func TestMetadataEditsAreSaved(t *testing.T) {
+	stubUser(t, "alice@example.com", nil, "alice", nil)
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	// Open the issue, add a priority field, and go back.
+	m = update(t, m, enter, tea.KeyPressMsg{Code: 'm', Text: "m"})
+	m = typeText(t, m, "priority")
+	m = update(t, m, enter)
+	m = typeText(t, m, "high")
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	saved, err := parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatalf("LoadIssue() error = %v", err)
+	}
+
+	keys := []string{}
+	for _, tag := range saved.Metadata {
+		keys = append(keys, tag.Key+"="+strings.Join(tag.Values, ","))
+	}
+
+	if got := strings.Join(keys, " "); got != "state=open assignees=alice priority=high" {
+		t.Fatalf("saved metadata = %q, want the new priority field last", got)
+	}
+
+	// Open it again, delete the state field, and go back.
+	backspace := tea.KeyPressMsg{Code: tea.KeyBackspace}
+	m = update(t, m, enter, tab, tab, backspace, backspace)
+	m = closeIssue(t, m, esc)
+
+	saved, err = parse.LoadIssue(m.dir, "AAA")
+
+	if err != nil {
+		t.Fatalf("LoadIssue() error = %v", err)
+	}
+	if saved.State() != "" || len(saved.Metadata) != 2 {
+		t.Errorf("saved metadata = %v, want the state field deleted", saved.Metadata)
+	}
+}

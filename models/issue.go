@@ -74,6 +74,97 @@ type Issue struct {
 	// newComment reports whether the card being edited is a comment that was
 	// just added, which is removed if its first edit is cancelled or empty.
 	newComment bool
+
+	// newTag reports whether the tag being edited was just added. Its key is
+	// edited first, then its values, and it's removed if it's left without
+	// either.
+	newTag bool
+}
+
+// addTag appends a blank metadata tag, selects it, and starts editing its
+// key.
+func (ish *Issue) addTag() tea.Cmd {
+	ish.Metadata = append(ish.Metadata, Tag{})
+	ish.setCursor(1 + len(ish.Metadata))
+
+	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)
+	ish.editing = true
+	ish.newTag = true
+	ish.saveErr = nil
+	// The header has a new line, and the help footer changes while editing.
+	ish.resize()
+
+	return cmd
+}
+
+// saveNewTag handles saving while a new tag is being edited, reporting
+// whether it was handled. Saving the key moves on to editing the values,
+// unless the key is empty, which removes the tag. Saving without values
+// keeps editing them. Saving with values isn't handled here, and is saved as
+// any other tag edit.
+func (ish *Issue) saveNewTag() (tea.Cmd, bool) {
+	i := ish.tagIndex()
+
+	if !ish.newTag || i < 0 {
+		return nil, false
+	}
+
+	tag := &ish.Metadata[i]
+
+	switch {
+	case tag.editingKey && tag.editedKey() == "":
+		ish.stopEdit(false)
+		return nil, true
+
+	case tag.editingKey:
+		tag.commitKey()
+		return tag.startEdit(ish.headerWidth(), !ish.light), true
+
+	case len(splitValues(tag.input.Value())) == 0:
+		return nil, true
+	}
+
+	return nil, false
+}
+
+// removeTag removes the metadata tag at index i, then selects the tag that
+// took its place, the tag before it if it was the last, or the title if no
+// tags are left.
+func (ish *Issue) removeTag(i int) {
+	ish.Metadata = slices.Delete(ish.Metadata, i, i+1)
+	ish.cursor = 0
+
+	if len(ish.Metadata) > 0 {
+		ish.setCursor(2 + min(i, len(ish.Metadata)-1))
+	} else {
+		ish.setCursor(1)
+	}
+
+	ish.resize()
+}
+
+// confirmingDelete reports whether the selected tag is highlighted, waiting
+// for the user to confirm that it should be deleted.
+func (ish Issue) confirmingDelete() bool {
+	i := ish.tagIndex()
+	return i >= 0 && ish.Metadata[i].deleting
+}
+
+// updateDelete handles a key press while confirming that the selected tag
+// should be deleted: the delete key deletes it, and any other key cancels.
+func (ish *Issue) updateDelete(msg tea.KeyPressMsg) {
+	i := ish.tagIndex()
+
+	if key.Matches(msg, deleteKeys.Confirm) {
+		ish.removeTag(i)
+		ish.dirty = true
+		// After a failed save, a new change may fix the problem, so the next
+		// exit tries to save again.
+		ish.saveErr = nil
+		return
+	}
+
+	ish.Metadata[i].deleting = false
 }
 
 // now returns the current time. Tests replace it.
@@ -157,6 +248,7 @@ func (ish Issue) keyMap() keyMap {
 	k := keys
 	k.Edit.SetEnabled(ish.cursor > 0)
 	k.Comment.SetEnabled(ish.author != "")
+	k.DeleteTag.SetEnabled(ish.tagIndex() >= 0)
 	k.Back.SetEnabled(ish.closable)
 
 	if i := ish.cardIndex(); i >= 0 {
@@ -346,6 +438,11 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return ish, nil
 
 	case tea.KeyPressMsg:
+		if ish.confirmingDelete() {
+			ish.updateDelete(msg)
+			return ish, nil
+		}
+
 		if ish.selectingTodo() && ish.updateTodos(msg) {
 			return ish, nil
 		}
@@ -368,6 +465,14 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Comment):
 			cmd := ish.addComment()
 			return ish, cmd
+
+		case key.Matches(msg, keys.AddTag):
+			cmd := ish.addTag()
+			return ish, cmd
+
+		case key.Matches(msg, keys.DeleteTag):
+			ish.Metadata[ish.tagIndex()].deleting = true
+			return ish, nil
 
 		case key.Matches(msg, keys.Todos):
 			ish.Conversation[ish.cardIndex()].startTodos()
@@ -507,6 +612,10 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 			return ish.exit(tea.Quit), true
 
 		case key.Matches(msg, keys.Save):
+			if cmd, handled := ish.saveNewTag(); handled {
+				return cmd, true
+			}
+
 			ish.stopEdit(true)
 			return nil, true
 
@@ -592,9 +701,15 @@ func (ish *Issue) stopEdit(save bool) {
 		}
 
 	case ish.tagIndex() >= 0:
-		if save {
+		switch {
+		// A new tag that's cancelled is removed, since it's missing its key
+		// or its values, and can't be written to the issue file without
+		// both.
+		case ish.newTag && !save:
+			ish.removeTag(ish.tagIndex())
+		case save:
 			ish.dirty = ish.Metadata[ish.tagIndex()].commitEdit() || ish.dirty
-		} else {
+		default:
 			ish.Metadata[ish.tagIndex()].cancelEdit()
 		}
 
@@ -615,6 +730,7 @@ func (ish *Issue) stopEdit(save bool) {
 
 	ish.editing = false
 	ish.newComment = false
+	ish.newTag = false
 	ish.resize()
 
 	if i := ish.cardIndex(); i >= 0 {
@@ -633,6 +749,7 @@ func (ish *Issue) styleEditor() {
 
 	case ish.tagIndex() >= 0:
 		ish.Metadata[ish.tagIndex()].input.SetStyles(textinput.DefaultStyles(dark))
+		ish.Metadata[ish.tagIndex()].keyInput.SetStyles(textinput.DefaultStyles(dark))
 
 	case ish.cardIndex() >= 0:
 		ish.Conversation[ish.cardIndex()].editor.SetStyles(textarea.DefaultStyles(dark))
@@ -835,6 +952,8 @@ func (ish Issue) renderFooter() string {
 	switch {
 	case ish.editing:
 		help = ish.help.View(ish.editKeyMap())
+	case ish.confirmingDelete():
+		help = ish.help.View(deleteKeys)
 	case ish.selectingTodo():
 		help = ish.help.View(todoKeys)
 	}

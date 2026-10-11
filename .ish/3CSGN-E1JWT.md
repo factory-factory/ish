@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-11T10:57:08-07:00]
 
-- state: open
+- state: in review
 - assignees: brendan@berg.industries
 
 ---
@@ -20,3 +20,31 @@ If the Tag is taken out of editing mode having an empty Key field, the Tag shoul
 ## Removing a metadata field
 
 When a Tag is selected, pressing delete should highlight the entire Tag with red text on a grey background. Pressing delete again should remove the tag. Any other key should put the Tag back into the selected state.
+
+---
+
+[Claude 2026-10-11T11:19:25-07:00]
+
+Done, and moved to `in review`.
+
+Adding a metadata field:
+
+- `m` appends a blank tag to the metadata, selects it, and starts editing its key. Enter sets the key and moves on to editing the values, which are comma-separated like other tags. Enter with values set stops editing, and the tag stays selected.
+- A tag that leaves edit mode with an empty key is removed, as the issue says, and the tag before it (or the title, if there are none) is selected again.
+- Two cases the issue didn't cover:
+  - Enter with no values keeps editing the values, since the tag should only stop editing once both are set.
+  - Pressing `esc` while editing the values also removes the new tag. A key without a value can't be written to the issue file (the format needs `key: value`), so keeping it would make saving fail when leaving the issue. Tell me if you'd rather keep it and handle that another way.
+- Keys can't contain spaces in the file format, so typed spaces are ignored and pasted whitespace is removed.
+
+Removing a metadata field:
+
+- With a tag selected, pressing delete highlights the whole tag in bold bright red on dark grey (ANSI colors 9 and 8). Pressing delete again removes it, and selects the tag that took its place, the tag before it, or the title.
+- On Mac keyboards the key labelled "delete" sends backspace, so both backspace and forward delete work.
+- Any other key cancels and the tag goes back to being selected. The key isn't also acted on, so pressing `j` to cancel doesn't move the selection. Moving the selection away also cancels.
+- Backspace on the title or a comment does nothing, and while a field is being edited it deletes a character as usual.
+
+Other details:
+
+- Added and deleted fields mark the issue as changed, and they're written to the file when the issue is closed or the program quits, like other edits. An unfinished new tag is discarded when quitting.
+- The help footer lists `m add field` and, with a tag selected, `⌫ delete field`. While confirming a delete it shows `⌫ delete field • any other key cancel`.
+- Added tests for adding a tag (key, then values), spaces in keys, empty values, each way of abandoning a new tag, quitting while adding one, saving it, deleting with both keys, deleting the last tags, cancelling with another key or by moving away, and the delete key elsewhere. There's also an end-to-end test that adds and deletes fields in an issue file through the list.
