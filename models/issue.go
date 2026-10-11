@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/styles"
@@ -24,11 +27,17 @@ type Issue struct {
 	selectedComment int
 	cursor          int
 
-	// width and height are the terminal dimensions, and offset is the number
-	// of lines the card area is scrolled down.
+	// width and height are the terminal dimensions.
 	width  int
 	height int
-	offset int
+
+	// viewport scrolls the cards below the pinned header, and spans records
+	// where each card sits in the viewport content.
+	viewport viewport.Model
+	spans    []span
+
+	help  help.Model
+	ready bool
 }
 
 const (
@@ -87,66 +96,120 @@ func InitialModel() Issue {
 }
 
 func (ish Issue) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+	return tea.RequestBackgroundColor
 }
 
 func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	ish.initComponents()
+
 	switch msg := msg.(type) {
+
+	case tea.BackgroundColorMsg:
+		ish.help.Styles = help.DefaultStyles(msg.IsDark())
+		return ish, nil
 
 	case tea.WindowSizeMsg:
 		ish.width = msg.Width
 		ish.height = msg.Height
+		ish.resize()
 
-		spans, area := ish.layout()
 		if i := ish.cardIndex(); i >= 0 {
-			ish.reveal(spans[i], area, true)
+			ish.reveal(ish.spans[i], true)
 		}
-		ish.clampOffset(spans, area)
 
 		return ish, nil
 
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+	case tea.KeyPressMsg:
+		switch {
+		case key.Matches(msg, keys.Quit):
 			return ish, tea.Quit
 
-		case "tab", "shift+tab":
+		case key.Matches(msg, keys.Help):
+			ish.help.ShowAll = !ish.help.ShowAll
+			ish.resize()
+			return ish, nil
+
+		case key.Matches(msg, keys.Next, keys.Prev):
 			total := len(ish.Metadata) + len(ish.Conversation) + 2
+			next := key.Matches(msg, keys.Next)
 			c := ish.cursor
 
-			switch msg.String() {
-			case "tab":
+			if next {
 				c = (c + 1) % total
-			case "shift+tab":
+			} else {
 				c = (c - 1 + total) % total
 			}
 
 			ish.setCursor(c)
 
-			spans, area := ish.layout()
 			if i := ish.cardIndex(); i >= 0 {
-				ish.reveal(spans[i], area, msg.String() == "tab")
+				ish.reveal(ish.spans[i], next)
 			}
-			ish.clampOffset(spans, area)
 
 			return ish, nil
 
-		case "down", "j":
+		case key.Matches(msg, keys.Down):
 			ish.scrollDown()
 			return ish, nil
 
-		case "up", "k":
+		case key.Matches(msg, keys.Up):
 			ish.scrollUp()
 			return ish, nil
 		}
 	}
 
-	return ish, nil
+	// Paging keys and the mouse wheel scroll the viewport directly.
+	var cmd tea.Cmd
+	ish.viewport, cmd = ish.viewport.Update(msg)
+
+	return ish, cmd
+}
+
+// initComponents sets up the viewport and help footer the first time the
+// issue receives a message, since issues are built as struct literals.
+func (ish *Issue) initComponents() {
+	if ish.ready {
+		return
+	}
+
+	ish.viewport = viewport.New()
+	// Arrow keys move between cards, so the viewport mustn't handle them too.
+	ish.viewport.KeyMap.Up.Unbind()
+	ish.viewport.KeyMap.Down.Unbind()
+
+	ish.help = help.New()
+	ish.ready = true
+
+	ish.syncViewport()
+}
+
+// resize fits the viewport into the space left between the pinned header and
+// the help footer.
+func (ish *Issue) resize() {
+	ish.help.SetWidth(ish.width)
+
+	header := lipgloss.Height(ish.renderHeader())
+	footer := lipgloss.Height(ish.renderFooter())
+
+	ish.viewport.SetWidth(ish.width)
+	ish.viewport.SetHeight(max(ish.height-header-footer, 0))
+
+	ish.syncViewport()
+}
+
+// syncViewport re-renders the cards into the viewport, recording where each
+// card sits so the selection can be scrolled into view.
+func (ish *Issue) syncViewport() {
+	content, spans := ish.renderCards()
+
+	ish.spans = spans
+	ish.viewport.SetContent(content)
+	// Content may have shrunk, so clamp the offset to the new bounds.
+	ish.viewport.SetYOffset(ish.viewport.YOffset())
 }
 
 // span is the vertical extent, in lines, of a rendered card within the
-// scrollable card area.
+// viewport content.
 type span struct {
 	top    int
 	height int
@@ -178,6 +241,8 @@ func (ish *Issue) setCursor(c int) {
 	ish.selectAt(ish.cursor, false)
 	ish.cursor = c
 	ish.selectAt(ish.cursor, true)
+
+	ish.syncViewport()
 }
 
 func (ish *Issue) selectAt(c int, selected bool) {
@@ -197,94 +262,65 @@ func (ish *Issue) selectAt(c int, selected bool) {
 // time, then moves the selection to the next card once the selected card's
 // last line is visible.
 func (ish *Issue) scrollDown() {
-	spans, area := ish.layout()
 	i := ish.cardIndex()
+	bottom := ish.viewport.YOffset() + ish.viewport.Height()
 
 	switch {
-	case len(spans) == 0:
+	case len(ish.spans) == 0:
 		return
 	case i < 0:
 		ish.setCursor(ish.firstCard())
-		ish.reveal(spans[0], area, true)
-	case spans[i].bottom() > ish.offset+area:
-		ish.offset++
-	case i+1 < len(spans):
+		ish.reveal(ish.spans[0], true)
+	case ish.spans[i].bottom() > bottom:
+		ish.viewport.ScrollDown(1)
+	case i+1 < len(ish.spans):
 		ish.setCursor(ish.cursor + 1)
-		ish.reveal(spans[i+1], area, true)
+		ish.reveal(ish.spans[i+1], true)
 	}
-
-	ish.clampOffset(spans, area)
 }
 
 // scrollUp scrolls the rest of the selected card into view one line at a
 // time, then moves the selection to the previous card once the selected
 // card's first line is visible.
 func (ish *Issue) scrollUp() {
-	spans, area := ish.layout()
 	i := ish.cardIndex()
+	last := len(ish.spans) - 1
 
 	switch {
-	case len(spans) == 0:
+	case len(ish.spans) == 0:
 		return
 	case i < 0:
-		ish.setCursor(ish.firstCard() + len(spans) - 1)
-		ish.reveal(spans[len(spans)-1], area, false)
-	case spans[i].top < ish.offset:
-		ish.offset--
+		ish.setCursor(ish.firstCard() + last)
+		ish.reveal(ish.spans[last], false)
+	case ish.spans[i].top < ish.viewport.YOffset():
+		ish.viewport.ScrollUp(1)
 	case i > 0:
 		ish.setCursor(ish.cursor - 1)
-		ish.reveal(spans[i-1], area, false)
+		ish.reveal(ish.spans[i-1], false)
 	}
-
-	ish.clampOffset(spans, area)
 }
 
-// reveal adjusts the scroll offset so that s is visible in a card area of the
-// given height. A card taller than the area is revealed from its top edge when
-// moving down and from its bottom edge when moving up.
-func (ish *Issue) reveal(s span, area int, down bool) {
+// reveal scrolls the viewport so that s is visible. A card taller than the
+// viewport is revealed from its top edge when moving down and from its bottom
+// edge when moving up.
+func (ish *Issue) reveal(s span, down bool) {
+	top := ish.viewport.YOffset()
+	area := ish.viewport.Height()
+
 	if s.height > area {
-		if down && (s.top < ish.offset || s.top >= ish.offset+area) {
-			ish.offset = s.top
-		} else if !down && (s.bottom() <= ish.offset || s.bottom() > ish.offset+area) {
-			ish.offset = s.bottom() - area
+		if down && (s.top < top || s.top >= top+area) {
+			ish.viewport.SetYOffset(s.top)
+		} else if !down && (s.bottom() <= top || s.bottom() > top+area) {
+			ish.viewport.SetYOffset(s.bottom() - area)
 		}
 		return
 	}
 
-	if s.top < ish.offset {
-		ish.offset = s.top
-	} else if s.bottom() > ish.offset+area {
-		ish.offset = s.bottom() - area
+	if s.top < top {
+		ish.viewport.SetYOffset(s.top)
+	} else if s.bottom() > top+area {
+		ish.viewport.SetYOffset(s.bottom() - area)
 	}
-}
-
-// clampOffset keeps the scroll offset within the bounds of the card content.
-func (ish *Issue) clampOffset(spans []span, area int) {
-	total := 0
-	if len(spans) > 0 {
-		total = spans[len(spans)-1].bottom()
-	}
-
-	ish.offset = min(ish.offset, max(total-area, 0))
-	ish.offset = max(ish.offset, 0)
-}
-
-// layout returns the position of each rendered card and the height of the
-// scrollable card area below the pinned header. Before the terminal size is
-// known, the card area is tall enough to hold every card.
-func (ish Issue) layout() ([]span, int) {
-	_, spans := ish.renderCards()
-
-	if ish.height <= 0 {
-		total := 0
-		if len(spans) > 0 {
-			total = spans[len(spans)-1].bottom()
-		}
-		return spans, total
-	}
-
-	return spans, max(ish.height-lipgloss.Height(ish.renderHeader()), 0)
 }
 
 // renderHeader renders the title, byline, and metadata tags that stay pinned
@@ -342,19 +378,17 @@ func (ish Issue) renderCards() (string, []span) {
 	return styles.Body.Render(lipgloss.JoinVertical(lipgloss.Left, c...)), spans
 }
 
+// renderFooter renders the key binding help shown below the viewport.
+func (ish Issue) renderFooter() string {
+	return styles.Footer.Render(ish.help.View(keys))
+}
+
 func (ish Issue) View() tea.View {
-	header := ish.renderHeader()
-	cards, _ := ish.renderCards()
-
-	if ish.height > 0 {
-		area := max(ish.height-lipgloss.Height(header), 0)
-		lines := strings.Split(cards, "\n")
-		end := min(ish.offset+area, len(lines))
-		start := min(ish.offset, end)
-		cards = strings.Join(lines[start:end], "\n")
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, header, cards)
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		ish.renderHeader(),
+		ish.viewport.View(),
+		ish.renderFooter(),
+	)
 
 	if ish.width > 0 && ish.height > 0 {
 		content = lipgloss.NewStyle().
@@ -365,6 +399,7 @@ func (ish Issue) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 
 	return v
 }

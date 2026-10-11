@@ -51,52 +51,60 @@ func update(t *testing.T, ish Issue, msgs ...tea.Msg) Issue {
 	return ish
 }
 
-// resize sends a window size message giving the card area the given height.
+// resize sends a window size message giving the viewport the given height.
 func resize(t *testing.T, ish Issue, area int) Issue {
 	t.Helper()
 
+	ish.initComponents()
 	header := lipgloss.Height(ish.renderHeader())
-	return update(t, ish, tea.WindowSizeMsg{Width: 120, Height: header + area})
+	footer := lipgloss.Height(ish.renderFooter())
+	ish = update(t, ish, tea.WindowSizeMsg{Width: 120, Height: header + area + footer})
+
+	if got := ish.viewport.Height(); got != area {
+		t.Fatalf("viewport height = %d, want %d", got, area)
+	}
+
+	return ish
+}
+
+// offset returns the viewport's scroll position.
+func offset(ish Issue) int {
+	return ish.viewport.YOffset()
 }
 
 var (
-	down = tea.KeyPressMsg{Code: tea.KeyDown}
-	up   = tea.KeyPressMsg{Code: tea.KeyUp}
-	tab  = tea.KeyPressMsg{Code: tea.KeyTab}
+	down     = tea.KeyPressMsg{Code: tea.KeyDown}
+	up       = tea.KeyPressMsg{Code: tea.KeyUp}
+	tab      = tea.KeyPressMsg{Code: tea.KeyTab}
+	shiftTab = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	pageDown = tea.KeyPressMsg{Code: tea.KeyPgDown}
+	question = tea.KeyPressMsg{Code: '?', Text: "?"}
 )
 
-func TestViewPinsHeader(t *testing.T) {
+func TestViewPinsHeaderAndFooter(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(3), lines(3), lines(3)), 6)
-	ish.offset = 4
+	ish.viewport.SetYOffset(4)
 
 	header := strings.Split(ish.renderHeader(), "\n")
+	footer := strings.Split(ish.renderFooter(), "\n")
 	view := strings.Split(ish.View().Content, "\n")
 
-	if len(view) > ish.height {
-		t.Errorf("View() has %d lines, want at most %d", len(view), ish.height)
+	if len(view) != ish.height {
+		t.Fatalf("View() has %d lines, want %d", len(view), ish.height)
 	}
+
+	trim := func(s string) string { return strings.TrimRight(s, " ") }
 
 	for i, want := range header {
-		got := strings.TrimRight(view[i], " ")
-		if want = strings.TrimRight(want, " "); got != want {
-			t.Errorf("View() line %d = %q, want header line %q", i, got, want)
+		if got := trim(view[i]); got != trim(want) {
+			t.Errorf("View() line %d = %q, want header line %q", i, got, trim(want))
 		}
 	}
-}
 
-func TestViewShowsScrolledCards(t *testing.T) {
-	ish := resize(t, newTestIssue(lines(3), lines(3)), 5)
-	ish.offset = 2
-
-	cards, _ := ish.renderCards()
-	want := strings.Split(cards, "\n")[2:7]
-
-	view := strings.Split(ish.View().Content, "\n")
-	got := view[len(view)-5:]
-
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("card area line %d = %q, want %q", i, got[i], want[i])
+	for i, want := range footer {
+		j := len(view) - len(footer) + i
+		if got := trim(view[j]); got != trim(want) {
+			t.Errorf("View() line %d = %q, want footer line %q", j, got, trim(want))
 		}
 	}
 }
@@ -120,8 +128,8 @@ func TestDownMovesBetweenCardsThatFit(t *testing.T) {
 	if got := ish.cardIndex(); got != 2 {
 		t.Errorf("cardIndex() = %d, want 2", got)
 	}
-	if ish.offset != 0 {
-		t.Errorf("offset = %d, want 0", ish.offset)
+	if offset(ish) != 0 {
+		t.Errorf("offset = %d, want 0", offset(ish))
 	}
 	if ish.Conversation[0].selected || ish.Conversation[1].selected {
 		t.Error("previously selected cards are still selected")
@@ -136,7 +144,7 @@ func TestDownMovesBetweenCardsThatFit(t *testing.T) {
 
 func TestDownScrollsThroughTallCard(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(10), lines(1)), 6)
-	spans, area := ish.layout()
+	spans, area := ish.spans, ish.viewport.Height()
 	hidden := spans[0].bottom() - area
 
 	if hidden <= 0 {
@@ -148,8 +156,8 @@ func TestDownScrollsThroughTallCard(t *testing.T) {
 	for i := 1; i <= hidden; i++ {
 		ish = update(t, ish, down)
 
-		if ish.offset != i {
-			t.Fatalf("offset after %d scrolls = %d, want %d", i, ish.offset, i)
+		if offset(ish) != i {
+			t.Fatalf("offset after %d scrolls = %d, want %d", i, offset(ish), i)
 		}
 		if got := ish.cardIndex(); got != 0 {
 			t.Fatalf("cardIndex() after %d scrolls = %d, want 0", i, got)
@@ -161,46 +169,45 @@ func TestDownScrollsThroughTallCard(t *testing.T) {
 	if got := ish.cardIndex(); got != 1 {
 		t.Errorf("cardIndex() = %d, want 1", got)
 	}
-	if s := spans[1]; s.bottom() > ish.offset+area || s.top < ish.offset {
-		t.Errorf("second card %+v not in view at offset %d with area %d", s, ish.offset, area)
+	if s := spans[1]; s.bottom() > offset(ish)+area || s.top < offset(ish) {
+		t.Errorf("second card %+v not in view at offset %d with area %d", s, offset(ish), area)
 	}
 }
 
 func TestUpRevealsBottomOfTallCard(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(10), lines(1)), 6)
-	spans, area := ish.layout()
+	spans, area := ish.spans, ish.viewport.Height()
 
 	ish.setCursor(ish.firstCard() + 1)
-	ish.offset = spans[1].bottom() - area
+	ish.viewport.SetYOffset(spans[1].bottom() - area)
 	ish = update(t, ish, up)
 
 	if got := ish.cardIndex(); got != 0 {
 		t.Fatalf("cardIndex() = %d, want 0", got)
 	}
-
-	if s := spans[0]; s.bottom() <= ish.offset || s.bottom() > ish.offset+area {
-		t.Errorf("bottom of card %+v not in view at offset %d with area %d", s, ish.offset, area)
+	if s := spans[0]; s.bottom() <= offset(ish) || s.bottom() > offset(ish)+area {
+		t.Errorf("bottom of card %+v not in view at offset %d with area %d", s, offset(ish), area)
 	}
 
-	for ish.offset > 0 {
-		before := ish.offset
+	for offset(ish) > 0 {
+		before := offset(ish)
 		ish = update(t, ish, up)
 
-		if ish.offset != before-1 {
-			t.Fatalf("offset = %d, want %d", ish.offset, before-1)
+		if offset(ish) != before-1 {
+			t.Fatalf("offset = %d, want %d", offset(ish), before-1)
 		}
 	}
 
 	// Up on the first card, fully scrolled to its top, does nothing.
 	ish = update(t, ish, up)
-	if got := ish.cardIndex(); got != 0 || ish.offset != 0 {
-		t.Errorf("cardIndex(), offset = %d, %d, want 0, 0", got, ish.offset)
+	if got := ish.cardIndex(); got != 0 || offset(ish) != 0 {
+		t.Errorf("cardIndex(), offset = %d, %d, want 0, 0", got, offset(ish))
 	}
 }
 
 func TestTabRevealsSelectedCard(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(3), lines(3), lines(3)), 6)
-	spans, area := ish.layout()
+	spans, area := ish.spans, ish.viewport.Height()
 
 	ish.setCursor(ish.firstCard() + 1)
 	ish = update(t, ish, tab)
@@ -208,8 +215,8 @@ func TestTabRevealsSelectedCard(t *testing.T) {
 	if got := ish.cardIndex(); got != 2 {
 		t.Fatalf("cardIndex() = %d, want 2", got)
 	}
-	if s := spans[2]; s.top < ish.offset || s.top >= ish.offset+area {
-		t.Errorf("top of card %+v not in view at offset %d with area %d", s, ish.offset, area)
+	if s := spans[2]; s.top < offset(ish) || s.top >= offset(ish)+area {
+		t.Errorf("top of card %+v not in view at offset %d with area %d", s, offset(ish), area)
 	}
 }
 
@@ -217,7 +224,7 @@ func TestTabWrapsAround(t *testing.T) {
 	ish := newTestIssue(lines(1))
 	total := len(ish.Metadata) + len(ish.Conversation) + 2
 
-	ish = update(t, ish, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	ish = update(t, ish, shiftTab)
 	if ish.cursor != total-1 {
 		t.Errorf("cursor after shift+tab = %d, want %d", ish.cursor, total-1)
 	}
@@ -228,18 +235,41 @@ func TestTabWrapsAround(t *testing.T) {
 	}
 }
 
+func TestPageDownScrollsViewport(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(3), lines(3), lines(3)), 6)
+	ish = update(t, ish, pageDown)
+
+	if offset(ish) != 6 {
+		t.Errorf("offset = %d, want 6", offset(ish))
+	}
+}
+
+func TestHelpToggleResizesViewport(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(3), lines(3)), 10)
+	short := lipgloss.Height(ish.renderFooter())
+
+	ish = update(t, ish, question)
+
+	if !ish.help.ShowAll {
+		t.Fatal("full help not shown after ?")
+	}
+
+	full := lipgloss.Height(ish.renderFooter())
+	if want := 10 - (full - short); ish.viewport.Height() != want {
+		t.Errorf("viewport height = %d, want %d", ish.viewport.Height(), want)
+	}
+}
+
 func TestResizeClampsOffset(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(3), lines(3)), 4)
-	ish.offset = 1000
-	ish = resize(t, ish, 4)
+	ish.viewport.SetYOffset(1000)
 
-	spans, area := ish.layout()
-	if want := spans[len(spans)-1].bottom() - area; ish.offset != want {
-		t.Errorf("offset = %d, want %d", ish.offset, want)
+	if want := ish.spans[len(ish.spans)-1].bottom() - 4; offset(ish) != want {
+		t.Errorf("offset = %d, want %d", offset(ish), want)
 	}
 
 	ish = resize(t, ish, 1000)
-	if ish.offset != 0 {
-		t.Errorf("offset after growing = %d, want 0", ish.offset)
+	if offset(ish) != 0 {
+		t.Errorf("offset after growing = %d, want 0", offset(ish))
 	}
 }

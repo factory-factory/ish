@@ -31,6 +31,9 @@ var Header = lipgloss.NewStyle().
 var Body = lipgloss.NewStyle().
 	Padding(0, 1)
 
+var Footer = lipgloss.NewStyle().
+	Padding(0, 2)
+
 var cardBase = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("15")).
 	MarginBottom(0).

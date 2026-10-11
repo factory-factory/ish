@@ -181,7 +181,6 @@ func parseCard(node ast.Node, b []byte, r renderer.Renderer) (*models.Card, ast.
 	err = r.Render(&buf, b, doc)
 	content := string(buf.Bytes())
 
-	fmt.Print(content)
 	card := &models.Card{
 		Author:      *byline.Author,
 		DateCreated: *byline.DateCreated,
