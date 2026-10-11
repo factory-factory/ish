@@ -274,3 +274,164 @@ func TestListFitsTerminalResizedWhileIssueOpen(t *testing.T) {
 		t.Errorf("table width = %d, want at most 60", got)
 	}
 }
+
+// writeIssue writes an issue file to the model's directory.
+func writeIssue(t *testing.T, m Model, id, source string) {
+	t.Helper()
+
+	if err := os.WriteFile(filepath.Join(m.dir, id+".md"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func removeIssue(t *testing.T, m Model, id string) {
+	t.Helper()
+
+	if err := os.Remove(filepath.Join(m.dir, id+".md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// ids returns the IDs of the issues in the list, in order.
+func ids(m Model) string {
+	var ids []string
+	for _, row := range m.table.Rows() {
+		ids = append(ids, row[0])
+	}
+	return strings.Join(ids, " ")
+}
+
+func selected(m Model) string {
+	if row := m.table.SelectedRow(); row != nil {
+		return row[0]
+	}
+	return ""
+}
+
+var esc = tea.KeyPressMsg{Code: tea.KeyEscape}
+
+func TestCloseReloadsChangedIssues(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueSource("First", "open"),
+		"BBB": issueSource("Second", "open"),
+	})
+
+	m = update(t, m, enter)
+	writeIssue(t, m, "AAA", issueSource("A much longer title for the first issue", "closed"))
+	m = closeIssue(t, m, esc)
+
+	line := row(t, m, "AAA")
+
+	if !strings.Contains(line, "A much longer title for the first issue") || !strings.Contains(line, "closed") {
+		t.Errorf("row %q, want the title and state from disk", line)
+	}
+}
+
+func TestCloseReloadsAddedAndRemovedIssues(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueSource("First", "open"),
+		"BBB": issueSource("Second", "open"),
+	})
+
+	m = update(t, m, enter)
+	removeIssue(t, m, "BBB")
+	writeIssue(t, m, "CCC", issueSource("Third", "open"))
+	m = closeIssue(t, m, esc)
+
+	if got := ids(m); got != "AAA CCC" {
+		t.Errorf("listed %q, want %q", got, "AAA CCC")
+	}
+	if view := m.View().Content; strings.Contains(view, "BBB") || !strings.Contains(view, "Third") {
+		t.Errorf("View() = %q, want CCC listed and BBB gone", view)
+	}
+}
+
+func TestCloseKeepsSelectedIssueSelected(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueSource("First", "open"),
+		"CCC": issueSource("Third", "open"),
+	})
+
+	m = update(t, m, down, enter)
+	// BBB sorts before CCC, moving CCC down a row.
+	writeIssue(t, m, "BBB", issueSource("Second", "open"))
+	m = closeIssue(t, m, esc)
+
+	if got := selected(m); got != "CCC" {
+		t.Errorf("selected %q, want CCC", got)
+	}
+}
+
+func TestCloseAfterSelectedIssueRemoved(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueSource("First", "open"),
+		"BBB": issueSource("Second", "open"),
+		"CCC": issueSource("Third", "open"),
+	})
+
+	// The selection stays at the removed issue's position.
+	m = update(t, m, down, enter)
+	removeIssue(t, m, "BBB")
+	m = closeIssue(t, m, esc)
+
+	if got := selected(m); got != "CCC" {
+		t.Errorf("selected %q, want CCC", got)
+	}
+
+	// Removing the last issue moves the selection up to the new last issue.
+	m = update(t, m, enter)
+	removeIssue(t, m, "CCC")
+	m = closeIssue(t, m, esc)
+
+	if got := selected(m); got != "AAA" {
+		t.Errorf("selected %q, want AAA", got)
+	}
+
+	// Removing every issue leaves nothing selected.
+	m = update(t, m, enter)
+	removeIssue(t, m, "AAA")
+	m = closeIssue(t, m, esc)
+
+	if got := selected(m); got != "" {
+		t.Errorf("selected %q, want nothing", got)
+	}
+	if view := m.View().Content; !strings.Contains(view, "No issues in") {
+		t.Errorf("View() = %q, want a message saying there are no issues", view)
+	}
+}
+
+func TestCloseWithReloadError(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueSource("First", "open"),
+		"BBB": issueSource("Second", "open"),
+	})
+
+	m = update(t, m, enter)
+	writeIssue(t, m, "BBB", "Not an issue\n")
+	m = closeIssue(t, m, esc)
+
+	if m.issue != nil {
+		t.Fatal("issue still open after a failed reload")
+	}
+	if got := ids(m); got != "AAA BBB" {
+		t.Errorf("listed %q after a failed reload, want the previous list %q", got, "AAA BBB")
+	}
+	if m.err == nil || !strings.Contains(m.View().Content, "BBB.md") {
+		t.Errorf("View() = %q, want an error naming BBB.md", m.View().Content)
+	}
+	if got := len(strings.Split(m.View().Content, "\n")); got > m.height {
+		t.Errorf("View() has %d lines, want at most %d", got, m.height)
+	}
+
+	// Once the file is fixed, the next reload clears the error.
+	writeIssue(t, m, "BBB", issueSource("Fixed", "open"))
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	if m.err != nil {
+		t.Errorf("err = %v after a successful reload, want nil", m.err)
+	}
+	if line := row(t, m, "BBB"); !strings.Contains(line, "Fixed") {
+		t.Errorf("row %q, want the fixed title", line)
+	}
+}

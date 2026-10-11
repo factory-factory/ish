@@ -69,11 +69,6 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 // New returns a model listing the given issues, which were loaded from dir.
 func New(dir string, issues []models.Issue) Model {
-	rows := make([]table.Row, len(issues))
-	for i, issue := range issues {
-		rows[i] = table.Row{issue.Id, issue.Title, issue.State()}
-	}
-
 	s := table.DefaultStyles()
 	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
@@ -92,7 +87,7 @@ func New(dir string, issues []models.Issue) Model {
 	// Columns must be set before rows, which are rendered as they're added.
 	m.table = table.New(
 		table.WithColumns(m.columns(0)),
-		table.WithRows(rows),
+		table.WithRows(rows(issues)),
 		table.WithStyles(s),
 		table.WithFocused(true),
 	)
@@ -116,6 +111,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.issue != nil {
 		if _, ok := msg.(models.CloseMsg); ok {
 			m.issue = nil
+			m.reload()
 			return m, nil
 		}
 
@@ -147,6 +143,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.table, cmd = m.table.Update(msg)
 
 	return m, cmd
+}
+
+// rows returns a table row for each issue.
+func rows(issues []models.Issue) []table.Row {
+	r := make([]table.Row, len(issues))
+	for i, issue := range issues {
+		r[i] = table.Row{issue.Id, issue.Title, issue.State()}
+	}
+	return r
+}
+
+// reload loads the issues from disk again, keeping the selected issue
+// selected. If it's gone, the selection stays at the same position in the
+// list. If the issues fail to load, the list is left as it was and the error
+// is shown.
+func (m *Model) reload() {
+	issues, err := parse.ListIssues(m.dir)
+
+	if err != nil {
+		m.err = err
+		m.resize()
+		return
+	}
+
+	cursor := m.table.Cursor()
+
+	if row := m.table.SelectedRow(); row != nil {
+		for i, issue := range issues {
+			if issue.Id == row[0] {
+				cursor = i
+				break
+			}
+		}
+	}
+
+	m.issues = issues
+	m.err = nil
+
+	// Columns must be set before rows, which are rendered as they're added.
+	m.table.SetColumns(m.columns(0))
+	m.table.SetRows(rows(issues))
+	m.table.SetCursor(min(cursor, len(issues)-1))
+
+	m.resize()
 }
 
 // open loads the selected issue from disk and switches to its view.
