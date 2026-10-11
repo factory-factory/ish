@@ -323,8 +323,8 @@ func (ish *Issue) reveal(s span, down bool) {
 	}
 }
 
-// renderHeader renders the title, byline, and metadata tags that stay pinned
-// to the top of the screen.
+// renderHeader renders the title, byline, metadata tags, and the rule beneath
+// them, all of which stay pinned to the top of the screen.
 func (ish Issue) renderHeader() string {
 	t, err := time.Parse(time.RFC3339, ish.DateCreated)
 
@@ -356,7 +356,20 @@ func (ish Issue) renderHeader() string {
 		c = append(c, tag.View().Content)
 	}
 
-	return styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, c...))
+	header := styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, c...))
+
+	// Separate the header from the cards with a rule spanning the screen, or
+	// the header itself before the terminal size is known.
+	width := ish.width
+	if width <= 0 {
+		width = lipgloss.Width(header)
+	}
+
+	rule := styles.Rule.Render(
+		strings.Repeat("─", max(width-styles.Rule.GetHorizontalMargins(), 0)),
+	)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, rule)
 }
 
 // renderCards renders every card in the conversation, along with the position

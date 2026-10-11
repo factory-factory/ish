@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/factory-factory/ish/styles"
 )
 
 // newTestIssue returns an issue with one card per content string.
@@ -271,5 +272,38 @@ func TestResizeClampsOffset(t *testing.T) {
 	ish = resize(t, ish, 1000)
 	if offset(ish) != 0 {
 		t.Errorf("offset after growing = %d, want 0", offset(ish))
+	}
+}
+
+func TestHeaderRuleSeparatesCards(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(1)), 10)
+
+	view := strings.Split(ish.View().Content, "\n")
+	headerHeight := lipgloss.Height(ish.renderHeader())
+
+	rule := -1
+	for i, line := range view[:headerHeight] {
+		if strings.Contains(line, "─") {
+			rule = i
+		}
+	}
+
+	if rule < 0 {
+		t.Fatal("no horizontal rule in the header")
+	}
+
+	got := strings.Count(view[rule], "─")
+	if want := ish.width - styles.Rule.GetHorizontalMargins(); got != want {
+		t.Errorf("rule is %d cells wide, want %d", got, want)
+	}
+
+	// The first card begins below the rule, at the top of the viewport.
+	cards, _ := ish.renderCards()
+	first := strings.TrimRight(strings.Split(cards, "\n")[0], " ")
+	if got := strings.TrimRight(view[headerHeight], " "); got != first {
+		t.Errorf("first viewport line = %q, want first card line %q", got, first)
+	}
+	if rule >= headerHeight {
+		t.Errorf("rule on line %d, want above the viewport at line %d", rule, headerHeight)
 	}
 }

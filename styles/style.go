@@ -28,6 +28,10 @@ var BylineEmphasis = lipgloss.NewStyle().
 var Header = lipgloss.NewStyle().
 	Padding(1)
 
+var Rule = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8")).
+	Margin(0, 1, 0)
+
 var Body = lipgloss.NewStyle().
 	Padding(0, 1)
 
