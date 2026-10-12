@@ -120,7 +120,7 @@ func (c *Card) cancelEdit() {
 
 // renderByline renders the comment's author and date.
 func (c Card) renderByline() string {
-	t, err := parseDate(c.DateCreated)
+	t, err := ParseDate(c.DateCreated)
 
 	if err != nil {
 		log.Fatal(err)

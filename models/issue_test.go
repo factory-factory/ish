@@ -435,19 +435,19 @@ func TestParseDate(t *testing.T) {
 		"2023-05-28T11:55:23-0400",  // ISO8601B
 		"2023-05-28 11:55:23 -0400", // Timestamp
 	} {
-		got, err := parseDate(s)
+		got, err := ParseDate(s)
 
 		if err != nil {
-			t.Errorf("parseDate(%q) error = %v", s, err)
+			t.Errorf("ParseDate(%q) error = %v", s, err)
 			continue
 		}
 		if !got.Equal(want) {
-			t.Errorf("parseDate(%q) = %v, want %v", s, got, want)
+			t.Errorf("ParseDate(%q) = %v, want %v", s, got, want)
 		}
 	}
 
-	if _, err := parseDate("yesterday"); err == nil {
-		t.Error(`parseDate("yesterday") error = nil, want an error`)
+	if _, err := ParseDate("yesterday"); err == nil {
+		t.Error(`ParseDate("yesterday") error = nil, want an error`)
 	}
 }
 
