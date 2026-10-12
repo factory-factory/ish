@@ -424,3 +424,9 @@ func TestFileError(t *testing.T) {
 		t.Errorf("FileError = %q, want the path and wrapped error", err.Error())
 	}
 }
+
+// sha256Hex returns the hex SHA-256 checksum of data.
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}

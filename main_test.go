@@ -86,3 +86,50 @@ func TestRunInit(t *testing.T) {
 		t.Errorf("runInit() under a file = %d, stderr %q, want 1 and an error", code, stderr.String())
 	}
 }
+
+func TestEnsureDatabase(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".ish")
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	good := "# Good\n\n[alice 2026-10-11T08:59:23-07:00]\n"
+
+	for name, source := range map[string]string{"AAAAA-11111.md": good, "BBBBB-22222.md": "Not an issue\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A missing database is built with runInit. A file it can't index is
+	// reported, but the database can still be used.
+	var stdout, stderr bytes.Buffer
+
+	if !ensureDatabase(dir, &stdout, &stderr) {
+		t.Fatalf("ensureDatabase() = false, want true (stderr: %s)", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Indexed 1 issue") || !strings.Contains(stderr.String(), "BBBBB-22222.md") {
+		t.Errorf("stdout = %q, stderr = %q, want runInit's report", stdout.String(), stderr.String())
+	}
+
+	// An existing database is used as it is, without rebuilding it.
+	stdout.Reset()
+	stderr.Reset()
+
+	if !ensureDatabase(dir, &stdout, &stderr) || stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Errorf("ensureDatabase() with a database: output %q %q, want none", stdout.String(), stderr.String())
+	}
+
+	// A database that can't be created stops ish.
+	blocked := filepath.Join(root, "file")
+
+	if err := os.WriteFile(blocked, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if ensureDatabase(filepath.Join(blocked, ".ish"), io.Discard, io.Discard) {
+		t.Error("ensureDatabase() under a file = true, want false")
+	}
+}

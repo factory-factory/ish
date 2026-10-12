@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/store"
 )
 
 func issueSource(title, state string) string {
@@ -35,7 +36,11 @@ func newTestModel(t *testing.T, sources map[string]string) Model {
 		}
 	}
 
-	issues, err := parse.ListIssues(dir)
+	if _, err := store.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	issues, err := store.ListIssues(dir)
 
 	if err != nil {
 		t.Fatal(err)
@@ -276,21 +281,37 @@ func TestListFitsTerminalResizedWhileIssueOpen(t *testing.T) {
 	}
 }
 
-// writeIssue writes an issue file to the model's directory.
+// writeIssue writes an issue file to the model's directory, then rebuilds
+// the metadata database, as running ish init would.
 func writeIssue(t *testing.T, m Model, id, source string) {
 	t.Helper()
 
 	if err := os.WriteFile(filepath.Join(m.dir, id+".md"), []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
+	rebuild(t, m)
 }
 
+// rebuild rebuilds the model's metadata database from its issue files.
+func rebuild(t *testing.T, m Model) {
+	t.Helper()
+
+	if _, err := store.Init(m.dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// removeIssue removes an issue file from the model's directory, then rebuilds
+// the metadata database, as running ish init would.
 func removeIssue(t *testing.T, m Model, id string) {
 	t.Helper()
 
 	if err := os.Remove(filepath.Join(m.dir, id+".md")); err != nil {
 		t.Fatal(err)
 	}
+
+	rebuild(t, m)
 }
 
 // ids returns the IDs of the issues in the list, in order.
@@ -407,8 +428,13 @@ func TestCloseWithReloadError(t *testing.T) {
 		"BBB": issueSource("Second", "open"),
 	})
 
+	// The database disappears while an issue is open.
 	m = update(t, m, enter)
-	writeIssue(t, m, "BBB", "Not an issue\n")
+
+	if err := os.Remove(filepath.Join(m.dir, store.DatabaseName)); err != nil {
+		t.Fatal(err)
+	}
+
 	m = closeIssue(t, m, esc)
 
 	if m.issue != nil {
@@ -417,14 +443,14 @@ func TestCloseWithReloadError(t *testing.T) {
 	if got := ids(m); got != "AAA BBB" {
 		t.Errorf("listed %q after a failed reload, want the previous list %q", got, "AAA BBB")
 	}
-	if m.err == nil || !strings.Contains(m.View().Content, "BBB.md") {
-		t.Errorf("View() = %q, want an error naming BBB.md", m.View().Content)
+	if m.err == nil || !strings.Contains(m.View().Content, "ish init") {
+		t.Errorf("View() = %q, want an error suggesting ish init", m.View().Content)
 	}
 	if got := len(strings.Split(m.View().Content, "\n")); got > m.height {
 		t.Errorf("View() has %d lines, want at most %d", got, m.height)
 	}
 
-	// Once the file is fixed, the next reload clears the error.
+	// Once the database is rebuilt, the next reload clears the error.
 	writeIssue(t, m, "BBB", issueSource("Fixed", "open"))
 	m = update(t, m, enter)
 	m = closeIssue(t, m, esc)
@@ -434,6 +460,31 @@ func TestCloseWithReloadError(t *testing.T) {
 	}
 	if line := row(t, m, "BBB"); !strings.Contains(line, "Fixed") {
 		t.Errorf("row %q, want the fixed title", line)
+	}
+}
+
+func TestListComesFromDatabase(t *testing.T) {
+	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+
+	// Changing a file outside ish doesn't change the list until the
+	// database is rebuilt.
+	if err := os.WriteFile(filepath.Join(m.dir, "AAA.md"), []byte(issueSource("Edited outside", "closed")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	if line := row(t, m, "AAA"); !strings.Contains(line, "First") {
+		t.Errorf("row %q, want the title from the database", line)
+	}
+
+	rebuild(t, m)
+	m = update(t, m, enter)
+	m = closeIssue(t, m, esc)
+
+	if line := row(t, m, "AAA"); !strings.Contains(line, "Edited outside") || !strings.Contains(line, "closed") {
+		t.Errorf("row %q, want the rebuilt title and state", line)
 	}
 }
 

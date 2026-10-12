@@ -25,17 +25,21 @@ var (
 		SilenceUsage:     false,
 		TraverseChildren: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			if !ensureDatabase(parse.IssuesDir, cmd.OutOrStdout(), cmd.ErrOrStderr()) {
+				os.Exit(1)
+			}
+
 			var model tea.Model
 
 			if len(args) == 1 {
 				issue := parse.InitialModel(issueIdFromPath(args[0]))
 				issue.SetSave(func(issue models.Issue) error {
-					return parse.SaveIssue(parse.IssuesDir, issue)
+					return store.SaveIssue(parse.IssuesDir, issue)
 				})
 				issue.SetAuthor(app.CurrentUser(parse.IssuesDir))
 				model = issue
 			} else {
-				issues, err := parse.ListIssues(parse.IssuesDir)
+				issues, err := store.ListIssues(parse.IssuesDir)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					os.Exit(1)
@@ -116,6 +120,31 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 	}
 
 	return 0
+}
+
+// ensureDatabase builds the metadata database in dir with runInit if it
+// doesn't exist yet, and reports whether there's a database to use. Issue
+// files that runInit couldn't index are reported, but don't stop ish, since
+// the database holds every other issue.
+func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
+	exists, err := store.Exists(dir)
+
+	if err != nil {
+		fmt.Fprintf(stderr, "Couldn't read the metadata database: %v\n", err)
+		return false
+	}
+
+	if exists {
+		return true
+	}
+
+	runInit(dir, stdout, stderr)
+
+	if exists, err := store.Exists(dir); err != nil || !exists {
+		return false
+	}
+
+	return true
 }
 
 func init() {
