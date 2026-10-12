@@ -114,12 +114,36 @@ func TestEnsureDatabase(t *testing.T) {
 		t.Errorf("stdout = %q, stderr = %q, want runInit's report", stdout.String(), stderr.String())
 	}
 
-	// An existing database is used as it is, without rebuilding it.
+	// An existing database is synced, not rebuilt. The file that still can't
+	// be indexed is reported again, since it's missing from the database.
+	stdout.Reset()
+	stderr.Reset()
+
+	if !ensureDatabase(dir, &stdout, &stderr) {
+		t.Fatal("ensureDatabase() with a database = false, want true")
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "Couldn't index "+filepath.Join(dir, "BBBBB-22222.md")) {
+		t.Errorf("stdout = %q, stderr = %q, want only the bad file reported", stdout.String(), stderr.String())
+	}
+
+	// Once it's fixed, it's indexed as a new issue.
+	if err := os.WriteFile(filepath.Join(dir, "BBBBB-22222.md"), []byte(good), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	if !ensureDatabase(dir, &stdout, &stderr) || stdout.String() != "Indexed new issue: BBBBB-22222\n" || stderr.Len() != 0 {
+		t.Errorf("stdout = %q, stderr = %q, want the fixed file indexed", stdout.String(), stderr.String())
+	}
+
+	// With nothing changed, nothing is reported.
 	stdout.Reset()
 	stderr.Reset()
 
 	if !ensureDatabase(dir, &stdout, &stderr) || stdout.Len() != 0 || stderr.Len() != 0 {
-		t.Errorf("ensureDatabase() with a database: output %q %q, want none", stdout.String(), stderr.String())
+		t.Errorf("ensureDatabase() with nothing changed: output %q %q, want none", stdout.String(), stderr.String())
 	}
 
 	// A database that can't be created stops ish.
