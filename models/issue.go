@@ -998,14 +998,14 @@ func (ish Issue) View() tea.View {
 
 // Opened returns the time the issue was opened, from its byline.
 func (ish Issue) Opened() (time.Time, error) {
-	return parseDate(ish.DateCreated)
+	return ParseDate(ish.DateCreated)
 }
 
 // dateLayouts are the formats bylines' dates are written in.
 var dateLayouts = []string{time.RFC3339, ISO8601A, ISO8601B, Timestamp}
 
-// parseDate parses a byline's date, which may be in any of dateLayouts.
-func parseDate(s string) (time.Time, error) {
+// ParseDate parses a byline's date, which may be in any of dateLayouts.
+func ParseDate(s string) (time.Time, error) {
 	var err error
 
 	for _, layout := range dateLayouts {

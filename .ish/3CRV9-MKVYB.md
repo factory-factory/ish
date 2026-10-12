@@ -2,6 +2,9 @@
 
 [brendan@berg.industries 2026-10-10T23:33:20-07:00]
 
+- assignees: brendan@berg.industries
+- state: open
+
 ---
 
 [brendan@berg.industries 2026-10-10T23:33:20-07:00]

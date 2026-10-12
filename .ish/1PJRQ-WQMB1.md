@@ -29,39 +29,16 @@ The **ish** command line tools rely on go modules from [charmbracelet](https://g
 
 - [x] Learn the basics of the charmbracelet tools
 - [x] Write parser
-- [ ] Build viewing and editing UI
+- [x] Build viewing and editing UI
   - [x] Rendering issues
   - [x] Navigating issue compontents
   - [x] Editing components
   - [x] Updating to-do items
   - [x] Appending comments
-  - [ ] Adding new metadata attributes
-- [ ] Build ish DB
+  - [x] Adding new metadata attributes
+- [x] Build ish DB
 - [ ] Create ish sub-commands
-  - [ ] ish init
+  - [x] ish init
   - [ ] ish new [TITLE]
   - [ ] ish list [QUERY]
-  - [ ] ish edit [HASH]
-
----
-
-[brendan@berg.industries 2023-06-04T16:18:23-0400]
-
-Once upon a time, there was a variable named `foo`.
-
-- The variable was sad, and lonely
-
-  Until the programmer declared a variable named `bar`
-
-- A separate variable, named `quux` became enraged with jealousy.
-
-  ```
-  for dip in glorp:
-    frob.hiss
-  ```
-
-1. Jig
-1. Karp
-1. Lob
-1. Meem
-1. Nin
+  - [ ] ish open [ISSUE-ID]

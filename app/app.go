@@ -3,6 +3,7 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -12,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/styles"
 )
 
@@ -20,7 +22,7 @@ import (
 type Model struct {
 	// dir is the directory issues are loaded from.
 	dir    string
-	issues []models.Issue
+	issues []store.Summary
 
 	table table.Model
 	help  help.Model
@@ -77,7 +79,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 }
 
 // New returns a model listing the given issues, which were loaded from dir.
-func New(dir string, issues []models.Issue) Model {
+func New(dir string, issues []store.Summary) Model {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
@@ -159,29 +161,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // rows returns a table row for each issue.
-func rows(issues []models.Issue) []table.Row {
+func rows(issues []store.Summary) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.Id, issue.Title, issue.Assignees(), opened(issue, now()), issue.State()}
+		r[i] = table.Row{issue.ID, issue.Title, assigneesText(issue), opened(issue, now()), stateText(issue)}
 	}
 	return r
 }
 
+// assigneesText formats an issue's assignees for the list.
+func assigneesText(issue store.Summary) string {
+	return strings.Join(issue.Assignees, ", ")
+}
+
+// stateText formats an issue's state for the list.
+func stateText(issue store.Summary) string {
+	return strings.Join(issue.State, ", ")
+}
+
 // opened formats the date an issue was opened for the list: the month and
 // day if it's in the same year as now, and also the year otherwise. The date
-// is shown in the time zone of the issue's byline, as in the issue view. It's
-// empty if the byline's date can't be read.
-func opened(issue models.Issue, now time.Time) string {
-	t, err := issue.Opened()
-
-	switch {
-	case err != nil:
-		return ""
-	case t.Year() == now.Year():
-		return t.Format("Jan 2")
-	default:
-		return t.Format(models.DateTime)
+// is shown in the time zone of the issue's byline, as in the issue view.
+func opened(issue store.Summary, now time.Time) string {
+	if issue.Opened.Year() == now.Year() {
+		return issue.Opened.Format("Jan 2")
 	}
+
+	return issue.Opened.Format(models.DateTime)
 }
 
 // reload loads the issues from disk again, selecting the issue that was just
@@ -189,7 +195,7 @@ func opened(issue models.Issue, now time.Time) string {
 // stays at the same position in the list. If the issues fail to load, the
 // list is left as it was and the error is shown.
 func (m *Model) reload() {
-	issues, err := parse.ListIssues(m.dir)
+	issues, err := store.ListIssues(m.dir)
 
 	if err != nil {
 		m.err = err
@@ -205,7 +211,7 @@ func (m *Model) reload() {
 	}
 
 	for i, issue := range issues {
-		if issue.Id == selected {
+		if issue.ID == selected {
 			cursor = i
 			break
 		}
@@ -276,9 +282,10 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(m.issue.Init(), cmd)
 }
 
-// saveIssue writes an issue's changes to its file in the list's directory.
+// saveIssue writes an issue's changes to its file in the list's directory,
+// and updates the metadata database the list is read from.
 func (m Model) saveIssue(issue models.Issue) error {
-	return parse.SaveIssue(m.dir, issue)
+	return store.SaveIssue(m.dir, issue)
 }
 
 // resize fits the table into the space left between the heading and the
@@ -309,11 +316,11 @@ func (m Model) columns(width int) []table.Column {
 	today := now()
 
 	for _, issue := range m.issues {
-		id = max(id, lipgloss.Width(issue.Id))
+		id = max(id, lipgloss.Width(issue.ID))
 		title = max(title, lipgloss.Width(issue.Title))
-		assignee = max(assignee, lipgloss.Width(issue.Assignees()))
+		assignee = max(assignee, lipgloss.Width(assigneesText(issue)))
 		date = max(date, lipgloss.Width(opened(issue, today)))
-		state = max(state, lipgloss.Width(issue.State()))
+		state = max(state, lipgloss.Width(stateText(issue)))
 	}
 
 	assignee = min(assignee, maxAssigneeWidth)
@@ -341,8 +348,14 @@ func (m Model) renderFooter() string {
 	footer := styles.Footer.Render(m.help.View(keys))
 
 	if m.err != nil {
+		// Long errors wrap to the terminal's width.
+		message := styles.Footer
+		if m.width > 0 {
+			message = message.Width(m.width)
+		}
+
 		footer = lipgloss.JoinVertical(lipgloss.Left,
-			styles.Footer.Render(styles.Error.Render(m.err.Error())),
+			message.Render(styles.Error.Render(m.err.Error())),
 			footer,
 		)
 	}

@@ -38,6 +38,7 @@ Only use dependencies from this list. Ask before adding anything new.
 - `github.com/spf13/cobra` v1.10.2
 - `github.com/yuin/goldmark` v1.8.6
 - `github.com/yuin/goldmark-emoji` v1.0.6
+- `modernc.org/sqlite` v1.60.1
 
 ## Git Behavior
 
