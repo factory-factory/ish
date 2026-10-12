@@ -29,13 +29,13 @@ The **ish** command line tools rely on go modules from [charmbracelet](https://g
 
 - [x] Learn the basics of the charmbracelet tools
 - [x] Write parser
-- [ ] Build viewing and editing UI
+- [x] Build viewing and editing UI
   - [x] Rendering issues
   - [x] Navigating issue compontents
   - [x] Editing components
   - [x] Updating to-do items
   - [x] Appending comments
-  - [ ] Adding new metadata attributes
+  - [x] Adding new metadata attributes
 - [ ] Build ish DB
 - [ ] Create ish sub-commands
   - [ ] ish init

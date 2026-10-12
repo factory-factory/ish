@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2023-06-04T18:37:55-04:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 
 ---
