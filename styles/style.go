@@ -93,3 +93,30 @@ var FilterBoxSelected = FilterBox.
 
 var FilterPlaceholder = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("8"))
+
+// Filter expression syntax highlighting.
+
+var FilterBrace = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("4"))
+
+var FilterAttribute = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("5"))
+
+var FilterOperator = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Bold(true)
+
+var FilterValue = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("2"))
+
+var FilterBoolean = FilterValue.
+	Bold(true)
+
+var FilterNull = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8"))
+
+var FilterParenthesis = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("3"))
+
+var FilterKeyword = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("7"))

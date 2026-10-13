@@ -310,3 +310,19 @@ func TestEmptyListMessages(t *testing.T) {
 		t.Errorf("View() = %q, want a message that there are no issues", view)
 	}
 }
+
+func TestFilterFieldShowsHighlightedFilter(t *testing.T) {
+	m := filterModel(t)
+
+	// The applied filter is shown with its syntax highlighted.
+	if view := m.View().Content; !strings.Contains(view, m.filter.node.Render()) {
+		t.Errorf("View() doesn't show the highlighted filter %q", m.filter.node.Render())
+	}
+
+	// While editing, the raw text is shown without highlighting.
+	m = update(t, m, slash)
+
+	if view := m.View().Content; strings.Contains(view, m.filter.node.Render()) {
+		t.Error("View() shows the highlighted filter while editing")
+	}
+}

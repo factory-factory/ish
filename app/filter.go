@@ -192,9 +192,9 @@ func (m Model) filterWidth() int {
 }
 
 // renderFilter renders the applied filter shown in the field when it isn't
-// being edited.
+// being edited, with its syntax highlighted.
 func renderFilter(node filter.Node) string {
-	return node.String()
+	return node.Render()
 }
 
 // renderHeading renders the filter field and its label, which take the place
