@@ -33,9 +33,11 @@ const DatabaseName = ".metadata.ish"
 // journal files out of version control.
 const gitignoreEntry = ".metadata.ish*"
 
-// schemaVersion is stored in the database's user_version, so later versions
-// of ish can tell which schema a database has.
-const schemaVersion = 1
+// schemaVersion is stored in the database's user_version, so ish can tell
+// which schema a database has, and rebuild one with an older schema.
+//
+// Version 2 stopped allowing colons in attribute keys.
+const schemaVersion = 2
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Attribute
@@ -54,7 +56,7 @@ CREATE TABLE issue (
 CREATE TABLE attribute (
 	uuid    TEXT PRIMARY KEY,
 	issueId TEXT NOT NULL REFERENCES issue (id) ON DELETE CASCADE,
-	key     TEXT NOT NULL CHECK (key <> '' AND key NOT GLOB '*[^A-Za-z0-9._:/-]*'),
+	key     TEXT NOT NULL CHECK (key <> '' AND key NOT GLOB '*[^A-Za-z0-9._/-]*'),
 	value   TEXT NOT NULL CHECK (json_valid(value)),
 	UNIQUE (issueId, key)
 );
@@ -74,7 +76,7 @@ CREATE TABLE comment (
 `
 
 // keyPattern matches the characters an attribute key may contain.
-var keyPattern = regexp.MustCompile(`^[A-Za-z0-9._:/-]+$`)
+var keyPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
 
 // Result describes what Init did.
 type Result struct {
@@ -368,7 +370,7 @@ func validate(issue *models.Issue) error {
 
 	for _, tag := range issue.Metadata {
 		if !keyPattern.MatchString(tag.Key) {
-			return fmt.Errorf("metadata key %q may only contain letters, digits, and . _ - : /", tag.Key)
+			return fmt.Errorf("metadata key %q may only contain letters, digits, and . _ - /", tag.Key)
 		}
 
 		if seen[tag.Key] {

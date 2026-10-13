@@ -40,13 +40,13 @@ func newTestModel(t *testing.T, sources map[string]string) Model {
 		t.Fatal(err)
 	}
 
-	issues, err := store.ListIssues(dir)
+	m, err := New(dir)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return update(t, New(dir, issues), tea.WindowSizeMsg{Width: 100, Height: 30})
+	return update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
 }
 
 func update(t *testing.T, m Model, msgs ...tea.Msg) Model {
@@ -253,7 +253,7 @@ func TestBackKeysReturnToList(t *testing.T) {
 		if got := m.table.SelectedRow()[0]; got != "BBB" {
 			t.Errorf("selected %s after %s, want the issue that was open, BBB", got, msg)
 		}
-		if view := m.View().Content; !strings.Contains(view, "Issues") || !strings.Contains(view, "AAA") {
+		if view := m.View().Content; !strings.Contains(view, "Issue Filter") || !strings.Contains(view, "AAA") {
 			t.Errorf("View() after %s = %q, want the issue list", msg, view)
 		}
 
@@ -339,12 +339,12 @@ func TestCloseReloadsChangedIssues(t *testing.T) {
 	})
 
 	m = update(t, m, enter)
-	writeIssue(t, m, "AAA", issueSource("A much longer title for the first issue", "closed"))
+	writeIssue(t, m, "AAA", issueSource("A much longer title for the first issue", "in review"))
 	m = closeIssue(t, m, esc)
 
 	line := row(t, m, "AAA")
 
-	if !strings.Contains(line, "A much longer title for the first issue") || !strings.Contains(line, "closed") {
+	if !strings.Contains(line, "A much longer title for the first issue") || !strings.Contains(line, "in review") {
 		t.Errorf("row %q, want the title and state from disk", line)
 	}
 }
@@ -468,7 +468,7 @@ func TestListComesFromDatabase(t *testing.T) {
 
 	// Changing a file outside ish doesn't change the list until the
 	// database is rebuilt.
-	if err := os.WriteFile(filepath.Join(m.dir, "AAA.md"), []byte(issueSource("Edited outside", "closed")), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(m.dir, "AAA.md"), []byte(issueSource("Edited outside", "in review")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -483,7 +483,7 @@ func TestListComesFromDatabase(t *testing.T) {
 	m = update(t, m, enter)
 	m = closeIssue(t, m, esc)
 
-	if line := row(t, m, "AAA"); !strings.Contains(line, "Edited outside") || !strings.Contains(line, "closed") {
+	if line := row(t, m, "AAA"); !strings.Contains(line, "Edited outside") || !strings.Contains(line, "in review") {
 		t.Errorf("row %q, want the rebuilt title and state", line)
 	}
 }
@@ -625,7 +625,7 @@ func issueWithMetadata(title string, metadata ...string) string {
 func TestAssigneeColumn(t *testing.T) {
 	m := newTestModel(t, map[string]string{
 		"AAA": issueWithMetadata("First", "- state: open", "- assignees: alice, bob"),
-		"BBB": issueWithMetadata("Second", "- assignees: carol", "- state: closed"),
+		"BBB": issueWithMetadata("Second", "- assignees: carol", "- state: in review"),
 		"CCC": issueWithMetadata("Third", "- state: open"),
 		"DDD": issueWithMetadata("Fourth", "- assignee: dave", "- state: open"),
 	})
@@ -647,7 +647,7 @@ func TestAssigneeColumn(t *testing.T) {
 
 	for _, want := range []struct{ id, title, assignee, state string }{
 		{"AAA", "First", "alice, bob", "open"},
-		{"BBB", "Second", "carol", "closed"},
+		{"BBB", "Second", "carol", "in review"},
 	} {
 		line := escapes.ReplaceAllString(row(t, m, want.id), "")
 

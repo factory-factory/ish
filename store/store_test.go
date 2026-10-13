@@ -135,8 +135,8 @@ func TestInitCreatesDirectory(t *testing.T) {
 	if got := query(t, db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"); !slices.Equal(got, []string{"attribute", "comment", "issue"}) {
 		t.Errorf("tables = %v, want attribute, comment, issue", got)
 	}
-	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"1"}) {
-		t.Errorf("user_version = %v, want 1", got)
+	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"2"}) {
+		t.Errorf("user_version = %v, want 2", got)
 	}
 
 	// No temporary databases are left behind.
@@ -289,6 +289,7 @@ func TestInitSkipsFilesThatCantBeIndexed(t *testing.T) {
 		"DDDDD-44444": issueSource("Bad key", []string{"- due@date: tomorrow"}),
 		"EEEEE-55555": strings.Replace(issueSource("Bad date", nil), "2026-10-11T08:59:23-07:00", "someday", 1),
 		"FFFFF-66666": issueSource("Bad comment date", nil, "Comment") + "\n---\n\n[carol yesterday]\n\nLate\n",
+		"GGGGG-77777": issueSource("Colon key", []string{"- ns:key: value"}),
 	})
 
 	result := initDir(t, dir)
@@ -303,6 +304,7 @@ func TestInitSkipsFilesThatCantBeIndexed(t *testing.T) {
 		"DDDDD-44444.md": `"due@date" may only contain`,
 		"EEEEE-55555.md": `byline date "someday"`,
 		"FFFFF-66666.md": `comment 2: byline date "yesterday"`,
+		"GGGGG-77777.md": `"ns:key" may only contain letters, digits, and . _ - /`,
 	}
 
 	if len(result.Failed) != len(wantFailures) {
@@ -375,6 +377,7 @@ func TestSchemaConstraints(t *testing.T) {
 		{"duplicate attribute key", `INSERT INTO attribute VALUES ('u1', 'AAAAA-11111', 'state', '["closed"]')`},
 		{"attribute key characters", `INSERT INTO attribute VALUES ('u2', 'AAAAA-11111', 'a b', '["x"]')`},
 		{"empty attribute key", `INSERT INTO attribute VALUES ('u3', 'AAAAA-11111', '', '["x"]')`},
+		{"attribute key with a colon", `INSERT INTO attribute VALUES ('u10', 'AAAAA-11111', 'ns:key', '["x"]')`},
 		{"attribute value JSON", `INSERT INTO attribute VALUES ('u4', 'AAAAA-11111', 'priority', 'not json')`},
 		{"attribute issue", `INSERT INTO attribute VALUES ('u5', 'ZZZZZ-99999', 'priority', '["high"]')`},
 		{"duplicate comment index", `INSERT INTO comment VALUES ('u6', 'AAAAA-11111', 0, 'a', 'd', 0, 'c')`},
@@ -387,8 +390,8 @@ func TestSchemaConstraints(t *testing.T) {
 		}
 	}
 
-	// Keys may use letters, digits, and . _ - : /
-	if _, err := db.Exec(`INSERT INTO attribute VALUES ('u9', 'AAAAA-11111', 'ns:team/sub_key.v-2', '["x"]')`); err != nil {
+	// Keys may use letters, digits, and . _ - /
+	if _, err := db.Exec(`INSERT INTO attribute VALUES ('u9', 'AAAAA-11111', 'team/sub_key.v-2', '["x"]')`); err != nil {
 		t.Errorf("insert with an allowed key: %v", err)
 	}
 

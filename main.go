@@ -39,13 +39,13 @@ var (
 				issue.SetAuthor(app.CurrentUser(parse.IssuesDir))
 				model = issue
 			} else {
-				issues, err := store.ListIssues(parse.IssuesDir)
+				list, err := app.New(parse.IssuesDir)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					os.Exit(1)
 				}
 
-				model = app.New(parse.IssuesDir, issues)
+				model = list
 			}
 
 			p := tea.NewProgram(model)
@@ -122,10 +122,12 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// ensureDatabase builds the metadata database in dir with runInit if it
-// doesn't exist yet, and reports whether there's a database to use. Issue
-// files that runInit couldn't index are reported, but don't stop ish, since
-// the database holds every other issue.
+// ensureDatabase prepares the metadata database in dir for ish to use, and
+// reports whether there's a database to use. If the database doesn't exist
+// yet, or has an older schema, it's built with runInit. Otherwise, it's
+// brought up to date with any issue files that changed, were added, or were
+// removed since it was last updated. Issue files that can't be indexed are reported, but don't stop ish,
+// since the database holds every other issue.
 func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	exists, err := store.Exists(dir)
 
@@ -135,7 +137,19 @@ func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	}
 
 	if exists {
-		return true
+		current, err := store.Current(dir)
+
+		if err != nil {
+			fmt.Fprintf(stderr, "Couldn't read the metadata database: %v\n", err)
+			fmt.Fprintln(stderr, "Run ish init to rebuild it.")
+			return false
+		}
+
+		// A database from an older version of ish is rebuilt, since its
+		// schema may not match.
+		if current {
+			return syncDatabase(dir, stdout, stderr)
+		}
 	}
 
 	runInit(dir, stdout, stderr)
@@ -145,6 +159,47 @@ func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	}
 
 	return true
+}
+
+// syncDatabase brings the metadata database in dir up to date with the issue
+// files, reporting any changes to stdout and files it couldn't index to
+// stderr. It reports whether the database can be used.
+func syncDatabase(dir string, stdout, stderr io.Writer) bool {
+	result, err := store.Sync(dir)
+
+	if err != nil {
+		fmt.Fprintf(stderr, "Couldn't update the metadata database: %v\n", err)
+		fmt.Fprintln(stderr, "Run ish init to rebuild it.")
+		return false
+	}
+
+	for _, change := range []struct {
+		ids  []string
+		verb string
+	}{
+		{result.Updated, "Re-indexed changed"},
+		{result.Added, "Indexed new"},
+		{result.Removed, "Removed deleted"},
+	} {
+		if len(change.ids) > 0 {
+			fmt.Fprintf(stdout, "%s %s: %s\n", change.verb, plural(len(change.ids), "issue"), strings.Join(change.ids, ", "))
+		}
+	}
+
+	for _, failure := range result.Failed {
+		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
+	}
+
+	return true
+}
+
+// plural returns noun, made plural if n isn't 1.
+func plural(n int, noun string) string {
+	if n == 1 {
+		return noun
+	}
+
+	return noun + "s"
 }
 
 func init() {

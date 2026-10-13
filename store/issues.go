@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 )
@@ -24,9 +25,9 @@ type Summary struct {
 	Opened time.Time
 }
 
-// listQuery selects every issue, with the attributes the issue list shows.
-// The unique (issueId, key) constraint means each join matches at most one
-// attribute.
+// listQuery selects issues with the attributes the issue list shows. The
+// unique (issueId, key) constraint means each join matches at most one
+// attribute. A filter's condition is added after it, then the order.
 const listQuery = `
 SELECT issue.id, issue.title, issue.dateCreated, issue.dateCreatedOffset,
        assignees.value, state.value
@@ -35,7 +36,6 @@ LEFT JOIN attribute AS assignees
   ON assignees.issueId = issue.id AND assignees.key = 'assignees'
 LEFT JOIN attribute AS state
   ON state.issueId = issue.id AND state.key = 'state'
-ORDER BY issue.id
 `
 
 // Exists reports whether the base directory dir has a metadata database.
@@ -47,6 +47,30 @@ func Exists(dir string) (bool, error) {
 	}
 
 	return err == nil, err
+}
+
+// Current reports whether the metadata database in dir has the schema this
+// version of ish uses. A database with an older schema should be rebuilt with
+// Init.
+func Current(dir string) (current bool, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return false, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	var version int
+
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return false, err
+	}
+
+	return version == schemaVersion, nil
 }
 
 // openExisting opens the metadata database in dir, returning an error if it
@@ -65,9 +89,27 @@ func openExisting(dir string) (*sql.DB, error) {
 	return Open(filepath.Join(dir, DatabaseName))
 }
 
-// ListIssues returns a summary of every issue in the metadata database in dir,
-// ordered by ID.
-func ListIssues(dir string) (summaries []Summary, err error) {
+// CountIssues returns the number of issues in the metadata database in dir.
+func CountIssues(dir string) (count int, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	err = db.QueryRow("SELECT count(*) FROM issue").Scan(&count)
+
+	return count, err
+}
+
+// ListIssues returns a summary of each issue in the metadata database in dir
+// that matches where, ordered by ID. If where is nil, every issue is listed.
+func ListIssues(dir string, where filter.Node) (summaries []Summary, err error) {
 	db, err := openExisting(dir)
 	if err != nil {
 		return nil, err
@@ -79,7 +121,16 @@ func ListIssues(dir string) (summaries []Summary, err error) {
 		}
 	}()
 
-	rows, err := db.Query(listQuery)
+	query := listQuery
+	var args []any
+
+	if where != nil {
+		var clause string
+		clause, args = where.Where()
+		query += "WHERE " + clause + "\n"
+	}
+
+	rows, err := db.Query(query+"ORDER BY issue.id", args...)
 	if err != nil {
 		return nil, err
 	}
