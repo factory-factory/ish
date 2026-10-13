@@ -15,7 +15,7 @@ import (
 func listIssues(t *testing.T, dir string) []Summary {
 	t.Helper()
 
-	summaries, err := ListIssues(dir)
+	summaries, err := ListIssues(dir, nil)
 
 	if err != nil {
 		t.Fatalf("ListIssues() error = %v", err)
@@ -65,7 +65,7 @@ func TestListIssues(t *testing.T) {
 func TestListIssuesWithoutDatabase(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := ListIssues(dir); err == nil || !strings.Contains(err.Error(), "ish init") {
+	if _, err := ListIssues(dir, nil); err == nil || !strings.Contains(err.Error(), "ish init") {
 		t.Errorf("ListIssues() without a database: error = %v, want one suggesting ish init", err)
 	}
 
@@ -258,5 +258,29 @@ func TestCurrent(t *testing.T) {
 
 	if current, err := Current(dir); current || err != nil {
 		t.Errorf("Current() with version 1 = %v, %v, want false, nil", current, err)
+	}
+}
+
+func TestCountIssues(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := CountIssues(dir); err == nil {
+		t.Error("CountIssues() without a database: error = nil, want an error")
+	}
+
+	initDir(t, dir)
+
+	if count, err := CountIssues(dir); count != 0 || err != nil {
+		t.Errorf("CountIssues() of an empty database = %d, %v, want 0, nil", count, err)
+	}
+
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("First", nil),
+		"BBBBB-22222": issueSource("Second", nil),
+	})
+	initDir(t, dir)
+
+	if count, err := CountIssues(dir); count != 2 || err != nil {
+		t.Errorf("CountIssues() = %d, %v, want 2, nil", count, err)
 	}
 }

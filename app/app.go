@@ -9,8 +9,10 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/store"
@@ -35,6 +37,15 @@ type Model struct {
 	// err is the error from the last attempt to open an issue, if any.
 	err error
 
+	// filter selects the issues that are listed, and unfiltered reports
+	// whether there are any issues at all, to tell an empty project from a
+	// filter that matches nothing.
+	filter     filterField
+	unfiltered bool
+
+	// light reports whether the terminal has a light background.
+	light bool
+
 	width  int
 	height int
 }
@@ -42,11 +53,12 @@ type Model struct {
 // keyMap holds the key bindings for the issue list. It satisfies help.KeyMap
 // so the bindings can be listed in the help footer.
 type keyMap struct {
-	Up   key.Binding
-	Down key.Binding
-	Open key.Binding
-	New  key.Binding
-	Quit key.Binding
+	Up     key.Binding
+	Down   key.Binding
+	Open   key.Binding
+	New    key.Binding
+	Filter key.Binding
+	Quit   key.Binding
 }
 
 var keys = func() keyMap {
@@ -63,6 +75,7 @@ var keys = func() keyMap {
 			key.WithKeys("n"),
 			key.WithHelp("n", "new"),
 		),
+		Filter: filterKeys.Start,
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
@@ -71,15 +84,26 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Filter, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{k.ShortHelp()}
 }
 
-// New returns a model listing the given issues, which were loaded from dir.
-func New(dir string, issues []store.Summary) Model {
+// New returns a model listing the issues in the metadata database in dir that
+// match DefaultFilter.
+func New(dir string) (Model, error) {
+	node, err := filter.Parse(DefaultFilter)
+	if err != nil {
+		return Model{}, err
+	}
+
+	issues, err := store.ListIssues(dir, node)
+	if err != nil {
+		return Model{}, err
+	}
+
 	s := table.DefaultStyles()
 	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
@@ -93,6 +117,11 @@ func New(dir string, issues []store.Summary) Model {
 		dir:    dir,
 		issues: issues,
 		help:   help.New(),
+		filter: filterField{text: DefaultFilter, node: node},
+	}
+
+	if m.unfiltered, err = anyIssues(dir, issues); err != nil {
+		return Model{}, err
 	}
 
 	// Columns must be set before rows, which are rendered as they're added.
@@ -103,7 +132,7 @@ func New(dir string, issues []store.Summary) Model {
 		table.WithFocused(true),
 	)
 
-	return m
+	return m, nil
 }
 
 func (m Model) Init() tea.Cmd {
@@ -135,29 +164,89 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.BackgroundColorMsg:
+		m.light = !msg.IsDark()
 		m.help.Styles = help.DefaultStyles(msg.IsDark())
+
+		if m.filter.editing {
+			m.filter.input.SetStyles(textarea.DefaultStyles(msg.IsDark()))
+		}
+
 		return m, nil
 
 	case tea.WindowSizeMsg:
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// While the filter is being edited, keys other than ctrl+c go to it.
+		if m.filter.editing {
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+
+			cmd := m.updateFilter(msg)
+			return m, cmd
+		}
+
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
 
+		case key.Matches(msg, keys.New):
+			return m.create()
+
+		case key.Matches(msg, keys.Filter):
+			cmd := m.editFilter()
+			return m, cmd
+		}
+
+		if m.filter.selected {
+			switch {
+			case key.Matches(msg, filterKeys.Edit):
+				cmd := m.editFilter()
+				return m, cmd
+
+			case key.Matches(msg, filterKeys.Table):
+				m.selectTable()
+			}
+
+			return m, nil
+		}
+
+		switch {
 		case key.Matches(msg, keys.Open):
 			return m.open()
 
-		case key.Matches(msg, keys.New):
-			return m.create()
+		// Moving up from the top of the table selects the filter.
+		case key.Matches(msg, keys.Up) && m.table.Cursor() <= 0:
+			m.selectFilter()
+			return m, nil
 		}
 	}
 
+	// Other messages, such as the cursor blinking, go to whichever has the
+	// focus.
 	var cmd tea.Cmd
+
+	if m.filter.editing {
+		m.filter.input, cmd = m.filter.input.Update(msg)
+		return m, cmd
+	}
+
 	m.table, cmd = m.table.Update(msg)
 
 	return m, cmd
+}
+
+// anyIssues reports whether the database in dir has any issues, given the
+// issues a filter listed.
+func anyIssues(dir string, listed []store.Summary) (bool, error) {
+	if len(listed) > 0 {
+		return true, nil
+	}
+
+	count, err := store.CountIssues(dir)
+
+	return count > 0, err
 }
 
 // rows returns a table row for each issue.
@@ -195,7 +284,11 @@ func opened(issue store.Summary, now time.Time) string {
 // stays at the same position in the list. If the issues fail to load, the
 // list is left as it was and the error is shown.
 func (m *Model) reload() {
-	issues, err := store.ListIssues(m.dir)
+	issues, err := store.ListIssues(m.dir, m.filter.node)
+
+	if err == nil {
+		m.unfiltered, err = anyIssues(m.dir, issues)
+	}
 
 	if err != nil {
 		m.err = err
@@ -297,6 +390,10 @@ func (m *Model) resize() {
 
 	m.help.SetWidth(m.width)
 
+	if m.filter.editing {
+		m.filter.input.SetWidth(m.filterWidth())
+	}
+
 	chrome := lipgloss.Height(m.renderHeading()) + lipgloss.Height(m.renderFooter())
 
 	m.table.SetColumns(m.columns(m.width - styles.Body.GetHorizontalFrameSize()))
@@ -340,12 +437,17 @@ func (m Model) columns(width int) []table.Column {
 	}
 }
 
-func (m Model) renderHeading() string {
-	return styles.Header.Render(styles.Title.Render("Issues"))
-}
-
 func (m Model) renderFooter() string {
-	footer := styles.Footer.Render(m.help.View(keys))
+	var keyMap help.KeyMap = keys
+
+	switch {
+	case m.filter.editing:
+		keyMap = editingFilterKeys{}
+	case m.filter.selected:
+		keyMap = selectedFilterKeys{}
+	}
+
+	footer := styles.Footer.Render(m.help.View(keyMap))
 
 	if m.err != nil {
 		// Long errors wrap to the terminal's width.
@@ -372,6 +474,10 @@ func (m Model) View() tea.View {
 
 	if len(m.issues) == 0 {
 		body = styles.Byline.Render("No issues in " + m.dir)
+
+		if m.unfiltered {
+			body = styles.Byline.Render("No issues match the filter")
+		}
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left,

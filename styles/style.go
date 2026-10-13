@@ -77,3 +77,19 @@ var Blue = Value.Copy().Background(lipgloss.Color("4")).Padding(0, 1)
 var Magenta = Value.Copy().Background(lipgloss.Color("5")).Padding(0, 1)
 var Aqua = Value.Copy().Background(lipgloss.Color("6")).Padding(0, 1)
 var Grey = Value.Copy().Background(lipgloss.Color("10")).Padding(0, 1)
+
+var FilterLabel = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Padding(0, 1)
+
+var FilterBox = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder(), true).
+	BorderForeground(lipgloss.Color("8")).
+	Padding(0, 1)
+
+var FilterBoxSelected = FilterBox.
+	Border(lipgloss.ThickBorder(), true).
+	BorderForeground(lipgloss.Color("4"))
+
+var FilterPlaceholder = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8"))

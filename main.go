@@ -39,13 +39,13 @@ var (
 				issue.SetAuthor(app.CurrentUser(parse.IssuesDir))
 				model = issue
 			} else {
-				issues, err := store.ListIssues(parse.IssuesDir)
+				list, err := app.New(parse.IssuesDir)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					os.Exit(1)
 				}
 
-				model = app.New(parse.IssuesDir, issues)
+				model = list
 			}
 
 			p := tea.NewProgram(model)
