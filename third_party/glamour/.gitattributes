@@ -1,0 +1,4 @@
+*.golden linguist-generated=true -text
+# Local change for ish: the module's .png files are Git LFS pointer files,
+# not images, and ish doesn't use Git LFS, so they're stored as plain files.
+*.png -text

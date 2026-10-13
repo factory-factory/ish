@@ -56,3 +56,5 @@ require (
 )
 
 replace github.com/factory-factory/ish => ./
+
+replace charm.land/glamour/v2 => ./third_party/glamour
