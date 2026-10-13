@@ -124,9 +124,9 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 
 // ensureDatabase prepares the metadata database in dir for ish to use, and
 // reports whether there's a database to use. If the database doesn't exist
-// yet, it's built with runInit. If it does, it's brought up to date with any
-// issue files that changed, were added, or were removed since it was last
-// updated. Issue files that can't be indexed are reported, but don't stop ish,
+// yet, or has an older schema, it's built with runInit. Otherwise, it's
+// brought up to date with any issue files that changed, were added, or were
+// removed since it was last updated. Issue files that can't be indexed are reported, but don't stop ish,
 // since the database holds every other issue.
 func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	exists, err := store.Exists(dir)
@@ -137,7 +137,19 @@ func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	}
 
 	if exists {
-		return syncDatabase(dir, stdout, stderr)
+		current, err := store.Current(dir)
+
+		if err != nil {
+			fmt.Fprintf(stderr, "Couldn't read the metadata database: %v\n", err)
+			fmt.Fprintln(stderr, "Run ish init to rebuild it.")
+			return false
+		}
+
+		// A database from an older version of ish is rebuilt, since its
+		// schema may not match.
+		if current {
+			return syncDatabase(dir, stdout, stderr)
+		}
 	}
 
 	runInit(dir, stdout, stderr)

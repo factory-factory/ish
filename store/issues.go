@@ -49,6 +49,30 @@ func Exists(dir string) (bool, error) {
 	return err == nil, err
 }
 
+// Current reports whether the metadata database in dir has the schema this
+// version of ish uses. A database with an older schema should be rebuilt with
+// Init.
+func Current(dir string) (current bool, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return false, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	var version int
+
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return false, err
+	}
+
+	return version == schemaVersion, nil
+}
+
 // openExisting opens the metadata database in dir, returning an error if it
 // doesn't exist rather than creating an empty one.
 func openExisting(dir string) (*sql.DB, error) {

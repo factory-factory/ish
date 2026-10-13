@@ -237,3 +237,26 @@ func TestIndexIssueLeavesDatabaseWhenFileIsBad(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrent(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := Current(dir); err == nil {
+		t.Error("Current() without a database: error = nil, want an error")
+	}
+
+	initDir(t, dir)
+
+	if current, err := Current(dir); !current || err != nil {
+		t.Errorf("Current() after init = %v, %v, want true, nil", current, err)
+	}
+
+	// A database from an older version of ish.
+	if _, err := openDB(t, dir).Exec("PRAGMA user_version = 1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if current, err := Current(dir); current || err != nil {
+		t.Errorf("Current() with version 1 = %v, %v, want false, nil", current, err)
+	}
+}
