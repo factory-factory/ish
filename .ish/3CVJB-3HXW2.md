@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-12T21:59:07-07:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 - relation.parent: #3CSJ4-PEZ1N
 

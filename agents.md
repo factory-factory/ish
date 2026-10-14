@@ -34,6 +34,7 @@ Only use dependencies from this list. Ask before adding anything new.
 - `charm.land/glamour/v2` v2.0.1
 - `charm.land/lipgloss/v2` v2.0.6
 - `charm.land/bubbles/v2` v2.2.1
+- `github.com/madicen/bubble-dropdown/v2` v2.0.1
 - `github.com/muesli/termenv` v0.16.0
 - `github.com/spf13/cobra` v1.10.2
 - `github.com/yuin/goldmark` v1.8.6

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	dropdown "github.com/madicen/bubble-dropdown/v2"
 )
 
 var (
@@ -51,22 +52,15 @@ func TestFilterFieldInitially(t *testing.T) {
 	m := filterModel(t)
 	view := plainView(m)
 
-	if !strings.Contains(view, "Issue Filter") || strings.Contains(view, "Issues\n") {
-		t.Errorf("View() = %q, want the filter label in place of the title", view)
+	// The label and the menu, showing the default filter, share a row.
+	if !strings.Contains(view, "Filter: [ All unclosed issues") || strings.Contains(view, "Issues\n") {
+		t.Errorf("View() = %q, want the filter label and menu in place of the title", view)
 	}
+
 	// The default filter is applied, so the closed issue isn't listed.
-	if !strings.Contains(view, DefaultFilter) {
-		t.Errorf("View() = %q, want the default filter", view)
+	if m.filter.text != DefaultFilter || m.filter.custom {
+		t.Errorf("filter, custom = %q, %v, want the default filter from the menu", m.filter.text, m.filter.custom)
 	}
-
-	// The field has a grey rounded border until it's selected.
-	if !strings.Contains(view, "╭") || strings.Contains(view, "┏") {
-		t.Error("filter field doesn't have the unselected border")
-	}
-	if !strings.Contains(m.View().Content, "\x1b[90m╭") {
-		t.Error("filter field's border isn't grey")
-	}
-
 	if got := ids(m); got != "AAA CCC" {
 		t.Errorf("listed %q, want the issues that aren't closed", got)
 	}
@@ -167,28 +161,36 @@ func TestCancelAndClearFilter(t *testing.T) {
 func TestSelectFilterField(t *testing.T) {
 	m := filterModel(t)
 
-	// Up from the top of the table selects the field.
+	// Up from the top of the table selects the menu.
 	m = update(t, m, up)
 
-	if !m.filter.selected || !strings.Contains(plainView(m), "┏") {
-		t.Fatal("filter field not selected after up from the top row")
+	if !m.filter.selected || !m.filter.menu.Focused() {
+		t.Fatal("filter menu not selected after up from the top row")
 	}
-	if footer := escapes.ReplaceAllString(m.renderFooter(), ""); !strings.Contains(footer, "enter edit filter") {
-		t.Errorf("footer = %q, want the selected field's keys", footer)
+	if footer := escapes.ReplaceAllString(m.renderFooter(), ""); !strings.Contains(footer, "enter choose filter") {
+		t.Errorf("footer = %q, want the selected menu's keys", footer)
 	}
 
-	// Enter edits it, rather than opening an issue.
+	// Up again doesn't change the menu's selection without choosing it.
+	m = update(t, m, up)
+
+	if got := m.filter.menu.SelectedIndex(); got != presetUnclosed {
+		t.Errorf("menu selection = %d after up, want %d", got, presetUnclosed)
+	}
+
+	// Enter opens the menu, rather than opening an issue.
 	m = update(t, m, enter)
 
-	if !m.filter.editing || m.issue != nil {
-		t.Fatalf("editing, issue = %v, %v, want to edit the filter", m.filter.editing, m.issue)
+	if !m.filter.menu.Open() || m.issue != nil {
+		t.Fatalf("menu open, issue = %v, %v, want the menu open", m.filter.menu.Open(), m.issue)
 	}
 
-	// Down goes back to the table once editing stops.
-	m = update(t, m, esc, down)
+	// Down goes back to the table once the menu is closed.
+	m = press(t, m, esc)
+	m = update(t, m, down)
 
-	if m.filter.selected || strings.Contains(plainView(m), "┏") {
-		t.Error("filter field still selected after down")
+	if m.filter.selected || m.filter.menu.Focused() {
+		t.Error("filter menu still selected after down")
 	}
 
 	// Up from a lower row moves up the table instead.
@@ -314,15 +316,38 @@ func TestEmptyListMessages(t *testing.T) {
 func TestFilterFieldShowsHighlightedFilter(t *testing.T) {
 	m := filterModel(t)
 
-	// The applied filter is shown with its syntax highlighted.
-	if view := m.View().Content; !strings.Contains(view, m.filter.node.Render()) {
-		t.Errorf("View() doesn't show the highlighted filter %q", m.filter.node.Render())
-	}
-
-	// While editing, the raw text is shown without highlighting.
+	// While the custom filter is being edited, the raw text is shown.
 	m = update(t, m, slash)
 
 	if view := m.View().Content; strings.Contains(view, m.filter.node.Render()) {
 		t.Error("View() shows the highlighted filter while editing")
 	}
+
+	// Once applied, the custom filter is shown with its syntax highlighted.
+	m = update(t, m, enter)
+
+	if view := m.View().Content; !strings.Contains(view, m.filter.node.Render()) {
+		t.Errorf("View() doesn't show the highlighted filter %q", m.filter.node.Render())
+	}
+}
+
+// press sends msg to the model, then sends back the message the filter menu
+// replies with, as the program would: ItemChosenMsg or ItemCanceledMsg.
+// Other commands, such as the text cursor's blinking, aren't run.
+func press(t *testing.T, m Model, msg tea.Msg) Model {
+	t.Helper()
+
+	next, cmd := m.Update(msg)
+	m = next.(Model)
+
+	if cmd == nil || !m.filter.menu.Open() {
+		return m
+	}
+
+	switch reply := cmd().(type) {
+	case dropdown.ItemChosenMsg, dropdown.ItemCanceledMsg:
+		return update(t, m, reply)
+	}
+
+	return m
 }

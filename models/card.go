@@ -160,8 +160,9 @@ func (c Card) renderContent() (string, int) {
 	}
 
 	var style ansi.StyleConfig
+	dark := termenv.HasDarkBackground()
 
-	if termenv.HasDarkBackground() {
+	if dark {
 		style = glamstyles.DarkStyleConfig
 	} else {
 		style = glamstyles.LightStyleConfig
@@ -171,6 +172,17 @@ func (c Card) renderContent() (string, int) {
 	style.Document.Margin = &margin
 	style.Document.BlockPrefix = ""
 	style.Document.BlockSuffix = ""
+
+	style.Code = ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BackgroundColor: stringPtr("0"),
+			Color:           stringPtr("6"),
+		},
+	}
+
+	// Mark each code block, so it can be painted grey once it's rendered.
+	style.CodeBlock.BlockPrefix = codeStartMarker
+	style.CodeBlock.BlockSuffix = codeEndMarker
 
 	var content string
 
@@ -184,6 +196,7 @@ func (c Card) renderContent() (string, int) {
 		content = source
 	}
 
+	content = paintCodeBlocks(content, codeBackground(dark))
 	content = strings.TrimRight(content, "\n\t ")
 
 	if utf8.RuneCountInString(content) == 0 {
@@ -212,4 +225,8 @@ func (c Card) getStyle() lipgloss.Style {
 	default:
 		return styles.Card
 	}
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

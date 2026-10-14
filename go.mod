@@ -10,6 +10,7 @@ require (
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/akrennmair/slice v0.0.0-20220105203817-49445747ab81
+	github.com/madicen/bubble-dropdown/v2 v2.0.1
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.6
@@ -35,6 +36,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/lrstanley/bubblezone/v2 v2.0.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
@@ -56,3 +58,7 @@ require (
 )
 
 replace github.com/factory-factory/ish => ./
+
+replace charm.land/glamour/v2 => ./third_party/glamour
+
+replace github.com/madicen/bubble-dropdown/v2 => ./third_party/bubble-dropdown

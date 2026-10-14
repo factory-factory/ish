@@ -253,7 +253,7 @@ func TestBackKeysReturnToList(t *testing.T) {
 		if got := m.table.SelectedRow()[0]; got != "BBB" {
 			t.Errorf("selected %s after %s, want the issue that was open, BBB", got, msg)
 		}
-		if view := m.View().Content; !strings.Contains(view, "Issue Filter") || !strings.Contains(view, "AAA") {
+		if view := m.View().Content; !strings.Contains(view, "Filter:") || !strings.Contains(view, "AAA") {
 			t.Errorf("View() after %s = %q, want the issue list", msg, view)
 		}
 
