@@ -17,6 +17,7 @@ import (
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/styles"
+	dropdown "github.com/madicen/bubble-dropdown/v2"
 )
 
 // Model lists issues until one is opened, then hands control to the issue
@@ -45,6 +46,9 @@ type Model struct {
 
 	// light reports whether the terminal has a light background.
 	light bool
+
+	// user is who's running ish, for the "Issues assigned to me" filter.
+	user string
 
 	width  int
 	height int
@@ -117,7 +121,8 @@ func New(dir string) (Model, error) {
 		dir:    dir,
 		issues: issues,
 		help:   help.New(),
-		filter: filterField{text: DefaultFilter, node: node},
+		filter: filterField{text: DefaultFilter, node: node, menu: newFilterMenu()},
+		user:   CurrentUser(dir),
 	}
 
 	if m.unfiltered, err = anyIssues(dir, issues); err != nil {
@@ -174,16 +179,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
-		return m, nil
+		// The filter menu needs the size to place its panel.
+		cmd := m.updateMenu(msg)
+		return m, cmd
+
+	case dropdown.ItemChosenMsg:
+		menuCmd := m.updateMenu(msg)
+		cmd := m.chooseFilter(msg.Index)
+		return m, tea.Batch(menuCmd, cmd)
+
+	case dropdown.ItemCanceledMsg:
+		cmd := m.updateMenu(msg)
+		return m, cmd
 
 	case tea.KeyPressMsg:
-		// While the filter is being edited, keys other than ctrl+c go to it.
-		if m.filter.editing {
+		// While the filter is being edited, or its menu is open, keys other
+		// than ctrl+c go to it.
+		if m.filter.editing || m.filter.menu.Open() {
 			if msg.String() == "ctrl+c" {
 				return m, tea.Quit
 			}
 
-			cmd := m.updateFilter(msg)
+			if m.filter.editing {
+				cmd := m.updateFilter(msg)
+				return m, cmd
+			}
+
+			cmd := m.updateMenu(msg)
 			return m, cmd
 		}
 
@@ -195,18 +217,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.create()
 
 		case key.Matches(msg, keys.Filter):
-			cmd := m.editFilter()
+			cmd := m.editCustomFilter()
 			return m, cmd
 		}
 
 		if m.filter.selected {
 			switch {
-			case key.Matches(msg, filterKeys.Edit):
+			case key.Matches(msg, filterKeys.Table):
+				m.selectTable()
+
+			case m.filter.custom && key.Matches(msg, filterKeys.Edit):
 				cmd := m.editFilter()
 				return m, cmd
 
-			case key.Matches(msg, filterKeys.Table):
-				m.selectTable()
+			case m.filter.custom && key.Matches(msg, menuKeys.Menu):
+				m.leaveCustomFilter()
+
+			case !m.filter.custom && key.Matches(msg, menuKeys.Open):
+				// The menu opens on enter or space. Other keys, such as up,
+				// would change its selection without choosing it.
+				cmd := m.updateMenu(msg)
+				return m, cmd
 			}
 
 			return m, nil
@@ -394,6 +425,14 @@ func (m *Model) resize() {
 		m.filter.input.SetWidth(m.filterWidth())
 	}
 
+	// The menu's panel opens under its trigger, which follows the label.
+	width, height := m.filter.menu.TriggerSize()
+	m.filter.menu.SetBounds(
+		styles.Header.GetPaddingTop(),
+		styles.Header.GetPaddingLeft()+labelWidth(),
+		width, height,
+	)
+
 	chrome := lipgloss.Height(m.renderHeading()) + lipgloss.Height(m.renderFooter())
 
 	m.table.SetColumns(m.columns(m.width - styles.Body.GetHorizontalFrameSize()))
@@ -443,8 +482,12 @@ func (m Model) renderFooter() string {
 	switch {
 	case m.filter.editing:
 		keyMap = editingFilterKeys{}
-	case m.filter.selected:
+	case m.filter.menu.Open():
+		keyMap = openMenuKeys{}
+	case m.filter.selected && m.filter.custom:
 		keyMap = selectedFilterKeys{}
+	case m.filter.selected:
+		keyMap = selectedMenuKeys{}
 	}
 
 	footer := styles.Footer.Render(m.help.View(keyMap))
@@ -485,6 +528,9 @@ func (m Model) View() tea.View {
 		styles.Body.Render(body),
 		m.renderFooter(),
 	)
+
+	// The open filter menu's panel is drawn over the list.
+	content = m.filter.menu.ViewWithOverlay(content, m.width, m.height)
 
 	if m.width > 0 && m.height > 0 {
 		content = lipgloss.NewStyle().

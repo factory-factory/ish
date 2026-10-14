@@ -85,7 +85,7 @@ func TestHighlightStyles(t *testing.T) {
 		{"operators are bold bright white", styles.FilterOperator, lipgloss.Color("15"), true},
 		{"strings and numbers are green", styles.FilterValue, lipgloss.Color("2"), false},
 		{"booleans are bold green", styles.FilterBoolean, lipgloss.Color("2"), true},
-		{"null is grey", styles.FilterNull, lipgloss.Color("8"), false},
+		{"null is bright yellow", styles.FilterNull, lipgloss.Color("11"), false},
 		{"parentheses are yellow", styles.FilterParenthesis, lipgloss.Color("3"), false},
 		{"logical operators are white", styles.FilterKeyword, lipgloss.Color("7"), false},
 	} {

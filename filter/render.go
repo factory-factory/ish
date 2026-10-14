@@ -44,7 +44,8 @@ func with(style lipgloss.Style) func(string) string {
 }
 
 // renderValue colors a value by its kind: strings, numbers, and regular
-// expressions are green, true and false are bold green, and null is grey.
+// expressions are green, true and false are bold green, and null is bright
+// yellow.
 func renderValue(v Value) string {
 	switch v.Data.(type) {
 	case nil:

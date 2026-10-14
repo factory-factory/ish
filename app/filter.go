@@ -10,28 +10,43 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/styles"
+	dropdown "github.com/madicen/bubble-dropdown/v2"
 )
 
 // DefaultFilter is the filter the issue list starts with, which lists every
 // issue that isn't closed.
 const DefaultFilter = "{state != 'closed'}"
 
-// filterField is the field above the issue list that holds the filter
-// expression selecting which issues are listed.
+// filterField is the row above the issue list that selects which issues are
+// listed: a menu of filters, or a field for a custom filter expression.
 type filterField struct {
 	// text is the applied filter as it was typed, and node is its parsed
 	// form. An empty filter has a nil node, and lists every issue.
 	text string
 	node filter.Node
 
-	// selected reports whether the field has the focus instead of the
-	// table, and editing whether its text is being edited in input.
+	// menu offers the preset filters, and preset is the last one chosen from
+	// it. When custom is set, the custom filter field replaces the menu.
+	menu   *dropdown.Dropdown
+	preset int
+	custom bool
+
+	// selected reports whether the filter row has the focus instead of the
+	// table, and editing whether the custom filter is being edited in input.
 	selected bool
 	editing  bool
 	input    textarea.Model
 
 	// err is the error from the last attempt to apply an edited filter.
 	err error
+}
+
+// filterLabel is shown before the filter menu or custom filter field.
+const filterLabel = "Filter:"
+
+// labelWidth returns the width of the rendered filter label.
+func labelWidth() int {
+	return lipgloss.Width(styles.FilterLabel.Render(filterLabel))
 }
 
 // maxFilterHeight is the most lines the filter field grows to while editing.
@@ -68,12 +83,12 @@ var filterKeys = struct {
 	),
 }
 
-// selectedFilterKeys are listed in the help footer while the filter field is
-// selected.
+// selectedFilterKeys are listed in the help footer while the custom filter
+// field is selected.
 type selectedFilterKeys struct{}
 
 func (selectedFilterKeys) ShortHelp() []key.Binding {
-	return []key.Binding{filterKeys.Edit, filterKeys.Table, keys.New, keys.Quit}
+	return []key.Binding{filterKeys.Edit, menuKeys.Menu, filterKeys.Table, keys.New, keys.Quit}
 }
 
 func (k selectedFilterKeys) FullHelp() [][]key.Binding {
@@ -92,9 +107,11 @@ func (k editingFilterKeys) FullHelp() [][]key.Binding {
 	return [][]key.Binding{k.ShortHelp()}
 }
 
-// selectFilter gives the filter field the focus.
+// selectFilter gives the filter row the focus: the menu, or the custom filter
+// field if it's replaced the menu.
 func (m *Model) selectFilter() {
 	m.filter.selected = true
+	m.filter.menu.SetFocused(!m.filter.custom)
 	m.table.Blur()
 	m.resize()
 }
@@ -102,6 +119,7 @@ func (m *Model) selectFilter() {
 // selectTable gives the table the focus.
 func (m *Model) selectTable() {
 	m.filter.selected = false
+	m.filter.menu.SetFocused(false)
 	m.table.Focus()
 	m.resize()
 }
@@ -154,6 +172,22 @@ func (m *Model) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	return cmd
 }
 
+// applyFilterText applies a valid filter expression, such as a preset's.
+func (m *Model) applyFilterText(text string) {
+	node, err := filter.Parse(text)
+
+	if err != nil {
+		m.filter.err = err
+		m.resize()
+		return
+	}
+
+	m.filter.text = text
+	m.filter.node = node
+	m.filter.err = nil
+	m.reload()
+}
+
 // applyFilter parses the edited filter and, if it's valid, lists the issues
 // it matches. An empty filter lists every issue. If it isn't valid, editing
 // continues and the error is shown.
@@ -179,10 +213,11 @@ func (m *Model) applyFilter() {
 	m.reload()
 }
 
-// filterWidth returns the width inside the filter field's border and
+// filterWidth returns the width inside the custom filter field's border and
 // padding.
 func (m Model) filterWidth() int {
-	width := m.width - styles.Header.GetHorizontalFrameSize() - styles.FilterBox.GetHorizontalFrameSize()
+	width := m.width - styles.Header.GetHorizontalFrameSize() -
+		labelWidth() - styles.FilterBox.GetHorizontalFrameSize()
 
 	if m.width <= 0 {
 		width = 40
@@ -197,9 +232,30 @@ func renderFilter(node filter.Node) string {
 	return node.Render()
 }
 
-// renderHeading renders the filter field and its label, which take the place
-// of a title above the issue list.
+// renderHeading renders the filter row, which takes the place of a title
+// above the issue list: a label, then the filter menu, or the custom filter
+// field if it's replaced the menu.
 func (m Model) renderHeading() string {
+	label := styles.FilterLabel.Render(filterLabel)
+	row := label + m.filter.menu.TriggerView()
+
+	if m.filter.custom {
+		// The label lines up with the first line of text inside the box.
+		row = lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderCustomFilter())
+	}
+
+	parts := []string{row}
+
+	if m.filter.err != nil {
+		parts = append(parts, lipgloss.NewStyle().Width(m.filterWidth()).Render(styles.Error.Render(m.filter.err.Error())))
+	}
+
+	return styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
+}
+
+// renderCustomFilter renders the custom filter field: the raw filter while
+// it's being edited, and the applied filter, highlighted, otherwise.
+func (m Model) renderCustomFilter() string {
 	width := m.filterWidth()
 
 	var content string
@@ -218,11 +274,5 @@ func (m Model) renderHeading() string {
 		box = styles.FilterBoxSelected
 	}
 
-	parts := []string{styles.FilterLabel.Render("Issue Filter"), box.Render(content)}
-
-	if m.filter.err != nil {
-		parts = append(parts, lipgloss.NewStyle().Width(width).Render(styles.Error.Render(m.filter.err.Error())))
-	}
-
-	return styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
+	return box.Render(content)
 }
