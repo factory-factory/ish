@@ -490,26 +490,44 @@ func TestValuesDimmedWhileKeyEditedAgain(t *testing.T) {
 	ish = typeText(t, ish, "high, low")
 	ish = update(t, ish, shiftTab)
 
-	if header := ish.renderHeader(); !strings.Contains(header, styles.TagDraft.Render(": high, low")) {
+	if header := ish.renderHeader(); !strings.Contains(header, styles.TagDraft.Render(" high, low")) {
 		t.Errorf("header %q, want the values dimmed after the key", header)
 	}
 
-	// The values follow the key and the cursor, without a gap, as the key
-	// grows.
-	if got := newTagLine(t, ish); !strings.Contains(got, "• prio : high, low") {
+	// The colon, under the cursor, and the values follow the key without
+	// a gap, as the key grows, and with the cursor within the key.
+	if got := newTagLine(t, ish); !strings.Contains(got, "• prio: high, low") {
 		t.Errorf("new tag line %q, want the values right after the key", got)
+	}
+	if header := ish.renderHeader(); strings.Contains(header, "prio\x1b[m ") {
+		t.Errorf("header %q, want the cursor on the colon", header)
 	}
 
 	ish = typeText(t, ish, "rity")
 
-	if got := newTagLine(t, ish); !strings.Contains(got, "• priority : high, low") {
+	if got := newTagLine(t, ish); !strings.Contains(got, "• priority: high, low") {
 		t.Errorf("new tag line %q after typing, want the values right after the key", got)
 	}
+
+	ish = update(t, ish, left, left)
+
+	if got := newTagLine(t, ish); !strings.Contains(got, "• priority: high, low") {
+		t.Errorf("new tag line %q with the cursor in the key, want the values right after it", got)
+	}
+
+	// With the key deleted, the colon still comes first.
+	ish = update(t, ish, right, right, ctrlU)
+
+	if got := newTagLine(t, ish); !strings.Contains(got, "• : high, low") {
+		t.Errorf("new tag line %q with an empty key, want the colon and values", got)
+	}
+
+	ish = typeText(t, ish, "priority")
 
 	// Moving on to the values shows them in the input again, undimmed.
 	ish = update(t, ish, tab)
 
-	if header := ish.renderHeader(); strings.Contains(header, styles.TagDraft.Render(": high, low")) {
+	if header := ish.renderHeader(); strings.Contains(header, styles.TagDraft.Render(" high, low")) {
 		t.Errorf("header %q, want the values in their input", header)
 	}
 	if got := newTagLine(t, ish); !strings.Contains(got, "• priority: high, low") {

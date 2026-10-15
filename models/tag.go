@@ -190,9 +190,12 @@ func (t *Tag) sizeEditor(width int) {
 
 		// The input is padded to its width, so with values shown after it,
 		// it's only as wide as the key. The cursor at the end is drawn
-		// beyond it.
+		// beyond it, where the colon is shown. An empty key has no width,
+		// so it isn't padded at all.
 		if t.draft != "" {
-			available = min(available-lipgloss.Width(draftSeparator+t.draft)-1, lipgloss.Width(t.keyInput.Value()))
+			available = min(available-lipgloss.Width(draftSeparator+t.draft), lipgloss.Width(t.keyInput.Value()))
+			t.keyInput.SetWidth(max(available, 0))
+			return
 		}
 
 		t.keyInput.SetWidth(max(available, 1))
@@ -237,13 +240,22 @@ func splitValues(s string) []string {
 
 func (t Tag) View() tea.View {
 	if t.editingKey {
-		view := styles.TagSelected.Render(keyPrefix) + t.keyInput.View()
+		key := t.keyInput.View()
 
-		if t.draft != "" {
-			view += styles.TagDraft.Render(draftSeparator + t.draft)
+		if t.draft == "" {
+			return tea.NewView(styles.TagSelected.Render(keyPrefix) + key)
 		}
 
-		return tea.NewView(view)
+		// The input ends with a blank cell: the cursor, or the padding
+		// that stands in for it when the cursor is within the key. The
+		// colon goes in that cell, so it follows the key directly, and the
+		// cursor at the end is drawn on it.
+		if i := strings.LastIndex(key, " "); i >= 0 {
+			key = key[:i] + ":" + key[i+1:]
+		}
+
+		return tea.NewView(styles.TagSelected.Render(keyPrefix) + key +
+			styles.TagDraft.Render(draftSeparator[1:]+t.draft))
 	}
 
 	if t.deleting {

@@ -109,3 +109,24 @@ Done, and left in `in review`.
 - After `shift+tab`, the values are dimmed, directly after the key and the cursor, including after typing more of the key.
 - Moving forward shows them in their input again, undimmed.
 - In a real terminal, on a copy of `.ish`, the line showed `prio` and the cursor, then `: high` in grey. After typing `r`, it showed `prior`, with `: high` still directly after the cursor.
+
+---
+
+[brendan@berg.industries 2026-10-15T10:01:34-07:00]
+
+This is a minor tweak, but is it possible to get rid of the space between the key and the colon when navigating back with `shift+tab`? The cursor should be on the colon if possible.
+
+---
+
+[Claude 2026-10-15T10:04:53-07:00]
+
+Done, and left in `in review`.
+
+- After `shift+tab`, the colon now follows the key directly, as in `• priority: high`. With the cursor at the end of the key, the cursor is drawn on the colon.
+- The gap was the cursor's own cell, which the text input always draws as a blank after the key. The colon is now shown in that cell, and only the values after it are dimmed.
+- With the cursor moved back into the key, the colon still follows the key directly. With the key deleted, the line reads `• : high`.
+
+## Testing
+
+- The line reads `• prio: high, low` after `shift+tab`, and keeps the colon directly after the key while typing, with the cursor within the key, and with the key deleted.
+- In a real terminal, on a copy of `.ish`, `prio` was followed by the colon in reverse video (the cursor), then ` high` in grey. After typing `r`, the cursor stayed on the colon after `prior`.
