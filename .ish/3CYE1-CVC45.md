@@ -81,3 +81,31 @@ Done, following your answers, and moved to `in review`.
 - `shift+tab` does nothing on an existing tag.
 - Pasting with and without a colon, with surrounding space, with a URL value, with an empty value, and with an empty key, and replacing values kept from before a `shift+tab`.
 - In a real terminal, on a copy of `.ish`, typing `prio`, `:`, `high`, `shift+tab`, `rity`, `tab` and enter saved `priority: high`. Pasting `relation.related: #3CSJ4-PEZ1N` saved that tag.
+
+---
+
+[brendan@berg.industries 2026-10-15T09:17:40-07:00]
+
+While playing with the UI, I noticed that the value field disappears when `shift+tab` is pressed to return to the key field. I'd like to dim the existing value text when going back to edit the key.
+
+---
+
+[Claude 2026-10-15T09:22:13-07:00]
+
+Done, and left in `in review`.
+
+## The change
+
+- After `shift+tab`, the values typed so far stay on the tag's line, dimmed, after the key: `• priority: high, low`, with `: high, low` in grey (8), the colour of the filter's placeholder text.
+- The values follow directly after the key and the cursor, and move along as the key gets longer or shorter. Moving forward with `tab`, `:` or enter puts them back in their input, undimmed.
+
+## How
+
+- The key input pads itself with spaces to its full width, which would have pushed the values to the far edge.
+- While values are shown after it, the input is now only as wide as the key. It's widened while each key press or paste is handled, so it doesn't scroll as the key grows.
+
+## Testing
+
+- After `shift+tab`, the values are dimmed, directly after the key and the cursor, including after typing more of the key.
+- Moving forward shows them in their input again, undimmed.
+- In a real terminal, on a copy of `.ish`, the line showed `prio` and the cursor, then `: high` in grey. After typing `r`, it showed `prior`, with `: high` still directly after the cursor.

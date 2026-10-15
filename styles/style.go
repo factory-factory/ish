@@ -99,6 +99,10 @@ var FilterBoxSelected = FilterBox.
 	Border(lipgloss.ThickBorder(), true).
 	BorderForeground(lipgloss.Color("4"))
 
+// TagDraft dims the values of a new tag while its key is edited again.
+var TagDraft = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8"))
+
 var FilterPlaceholder = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("8"))
 

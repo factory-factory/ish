@@ -481,3 +481,38 @@ func TestPasteReplacesKeptValues(t *testing.T) {
 		t.Errorf("key, values = %q, %q, want state, done", tag.Key, tag.input.Value())
 	}
 }
+
+func TestValuesDimmedWhileKeyEditedAgain(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "prio")
+	ish = update(t, ish, tab)
+	ish = typeText(t, ish, "high, low")
+	ish = update(t, ish, shiftTab)
+
+	if header := ish.renderHeader(); !strings.Contains(header, styles.TagDraft.Render(": high, low")) {
+		t.Errorf("header %q, want the values dimmed after the key", header)
+	}
+
+	// The values follow the key and the cursor, without a gap, as the key
+	// grows.
+	if got := newTagLine(t, ish); !strings.Contains(got, "• prio : high, low") {
+		t.Errorf("new tag line %q, want the values right after the key", got)
+	}
+
+	ish = typeText(t, ish, "rity")
+
+	if got := newTagLine(t, ish); !strings.Contains(got, "• priority : high, low") {
+		t.Errorf("new tag line %q after typing, want the values right after the key", got)
+	}
+
+	// Moving on to the values shows them in the input again, undimmed.
+	ish = update(t, ish, tab)
+
+	if header := ish.renderHeader(); strings.Contains(header, styles.TagDraft.Render(": high, low")) {
+		t.Errorf("header %q, want the values in their input", header)
+	}
+	if got := newTagLine(t, ish); !strings.Contains(got, "• priority: high, low") {
+		t.Errorf("new tag line %q, want the values in their input", got)
+	}
+}
