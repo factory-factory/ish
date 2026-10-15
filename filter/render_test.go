@@ -18,6 +18,7 @@ func TestRenderMatchesString(t *testing.T) {
 		"{state != 'closed'}",
 		`({state = "open"} or {done = true}) and not {a = null}`,
 		"(({a ~ /^in\\s/}))",
+		"{@title ~ 'x'} and {@dateCreated > '2026'}",
 		"{estimate >= -1.50e3} and {b <= 0} or not ({c = false} and {d > 2})",
 	}
 
@@ -43,7 +44,7 @@ func TestRenderMatchesString(t *testing.T) {
 }
 
 func TestRenderColorsEachToken(t *testing.T) {
-	rendered := mustParse(t, `({state != 'closed'} and not {done = true}) or {owner = null} or {estimate > 1.5} or {state ~ /^in/}`).Render()
+	rendered := mustParse(t, `({state != 'closed'} and not {done = true}) or {owner = null} or {estimate > 1.5} or {state ~ /^in/} or {@title = 'x'}`).Render()
 
 	for _, tt := range []struct {
 		name  string
@@ -53,6 +54,7 @@ func TestRenderColorsEachToken(t *testing.T) {
 		{"brace", styles.FilterBrace, "{"},
 		{"closing brace", styles.FilterBrace, "}"},
 		{"attribute", styles.FilterAttribute, "state"},
+		{"field", styles.FilterAttribute, "@title"},
 		{"operator", styles.FilterOperator, "!="},
 		{"two-character operator", styles.FilterOperator, ">"},
 		{"match operator", styles.FilterOperator, "~"},

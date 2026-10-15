@@ -63,6 +63,12 @@ func TestParseTrees(t *testing.T) {
 		{"{relation.parent = 'x'}", attr("relation.parent", Equal, "'x'", "x")},
 		{"{a-b_c/d.e2 != 'x'}", attr("a-b_c/d.e2", NotEqual, "'x'", "x")},
 
+		// Fields start with @.
+		{"{@title ~ /^Filter/}", attr("@title", Match, "/^Filter/", Regexp("^Filter"))},
+		{"{@author = 'alice'}", attr("@author", Equal, "'alice'", "alice")},
+		{"{@dateCreated >= '2026-10-01'}", attr("@dateCreated", GreaterOrEqual, "'2026-10-01'", "2026-10-01")},
+		{"{ @title!='x' }", attr("@title", NotEqual, "'x'", "x")},
+
 		// Every operator.
 		{"{a != 1}", attr("a", NotEqual, "1", json.Number("1"))},
 		{"{a < 1}", attr("a", Less, "1", json.Number("1"))},
@@ -106,6 +112,7 @@ func TestStringRoundTrip(t *testing.T) {
 		// are doubled.
 		{`{a ~ '(?i)^in\\s'}`, `{a ~ '(?i)^in\\s'}`},
 		{`{a = 'it\'s'}`, `{a = 'it\'s'}`},
+		{"{ @author='a' } or {@dateCreated<'2026'}", "{@author = 'a'} or {@dateCreated < '2026'}"},
 	}
 
 	for _, tt := range tests {
@@ -170,6 +177,12 @@ func TestParseErrors(t *testing.T) {
 		{"{st ate = 1}", 4, 7, "expected an operator"},
 		{"{a$ = 1}", 2, 3, "may only contain letters"},
 		{"{ = 1}", 2, 3, "expected an attribute name"},
+		{"{@ = 1}", 1, 2, "expected a field name: @title, @author, and @dateCreated"},
+		{"{@@title = 1}", 1, 2, "expected a field name"},
+		{"{@state = 'open'}", 1, 7, "unknown field @state; the fields are @title, @author, and @dateCreated"},
+		{"{@Title = 'x'}", 1, 7, "unknown field @Title"},
+		{"{@title@ = 'x'}", 7, 8, "may only contain letters"},
+		{"{a@b = 1}", 2, 3, "may only contain letters"},
 		{"({a = 1}", 0, 1, "this parenthesis is never closed"},
 		{"({a = 1} {b = 2})", 9, 11, "expected and, or, or a closing parenthesis"},
 		{"{a = 1} {b = 2}", 8, 10, "expected and, or, or the end"},

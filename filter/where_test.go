@@ -20,6 +20,16 @@ var issues = map[string][]string{
 	"E": {"- state: <script>", "- assignees: it's"},
 }
 
+// headers are the titles and bylines of the issues that have their own,
+// for filters on fields. dateCreated is stored in UTC, which for B and D is
+// a different day than in their own time zones.
+var headers = map[string]string{
+	"A": "# Fix the parser\n\n[alice 2026-10-12T10:00:00-07:00]\n", // 2026-10-12T17:00:00Z
+	"B": "# Filter by field\n\n[bob 2026-10-13T20:30:00-07:00]\n",  // 2026-10-14T03:30:00Z
+	"C": "# 42\n\n[alice 2026-09-30T23:00:00Z]\n",
+	"D": "# D\n\n[carol 2026-10-14T01:00:00+02:00]\n", // 2026-10-13T23:00:00Z
+}
+
 // match returns the IDs of the issues that text matches, in order.
 func match(t *testing.T, dir, text string) string {
 	t.Helper()
@@ -73,7 +83,10 @@ func indexedDir(t *testing.T) string {
 	dir := t.TempDir()
 
 	for id, metadata := range issues {
-		source := "# " + id + "\n\n[alice 2026-10-12T10:00:00-07:00]\n"
+		source, ok := headers[id]
+		if !ok {
+			source = "# " + id + "\n\n[alice 2026-10-12T10:00:00-07:00]\n"
+		}
 
 		if len(metadata) > 0 {
 			source += "\n" + strings.Join(metadata, "\n") + "\n"
@@ -163,6 +176,36 @@ func TestWhere(t *testing.T) {
 		{"not ({state = 'open'} or {state = null})", "B C E"},
 		{"not not {state = 'open'}", "A"},
 
+		// Fields compare the issue's title, author, and creation time.
+		{"{@title = 'Fix the parser'}", "A"},
+		{"{@title != 'Fix the parser'}", "B C D E"},
+		{"{@title ~ /^Fi/}", "A B"},
+		{"{@title ~ '(?i)PARSER'}", "A"},
+		{"{@title < 'E'}", "C D"},
+		{"{@author = 'alice'}", "A C E"},
+		{"{@author != 'alice'}", "B D"},
+		{"{@author = 'alice'} and {state != 'closed'}", "A C E"},
+		{"not {@author = 'alice'} or {priority = 'high'}", "B C D"},
+
+		// A field compares numerically with a number, and != is the
+		// opposite of = even where the field isn't a number.
+		{"{@title = 42}", "C"},
+		{"{@title = 42.0}", "C"},
+		{"{@title != 42}", "A B D E"},
+		{"{@title > 40}", "C"},
+		{"{@title = true}", ""},
+		{"{@title != true}", "A B C D E"},
+
+		// Every issue has every field.
+		{"{@author = null}", ""},
+		{"{@author != null}", "A B C D E"},
+
+		// dateCreated is RFC 3339 text in UTC, so dates compare as text.
+		{"{@dateCreated = '2026-10-12T17:00:00Z'}", "A E"},
+		{"{@dateCreated >= '2026-10-13'}", "B D"},
+		{"{@dateCreated < '2026-10-01'}", "C"},
+		{"{@dateCreated ~ /^2026-10-13/}", "D"},
+
 		// Values are passed as parameters, so quotes and SQL in them are
 		// just text.
 		{`{state = "x' OR 1=1 --"}`, ""},
@@ -192,4 +235,36 @@ func TestWhereUsesParameters(t *testing.T) {
 	if len(args) != 4 {
 		t.Errorf("args = %v, want the attribute and value of each expression", args)
 	}
+}
+
+func TestWhereFieldColumns(t *testing.T) {
+	for _, tt := range []struct {
+		text   string
+		column string
+	}{
+		{"{@title = 'x'}", "issue.title"},
+		{"{@author != 'x'}", "issue.author"},
+		{"{@dateCreated ~ /x/}", "issue.dateCreated"},
+	} {
+		clause, args := mustWhere(t, tt.text)
+
+		if !strings.Contains(clause, tt.column) || strings.Contains(clause, "attribute") {
+			t.Errorf("%s: clause %q, want a condition on %s and not the attribute table", tt.text, clause, tt.column)
+		}
+		if len(args) != 1 || args[0] != "x" {
+			t.Errorf("%s: args = %v, want [x]", tt.text, args)
+		}
+	}
+}
+
+func mustWhere(t *testing.T, text string) (string, []any) {
+	t.Helper()
+
+	node, err := filter.Parse(text)
+
+	if err != nil {
+		t.Fatalf("Parse(%q) error = %v", text, err)
+	}
+
+	return node.Where()
 }
