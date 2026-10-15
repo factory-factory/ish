@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-14T22:53:31-07:00]
 
-- state: open
+- state: in review
 - assignees: brendan@berg.industries
 
 ---
@@ -12,3 +12,72 @@
 Since colons are not allowed in attribute keys, typing colon should save the contents of the key field and advance the cursor to the value field. Additionally, the tab key should advance to the key field.
 
 While editing the value field, it should also be possible to shift-tab to switch back to editing the key field.
+
+---
+
+[Claude 2026-10-15T00:57:38-07:00]
+
+I've reviewed this and moved it to `in progress`. I have a plan, but a few points need your answers before I start.
+
+## How it works now
+
+- Pressing `m` adds a tag and edits its key first. Enter saves the key and moves on to its values. Enter on an empty key removes the new tag.
+- Only new tags have an editable key. Enter on an existing tag edits just its values.
+
+## Plan
+
+- **While editing a new tag's key:** `tab` or `:` saves the key and moves to the value field, as enter does now. The colon isn't typed into the key.
+- **While editing that tag's values:** `shift+tab` returns to the key, keeping the values typed so far. `tab` or `:` then moves forward to them again.
+- **The help footer** lists `tab`/`:` and `shift+tab` while a tag is being edited.
+
+## Questions
+
+1. **"The tab key should advance to the key field":** I've read this as advancing to the *value* field. Is that right?
+2. **`shift+tab` on existing tags:** should it also work while editing the values of an existing tag? That would let you rename keys, which isn't possible today. Or should it only work on new tags, whose key hasn't been saved yet? I'd suggest new tags only, unless you want renaming. Renaming would also need a rule for a key that's already used by another tag.
+3. **An empty key:** enter on an empty key removes the new tag. Should `tab` and `:` on an empty key do the same, or do nothing and leave you in the key field? I'd suggest doing nothing, since `esc` already cancels.
+4. **Pasting `key: value`:** pasted text, such as `relation.parent: #3CSJ4-PEZ1N`, arrives in one piece. Should a colon in pasted text split it between the key and the value? Or should the paste be typed into the key, with the colon dropped, as other characters that can't be in a key are? I'd suggest splitting it, but it's an extra, so I'm happy to leave it out.
+
+---
+
+[Claude 2026-10-15T00:57:53-07:00]
+
+A correction to question 4: the key field drops only spaces. It doesn't drop other characters that can't be in a key; those are typed, and the key is rejected when the issue is saved. So the second option would be "type the paste into the key, with the colon dropped".
+
+---
+
+[brendan@berg.industries 2026-10-15T01:09:46-07:00]
+
+1. Yes, that's my bad. I meant the *value* field. I've updated the original comment.
+2. `shift+tab` should only work on new tags.
+3. `tab` and `:` on an empty key should do nothing.
+4. Let's split pasted text on `:`. Since a space is likely to follow a colon, whitespace should be stripped from the value portion of the pasted text.
+
+---
+
+[Claude 2026-10-15T01:16:16-07:00]
+
+Done, following your answers, and moved to `in review`.
+
+## Keys while adding a tag
+
+- **Key field:** `tab` or `:` saves the key and moves to the value field, as enter does. The colon isn't typed. On an empty key, they do nothing.
+- **Value field:** `shift+tab` returns to the key. The values typed so far are kept, and come back when you move forward again with `tab`, `:` or enter.
+  - This only applies to new tags. On an existing tag, `shift+tab` does nothing.
+  - In the value field, `:` and `tab` are typed as usual, so values such as URLs can contain colons.
+- **Help footer:** it shows `tab/: values` while the key is edited, and `shift+tab key` while a new tag's values are.
+
+## Pasting
+
+- Text pasted into the key is split at its first colon. The part before it goes into the key, and the part after it goes into the value field, without surrounding whitespace.
+- For example, pasting `relation.parent: #3CSJ4-PEZ1N` fills in both.
+- Pasted values replace any values kept from before a `shift+tab`. An empty part after the colon keeps them.
+- With an empty key, the colon does nothing, as when it's typed, so the part after it is dropped.
+- Text without a colon is pasted into the key as before.
+
+## Testing
+
+- `tab` and `:` move to the values from a key, do nothing on an empty key, and update the help.
+- `shift+tab` returns to the key and keeps the values, and the tag is then saved with the edited key.
+- `shift+tab` does nothing on an existing tag.
+- Pasting with and without a colon, with surrounding space, with a URL value, with an empty value, and with an empty key, and replacing values kept from before a `shift+tab`.
+- In a real terminal, on a copy of `.ish`, typing `prio`, `:`, `high`, `shift+tab`, `rity`, `tab` and enter saved `priority: high`. Pasting `relation.related: #3CSJ4-PEZ1N` saved that tag.

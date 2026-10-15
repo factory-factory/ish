@@ -336,3 +336,148 @@ func TestNewTagKeyStartsEmpty(t *testing.T) {
 		t.Errorf("new tag line = %q, want the typed key", got)
 	}
 }
+
+func TestTabAndColonMoveToValues(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{tab, {Code: ':', Text: ":"}} {
+		ish := taggingIssue(t, nil)
+		ish = update(t, ish, mKey)
+
+		if footer := footerText(ish); !strings.Contains(footer, "tab/: values") || strings.Contains(footer, "shift+tab") {
+			t.Errorf("footer %q while editing a new key, want tab/: and not shift+tab", footer)
+		}
+
+		ish = typeText(t, ish, "priority")
+		ish = update(t, ish, key)
+		tag := ish.Metadata[1]
+
+		if tag.Key != "priority" || tag.editingKey || !tag.editing {
+			t.Fatalf("after %s: key, editing key, editing values = %q, %v, %v, want priority, false, true",
+				key, tag.Key, tag.editingKey, tag.editing)
+		}
+		if tag.input.Value() != "" {
+			t.Errorf("after %s: values input = %q, want it empty", key, tag.input.Value())
+		}
+		if footer := footerText(ish); !strings.Contains(footer, "shift+tab key") || strings.Contains(footer, "tab/:") {
+			t.Errorf("footer %q while editing a new tag's values, want shift+tab and not tab/:", footer)
+		}
+
+		// A colon in the values is just text.
+		ish = typeText(t, ish, "a:b")
+		ish = update(t, ish, enter)
+
+		if got := ish.Metadata[1].Values; !slices.Equal(got, []string{"a:b"}) {
+			t.Errorf("after %s: values = %q, want [a:b]", key, got)
+		}
+	}
+}
+
+func TestTabAndColonWithEmptyKey(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{tab, {Code: ':', Text: ":"}} {
+		ish := taggingIssue(t, nil)
+		ish = update(t, ish, mKey, key)
+		tag := ish.Metadata[1]
+
+		if len(ish.Metadata) != 2 || !tag.editingKey || tag.keyInput.Value() != "" {
+			t.Errorf("after %s on an empty key: tags, editing key, key = %d, %v, %q, want the key still being edited",
+				key, len(ish.Metadata), tag.editingKey, tag.keyInput.Value())
+		}
+	}
+}
+
+func TestShiftTabReturnsToKey(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "prio")
+	ish = update(t, ish, tab)
+	ish = typeText(t, ish, "high")
+	ish = update(t, ish, shiftTab)
+	tag := ish.Metadata[1]
+
+	if !tag.editingKey || tag.editing || tag.keyInput.Value() != "prio" {
+		t.Fatalf("editing key, editing values, key = %v, %v, %q, want the key being edited again",
+			tag.editingKey, tag.editing, tag.keyInput.Value())
+	}
+
+	// Shift+tab does nothing more while the key is edited.
+	ish = update(t, ish, shiftTab)
+	ish = typeText(t, ish, "rity")
+	ish = update(t, ish, tab)
+	tag = ish.Metadata[1]
+
+	if tag.Key != "priority" || !tag.editing || tag.input.Value() != "high" {
+		t.Fatalf("key, editing values, values = %q, %v, %q, want priority with the values kept",
+			tag.Key, tag.editing, tag.input.Value())
+	}
+
+	ish = update(t, ish, enter)
+
+	if tag := ish.Metadata[1]; tag.Key != "priority" || !slices.Equal(tag.Values, []string{"high"}) {
+		t.Errorf("saved tag %q: %q, want priority: [high]", tag.Key, tag.Values)
+	}
+}
+
+func TestShiftTabOnExistingTag(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish.setCursor(2)
+	ish = update(t, ish, enter)
+
+	if footer := footerText(ish); strings.Contains(footer, "shift+tab") {
+		t.Errorf("footer %q while editing an existing tag, want no shift+tab", footer)
+	}
+
+	ish = update(t, ish, shiftTab)
+
+	if tag := ish.Metadata[0]; tag.editingKey || !tag.editing {
+		t.Errorf("editing key, editing values = %v, %v after shift+tab on an existing tag, want its values still edited",
+			tag.editingKey, tag.editing)
+	}
+}
+
+func TestPasteKeyAndValues(t *testing.T) {
+	tests := []struct {
+		paste      string
+		key        string
+		editingKey bool
+		values     string
+	}{
+		{"relation.parent: #3CSJ4-PEZ1N", "relation.parent", false, "#3CSJ4-PEZ1N"},
+		{"priority:high, urgent  ", "priority", false, "high, urgent"},
+		{"url: http://example.com", "url", false, "http://example.com"},
+		{"priority:", "priority", false, ""},
+
+		// Without a colon, the paste is the key.
+		{"priority", "priority", true, ""},
+
+		// With an empty key, a colon does nothing, so the values are dropped.
+		{": high", "", true, ""},
+	}
+
+	for _, tt := range tests {
+		ish := taggingIssue(t, nil)
+		ish = update(t, ish, mKey, tea.PasteMsg{Content: tt.paste})
+		tag := ish.Metadata[1]
+
+		key := tag.Key
+		if tag.editingKey {
+			key = tag.editedKey()
+		}
+
+		if key != tt.key || tag.editingKey != tt.editingKey || tag.input.Value() != tt.values {
+			t.Errorf("paste %q: key, editing key, values = %q, %v, %q, want %q, %v, %q",
+				tt.paste, key, tag.editingKey, tag.input.Value(), tt.key, tt.editingKey, tt.values)
+		}
+	}
+}
+
+func TestPasteReplacesKeptValues(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "x")
+	ish = update(t, ish, tab)
+	ish = typeText(t, ish, "kept")
+	ish = update(t, ish, shiftTab, ctrlU, tea.PasteMsg{Content: "state: done"})
+
+	if tag := ish.Metadata[1]; tag.Key != "state" || tag.input.Value() != "done" {
+		t.Errorf("key, values = %q, %q, want state, done", tag.Key, tag.input.Value())
+	}
+}

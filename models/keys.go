@@ -117,6 +117,8 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // other keys are handled by the field's editor.
 type editKeyMap struct {
 	Save   key.Binding
+	Next   key.Binding
+	Prev   key.Binding
 	Cancel key.Binding
 	Quit   key.Binding
 }
@@ -138,6 +140,18 @@ func editKeys(multiline bool) editKeyMap {
 
 	return editKeyMap{
 		Save: save,
+		// Next and Prev are enabled only while a new tag's key or values
+		// are being edited, to move between them.
+		Next: key.NewBinding(
+			key.WithKeys("tab", ":"),
+			key.WithHelp("tab/:", "values"),
+			key.WithDisabled(),
+		),
+		Prev: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("shift+tab", "key"),
+			key.WithDisabled(),
+		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "cancel"),
@@ -150,11 +164,11 @@ func editKeys(multiline bool) editKeyMap {
 }
 
 func (k editKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.Cancel}
+	return []key.Binding{k.Save, k.Next, k.Prev, k.Cancel}
 }
 
 func (k editKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Save, k.Cancel, k.Quit}}
+	return [][]key.Binding{{k.Save, k.Next, k.Prev, k.Cancel, k.Quit}}
 }
 
 // itemKeyMap holds the key bindings used while selecting a card's todo items

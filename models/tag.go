@@ -26,6 +26,10 @@ type Tag struct {
 	editingKey bool
 	keyInput   textinput.Model
 
+	// draft holds the values typed for a new tag while its key is edited
+	// again, to be restored when its values are.
+	draft string
+
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
 	deleting bool
@@ -120,11 +124,40 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	t.input.Prompt = ""
 	t.input.SetStyles(textinput.DefaultStyles(isDark))
 	t.input.SetValue(strings.Join(t.Values, ", "))
+
+	if t.draft != "" {
+		t.input.SetValue(t.draft)
+		t.draft = ""
+	}
+
 	t.input.CursorEnd()
 	t.sizeEditor(width)
 	t.editing = true
 
 	return t.input.Focus()
+}
+
+// editKeyAgain stops editing a new tag's values and returns to editing its
+// key, keeping the values typed so far for when its values are edited again.
+func (t *Tag) editKeyAgain() tea.Cmd {
+	t.draft = t.input.Value()
+	t.input.Blur()
+	t.editing = false
+	t.editingKey = true
+
+	return t.keyInput.Focus()
+}
+
+// pasteKey handles text pasted while a new tag's key is being edited. The
+// text before the first colon is pasted into the key, and the text after it,
+// without surrounding space, is returned as values, reporting whether there
+// was a colon.
+func (t *Tag) pasteKey(text string) (values string, split bool) {
+	key, values, split := strings.Cut(text, ":")
+
+	t.keyInput, _ = t.keyInput.Update(tea.PasteMsg{Content: key})
+
+	return strings.TrimSpace(values), split
 }
 
 // sizeEditor fits the input, with the key, within width.
