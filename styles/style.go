@@ -68,6 +68,14 @@ var TodoSelected = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("15")).
 	Background(lipgloss.Color("4"))
 
+// Link is the style of a link to another issue, and LinkSelected the style
+// of the selected link.
+var Link = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("4")).
+	Underline(true)
+
+var LinkSelected = Link.Bold(true)
+
 var Value = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("7"))
 

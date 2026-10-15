@@ -79,12 +79,31 @@ type Issue struct {
 	// edited first, then its values, and it's removed if it's left without
 	// either.
 	newTag bool
+
+	// issues reports which issues exist, to link references to them. See
+	// SetIssueLookup.
+	issues IssueLookup
+}
+
+// SetIssueLookup sets the function that reports which issues exist, so that
+// references to them in metadata and comments are shown as links, which
+// open the issue they refer to. Without one, there are no links.
+func (ish *Issue) SetIssueLookup(issues IssueLookup) {
+	ish.issues = issues
+
+	for i := range ish.Metadata {
+		ish.Metadata[i].issues = issues
+	}
+
+	for i := range ish.Conversation {
+		ish.Conversation[i].issues = issues
+	}
 }
 
 // addTag appends a blank metadata tag, selects it, and starts editing its
 // key.
 func (ish *Issue) addTag() tea.Cmd {
-	ish.Metadata = append(ish.Metadata, Tag{})
+	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues})
 	ish.setCursor(1 + len(ish.Metadata))
 
 	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)
@@ -185,6 +204,7 @@ func (ish *Issue) addComment() tea.Cmd {
 		Author:      ish.author,
 		DateCreated: now().Format(time.RFC3339),
 		Content:     &content,
+		issues:      ish.issues,
 	})
 
 	ish.syncViewport()
@@ -235,6 +255,12 @@ func (ish *Issue) exit(cmd tea.Cmd) tea.Cmd {
 // CloseMsg is sent when the user closes an issue with the back key.
 type CloseMsg struct{}
 
+// OpenMsg is sent when the user opens a link to another issue, after the
+// issue's changes are saved, asking for the linked issue to be shown instead.
+type OpenMsg struct {
+	Id string
+}
+
 // SetClosable sets whether the back key closes the issue by sending a
 // CloseMsg, for when the issue is shown by a model that can return to a
 // previous view.
@@ -252,62 +278,131 @@ func (ish Issue) keyMap() keyMap {
 	k.Back.SetEnabled(ish.closable)
 
 	if i := ish.cardIndex(); i >= 0 {
-		k.Todos.SetEnabled(len(ish.Conversation[i].todos()) > 0)
+		k.Select.SetEnabled(len(ish.Conversation[i].items()) > 0)
+	}
+
+	if i := ish.tagIndex(); i >= 0 {
+		k.Select.SetEnabled(len(ish.Metadata[i].links()) > 0)
 	}
 
 	return k
 }
 
-// selectingTodo reports whether the todo items of the card under the cursor
-// are being selected.
-func (ish Issue) selectingTodo() bool {
-	i := ish.cardIndex()
-	return i >= 0 && ish.Conversation[i].selectingTodo
+// selectingItems reports whether the items of the card under the cursor, or
+// the links of the tag under it, are being selected.
+func (ish Issue) selectingItems() bool {
+	if i := ish.cardIndex(); i >= 0 {
+		return ish.Conversation[i].selecting
+	}
+
+	if i := ish.tagIndex(); i >= 0 {
+		return ish.Metadata[i].selecting
+	}
+
+	return false
 }
 
-// updateTodos handles a key press while a card's todo items are being
-// selected, reporting whether it was handled. Other keys work as they do in
-// the issue view.
-func (ish *Issue) updateTodos(msg tea.KeyPressMsg) bool {
-	i := ish.cardIndex()
-	card := &ish.Conversation[i]
+// startItems begins selecting the items of the card under the cursor, or the
+// links of the tag under it.
+func (ish *Issue) startItems() {
+	if i := ish.cardIndex(); i >= 0 {
+		ish.Conversation[i].startItems()
+		ish.syncViewport()
+		ish.revealItem()
+	}
+
+	if i := ish.tagIndex(); i >= 0 {
+		ish.Metadata[i].startLinks()
+	}
+}
+
+// updateItems handles a key press while a card's items or a tag's links are
+// being selected, reporting whether it was handled. Other keys work as they
+// do in the issue view.
+func (ish *Issue) updateItems(msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	if i := ish.tagIndex(); i >= 0 {
+		return ish.updateTagLinks(&ish.Metadata[i], msg)
+	}
+
+	card := &ish.Conversation[ish.cardIndex()]
 
 	switch {
-	case key.Matches(msg, todoKeys.Up):
-		card.moveTodo(-1)
+	case key.Matches(msg, itemKeys.Up):
+		card.moveItem(-1)
 
-	case key.Matches(msg, todoKeys.Down):
-		card.moveTodo(1)
+	case key.Matches(msg, itemKeys.Down):
+		card.moveItem(1)
 
-	case key.Matches(msg, todoKeys.Toggle):
-		card.toggleTodo()
-		ish.dirty = true
-		// After a failed save, a new change may fix the problem, so the next
-		// exit tries to save again.
-		ish.saveErr = nil
+	case key.Matches(msg, itemKeys.Choose):
+		selected, ok := card.selectedItem()
 
-	case key.Matches(msg, todoKeys.Done):
-		card.stopTodos()
+		if ok && selected.todo < 0 {
+			return ish.openLink(selected.link.id), true
+		}
+
+		if ok {
+			card.toggleTodo(selected.todo)
+			ish.dirty = true
+			// After a failed save, a new change may fix the problem, so
+			// the next exit tries to save again.
+			ish.saveErr = nil
+		}
+
+	case key.Matches(msg, itemKeys.Done):
+		card.stopItems()
 
 	default:
-		return false
+		return nil, false
 	}
 
 	ish.syncViewport()
-	ish.revealTodo()
+	ish.revealItem()
 
-	return true
+	return nil, true
 }
 
-// revealTodo scrolls the viewport so the selected todo item is visible.
-func (ish *Issue) revealTodo() {
+// updateTagLinks handles a key press while tag's links are being selected,
+// reporting whether it was handled.
+func (ish *Issue) updateTagLinks(tag *Tag, msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, itemKeys.Up):
+		tag.moveLink(-1)
+
+	case key.Matches(msg, itemKeys.Down):
+		tag.moveLink(1)
+
+	case key.Matches(msg, itemKeys.Choose):
+		if id, ok := tag.selectedLink(); ok {
+			return ish.openLink(id), true
+		}
+
+	case key.Matches(msg, itemKeys.Done):
+		tag.stopLinks()
+
+	default:
+		return nil, false
+	}
+
+	return nil, true
+}
+
+// openLink saves the issue's changes, then asks for the issue with the given
+// ID to be shown instead. If the changes can't be saved, the issue stays
+// open with the error shown.
+func (ish *Issue) openLink(id string) tea.Cmd {
+	return ish.exit(func() tea.Msg { return OpenMsg{Id: id} })
+}
+
+// revealItem scrolls the viewport so the selected item of the card under the
+// cursor is visible.
+func (ish *Issue) revealItem() {
 	i := ish.cardIndex()
 
 	if i < 0 {
 		return
 	}
 
-	row := ish.Conversation[i].todoRow()
+	row := ish.Conversation[i].itemRow()
 
 	if row < 0 {
 		return
@@ -443,8 +538,10 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return ish, nil
 		}
 
-		if ish.selectingTodo() && ish.updateTodos(msg) {
-			return ish, nil
+		if ish.selectingItems() {
+			if cmd, handled := ish.updateItems(msg); handled {
+				return ish, cmd
+			}
 		}
 
 		keys := ish.keyMap()
@@ -474,10 +571,8 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ish.Metadata[ish.tagIndex()].deleting = true
 			return ish, nil
 
-		case key.Matches(msg, keys.Todos):
-			ish.Conversation[ish.cardIndex()].startTodos()
-			ish.syncViewport()
-			ish.revealTodo()
+		case key.Matches(msg, keys.Select):
+			ish.startItems()
 			return ish, nil
 
 		case key.Matches(msg, keys.Help):
@@ -954,8 +1049,8 @@ func (ish Issue) renderFooter() string {
 		help = ish.help.View(ish.editKeyMap())
 	case ish.confirmingDelete():
 		help = ish.help.View(deleteKeys)
-	case ish.selectingTodo():
-		help = ish.help.View(todoKeys)
+	case ish.selectingItems():
+		help = ish.help.View(itemKeys)
 	}
 
 	if ish.saveErr == nil {

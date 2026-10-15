@@ -29,10 +29,13 @@ type Card struct {
 	editing bool
 	editor  textarea.Model
 
-	// selectingTodo reports whether the card's todo items are being
-	// selected, and todo is the index of the selected item.
-	selectingTodo bool
-	todo          int
+	// selecting reports whether the card's todo items and links are being
+	// selected, and item is the index of the selected one. See items.
+	selecting bool
+	item      int
+
+	// issues reports which issues exist, to link references to them.
+	issues IssueLookup
 }
 
 type SelectMsg bool
@@ -49,7 +52,7 @@ func (c Card) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		c.selected = bool(msg)
 
 		if !c.selected {
-			c.stopTodos()
+			c.stopItems()
 		}
 
 		return c, nil
@@ -146,18 +149,12 @@ func (c Card) View() tea.View {
 	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, byline, comment))
 }
 
-// renderContent renders the card's markdown, highlighting the selected todo
-// item if todo items are being selected. It returns the rendered content and
-// the index of the highlighted line, or -1 if there isn't one.
+// renderContent renders the card's markdown, with references to other
+// issues as links, and highlights the selected item if items are being
+// selected. It returns the rendered content and the index of the line with
+// the selected item, or -1 if there isn't one.
 func (c Card) renderContent() (string, int) {
-	source := ""
-	if c.Content != nil {
-		source = *c.Content
-	}
-
-	if todos := c.todos(); c.selectingTodo && c.todo < len(todos) {
-		source = markTodo(source, todos[c.todo])
-	}
+	source := c.markItems()
 
 	var style ansi.StyleConfig
 	dark := termenv.HasDarkBackground()
@@ -203,12 +200,15 @@ func (c Card) renderContent() (string, int) {
 		content = strings.Repeat(" ", 80)
 	}
 
-	return highlightTodo(content)
+	content, todoRow := highlightTodo(content)
+	content, linkRow := styleLinks(content)
+
+	return content, max(todoRow, linkRow)
 }
 
-// todoRow returns the line of the card's view showing the selected todo item,
-// or -1 if no todo item is selected.
-func (c Card) todoRow() int {
+// itemRow returns the line of the card's view showing the selected item, or
+// -1 if no item is selected.
+func (c Card) itemRow() int {
 	_, row := c.renderContent()
 
 	if row < 0 {

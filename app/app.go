@@ -35,6 +35,10 @@ type Model struct {
 	issue  tea.Model
 	openId string
 
+	// single reports whether ish was started with a single issue, rather
+	// than the list, so closing the issue quits. See Open.
+	single bool
+
 	// err is the error from the last attempt to open an issue, if any.
 	err error
 
@@ -140,6 +144,28 @@ func New(dir string) (Model, error) {
 	return m, nil
 }
 
+// Open returns a model showing the issue with the given ID in dir, without
+// the list: closing the issue quits, and links to other issues open them in
+// its place.
+func Open(dir, id string) (Model, error) {
+	m, err := New(dir)
+	if err != nil {
+		return Model{}, err
+	}
+
+	issue, err := parse.LoadIssue(dir, id)
+	if err != nil {
+		return Model{}, err
+	}
+
+	m.single = true
+
+	// The issue's Init command is the same as the model's.
+	shown, _ := m.show(*issue)
+
+	return shown.(Model), nil
+}
+
 func (m Model) Init() tea.Cmd {
 	return tea.RequestBackgroundColor
 }
@@ -154,11 +180,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.issue != nil {
-		if _, ok := msg.(models.CloseMsg); ok {
+		switch msg := msg.(type) {
+		case models.CloseMsg:
+			if m.single {
+				return m, tea.Quit
+			}
+
 			m.issue = nil
 			m.reload()
 			m.openId = ""
 			return m, nil
+
+		case models.OpenMsg:
+			return m.openLinked(msg.Id)
 		}
 
 		var cmd tea.Cmd
@@ -371,6 +405,24 @@ func (m Model) open() (tea.Model, tea.Cmd) {
 	return m.show(*issue)
 }
 
+// openLinked replaces the open issue with the issue with the given ID, which
+// a link in it refers to. If the issue can't be loaded, the list is shown
+// with the error.
+func (m Model) openLinked(id string) (tea.Model, tea.Cmd) {
+	issue, err := parse.LoadIssue(m.dir, id)
+
+	if err != nil {
+		m.issue = nil
+		m.reload()
+		m.openId = ""
+		m.err = err
+		m.resize()
+		return m, nil
+	}
+
+	return m.show(*issue)
+}
+
 // create opens a new, empty issue with an unused ID, by the current user. It
 // isn't written to disk unless it's edited.
 func (m Model) create() (tea.Model, tea.Cmd) {
@@ -392,6 +444,12 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
 	issue.SetAuthor(CurrentUser(m.dir))
+
+	// Without the IDs of the other issues, references aren't linked.
+	if ids, err := store.IssueIDs(m.dir); err == nil {
+		issue.SetIssueLookup(func(id string) bool { return ids[id] })
+	}
+
 	m.issue = issue
 	m.openId = issue.Id
 

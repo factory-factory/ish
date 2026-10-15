@@ -41,51 +41,31 @@ func todoLines(content string) []int {
 	return lines
 }
 
-// todos returns the indices of the lines in the card's content that are todo
-// items.
-func (c Card) todos() []int {
-	if c.Content == nil {
-		return nil
+// todoOffsets returns the byte offset in content at which the text of each
+// todo item starts, after "- [ ]" and the space that follows it, if any.
+func todoOffsets(content string) []int {
+	lines := strings.Split(content, "\n")
+	starts := make([]int, len(lines))
+
+	for i, offset := 0, 0; i < len(lines); i++ {
+		starts[i] = offset
+		offset += len(lines[i]) + 1
 	}
 
-	return todoLines(*c.Content)
-}
+	var offsets []int
 
-// startTodos begins selecting the card's todo items, starting with the first,
-// reporting whether it has any.
-func (c *Card) startTodos() bool {
-	if len(c.todos()) == 0 {
-		return false
+	for _, i := range todoLines(content) {
+		offsets = append(offsets, starts[i]+todoPattern.FindStringSubmatchIndex(lines[i])[1])
 	}
 
-	c.selectingTodo = true
-	c.todo = 0
-
-	return true
+	return offsets
 }
 
-// stopTodos stops selecting the card's todo items.
-func (c *Card) stopTodos() {
-	c.selectingTodo = false
-}
-
-// moveTodo moves the todo item selection by delta items, stopping at the
-// first and last items.
-func (c *Card) moveTodo(delta int) {
-	c.todo = min(max(c.todo+delta, 0), len(c.todos())-1)
-}
-
-// toggleTodo checks the selected todo item if it's unchecked, and unchecks it
-// if it's checked.
-func (c *Card) toggleTodo() {
-	todos := c.todos()
-
-	if !c.selectingTodo || c.todo >= len(todos) {
-		return
-	}
-
+// toggleTodo checks the todo item on line i of the card's content if it's
+// unchecked, and unchecks it if it's checked.
+func (c *Card) toggleTodo(i int) {
 	lines := strings.Split(*c.Content, "\n")
-	line := lines[todos[c.todo]]
+	line := lines[i]
 	match := todoPattern.FindStringSubmatchIndex(line)
 
 	mark := "x"
@@ -93,27 +73,15 @@ func (c *Card) toggleTodo() {
 		mark = " "
 	}
 
-	lines[todos[c.todo]] = line[:match[4]] + mark + line[match[5]:]
+	lines[i] = line[:match[4]] + mark + line[match[5]:]
 	content := strings.Join(lines, "\n")
 	c.Content = &content
 }
 
-// markTodo returns content with todoMarker inserted at the start of the text
-// of the todo item on line i.
-func markTodo(content string, i int) string {
-	lines := strings.Split(content, "\n")
-	match := todoPattern.FindStringSubmatchIndex(lines[i])
-
-	// Insert after "- [ ]" and the space that follows it, if any.
-	end := match[1]
-	lines[i] = lines[i][:end] + todoMarker + lines[i][end:]
-
-	return strings.Join(lines, "\n")
-}
-
 // highlightTodo finds the line of rendered markdown containing todoMarker,
-// removes the marker, and highlights the line's text. It returns the result
-// and the index of the highlighted line, or -1 if there's no marker.
+// removes the marker, and highlights the line's text, underlining any links
+// in it. It returns the result and the index of the highlighted line, or -1
+// if there's no marker.
 func highlightTodo(rendered string) (string, int) {
 	lines := strings.Split(rendered, "\n")
 
@@ -124,10 +92,14 @@ func highlightTodo(rendered string) (string, int) {
 
 		text := escapePattern.ReplaceAllString(strings.Replace(line, todoMarker, "", 1), "")
 		indent := len(text) - len(strings.TrimLeft(text, " "))
-		lines[i] = text[:indent] + styles.TodoSelected.Render(strings.TrimSpace(text))
+		lines[i] = text[:indent] + renderLinks(strings.TrimSpace(text), styles.TodoSelected, todoLinkStyle, todoLinkStyle)
 
 		return strings.Join(lines, "\n"), i
 	}
 
 	return rendered, -1
 }
+
+// todoLinkStyle is the style of a link in the selected todo item, which keeps
+// the item's colors, so the link stays visible on its background.
+var todoLinkStyle = styles.TodoSelected.Underline(true)

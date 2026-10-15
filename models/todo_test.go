@@ -51,15 +51,20 @@ func TestToggleTodo(t *testing.T) {
 	content := todoContent
 	card := Card{Content: &content}
 
-	if !card.startTodos() {
-		t.Fatal("startTodos() = false, want true")
+	if !card.startItems() {
+		t.Fatal("startItems() = false, want true")
 	}
 
-	card.toggleTodo()
-	card.moveTodo(1)
-	card.toggleTodo()
-	card.moveTodo(1)
-	card.toggleTodo()
+	toggle := func() {
+		selected, _ := card.selectedItem()
+		card.toggleTodo(selected.todo)
+	}
+
+	toggle()
+	card.moveItem(1)
+	toggle()
+	card.moveItem(1)
+	toggle()
 
 	want := "Intro\n\n- [x] first\n- [ ] second\n  - [ ] nested\n- plain item"
 
@@ -74,16 +79,16 @@ func TestToggleTodo(t *testing.T) {
 func TestMoveTodoStopsAtEnds(t *testing.T) {
 	content := todoContent
 	card := Card{Content: &content}
-	card.startTodos()
+	card.startItems()
 
-	card.moveTodo(-1)
-	if card.todo != 0 {
-		t.Errorf("todo = %d after moving up from the first item, want 0", card.todo)
+	card.moveItem(-1)
+	if card.item != 0 {
+		t.Errorf("todo = %d after moving up from the first item, want 0", card.item)
 	}
 
-	card.moveTodo(10)
-	if card.todo != 2 {
-		t.Errorf("todo = %d after moving past the last item, want 2", card.todo)
+	card.moveItem(10)
+	if card.item != 2 {
+		t.Errorf("todo = %d after moving past the last item, want 2", card.item)
 	}
 }
 
@@ -91,13 +96,13 @@ func TestStartTodosWithoutTodos(t *testing.T) {
 	content := "No todos\n\n- plain item"
 	card := Card{Content: &content}
 
-	if card.startTodos() || card.selectingTodo {
-		t.Error("startTodos() on a card without todo items started selecting")
+	if card.startItems() || card.selecting {
+		t.Error("startItems() on a card without todo items started selecting")
 	}
 
 	card = Card{}
-	if card.startTodos() {
-		t.Error("startTodos() on a card without content started selecting")
+	if card.startItems() {
+		t.Error("startItems() on a card without content started selecting")
 	}
 }
 
@@ -110,8 +115,8 @@ func TestRenderContentHighlightsSelectedTodo(t *testing.T) {
 		selected:    true,
 	}
 
-	card.startTodos()
-	card.moveTodo(1)
+	card.startItems()
+	card.moveItem(1)
 
 	rendered, row := card.renderContent()
 	lines := strings.Split(rendered, "\n")
@@ -131,17 +136,17 @@ func TestRenderContentHighlightsSelectedTodo(t *testing.T) {
 
 	// The row in the card's view accounts for the byline and border.
 	view := strings.Split(card.View().Content, "\n")
-	if got := escapes.ReplaceAllString(view[card.todoRow()], ""); !strings.Contains(got, "second") {
-		t.Errorf("view line %d = %q, want the second item", card.todoRow(), got)
+	if got := escapes.ReplaceAllString(view[card.itemRow()], ""); !strings.Contains(got, "second") {
+		t.Errorf("view line %d = %q, want the second item", card.itemRow(), got)
 	}
 
 	// Without todo selection, nothing is highlighted.
-	card.stopTodos()
+	card.stopItems()
 	if _, row := card.renderContent(); row != -1 {
 		t.Errorf("highlighted row = %d without todo selection, want -1", row)
 	}
-	if card.todoRow() != -1 {
-		t.Errorf("todoRow() = %d without todo selection, want -1", card.todoRow())
+	if card.itemRow() != -1 {
+		t.Errorf("itemRow() = %d without todo selection, want -1", card.itemRow())
 	}
 }
 
@@ -172,17 +177,17 @@ func TestRightSelectsTodos(t *testing.T) {
 	for _, key := range []tea.KeyPressMsg{right, l} {
 		ish := todoIssue(t, nil)
 
-		if footer := footerText(ish); !strings.Contains(footer, "→/l todos") {
+		if footer := footerText(ish); !strings.Contains(footer, "→/l select") {
 			t.Errorf("footer %q doesn't list the todos key on a card with todo items", footer)
 		}
 
 		ish = update(t, ish, key)
 
-		if !ish.selectingTodo() || ish.Conversation[1].todo != 0 {
+		if !ish.selectingItems() || ish.Conversation[1].item != 0 {
 			t.Fatalf("after %s: selectingTodo, todo = %v, %d, want true, 0",
-				key, ish.selectingTodo(), ish.Conversation[1].todo)
+				key, ish.selectingItems(), ish.Conversation[1].item)
 		}
-		if footer := footerText(ish); !strings.Contains(footer, "check/uncheck") {
+		if footer := footerText(ish); !strings.Contains(footer, "check/open") {
 			t.Errorf("footer %q while selecting todos, want the todo keys", footer)
 		}
 	}
@@ -195,10 +200,10 @@ func TestRightWithoutTodos(t *testing.T) {
 	ish.setCursor(ish.firstCard())
 	ish = update(t, ish, right)
 
-	if ish.selectingTodo() {
+	if ish.selectingItems() {
 		t.Error("selecting todos on a card without todo items")
 	}
-	if footer := footerText(ish); strings.Contains(footer, "→/l todos") {
+	if footer := footerText(ish); strings.Contains(footer, "→/l select") {
 		t.Errorf("footer %q lists the todos key on a card without todo items", footer)
 	}
 
@@ -206,7 +211,7 @@ func TestRightWithoutTodos(t *testing.T) {
 	ish.setCursor(1)
 	ish = update(t, ish, right)
 
-	if ish.selectingTodo() {
+	if ish.selectingItems() {
 		t.Error("selecting todos with the title selected")
 	}
 }
@@ -223,7 +228,7 @@ func TestToggleTodosAndSave(t *testing.T) {
 	if got := *ish.Conversation[1].Content; got != want {
 		t.Errorf("Content = %q, want %q", got, want)
 	}
-	if !ish.selectingTodo() {
+	if !ish.selectingItems() {
 		t.Error("stopped selecting todos after toggling")
 	}
 
@@ -246,7 +251,7 @@ func TestDoneSelectingTodos(t *testing.T) {
 		m, cmd := ish.Update(key)
 		ish = m.(Issue)
 
-		if ish.selectingTodo() {
+		if ish.selectingItems() {
 			t.Errorf("still selecting todos after %s", key)
 		}
 		if cmd != nil {
@@ -262,7 +267,7 @@ func TestTabStopsSelectingTodos(t *testing.T) {
 	ish := todoIssue(t, nil)
 	ish = update(t, ish, right, tab)
 
-	if ish.Conversation[1].selectingTodo {
+	if ish.Conversation[1].selecting {
 		t.Error("card still selecting todos after tab moved the cursor away")
 	}
 }
@@ -280,7 +285,7 @@ func TestSelectedTodoScrollsIntoView(t *testing.T) {
 	for i := range 29 {
 		ish = update(t, ish, j)
 
-		line := ish.spans[0].top + ish.Conversation[0].todoRow()
+		line := ish.spans[0].top + ish.Conversation[0].itemRow()
 		top, area := ish.viewport.YOffset(), ish.viewport.Height()
 
 		if line < top || line >= top+area {

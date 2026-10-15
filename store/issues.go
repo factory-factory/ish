@@ -107,6 +107,42 @@ func CountIssues(dir string) (count int, err error) {
 	return count, err
 }
 
+// IssueIDs returns the set of IDs of the issues in the metadata database in
+// dir.
+func IssueIDs(dir string) (ids map[string]bool, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	rows, err := db.Query("SELECT id FROM issue")
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	ids = map[string]bool{}
+
+	for rows.Next() {
+		var id string
+
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids[id] = true
+	}
+
+	return ids, rows.Err()
+}
+
 // ListIssues returns a summary of each issue in the metadata database in dir
 // that matches where, ordered by ID. If where is nil, every issue is listed.
 func ListIssues(dir string, where filter.Node) (summaries []Summary, err error) {

@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/akrennmair/slice"
 	"github.com/factory-factory/ish/styles"
 )
 
@@ -30,6 +29,14 @@ type Tag struct {
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
 	deleting bool
+
+	// selecting reports whether the links in the tag's values are being
+	// selected, and link is the index of the selected one.
+	selecting bool
+	link      int
+
+	// issues reports which issues exist, to link references to them.
+	issues IssueLookup
 }
 
 func (t Tag) Init() tea.Cmd {
@@ -45,6 +52,7 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !t.selected {
 			t.deleting = false
+			t.stopLinks()
 		}
 
 		return t, nil
@@ -177,20 +185,111 @@ func (t Tag) View() tea.View {
 		return tea.NewView(t.label() + t.input.View())
 	}
 
-	vals := slice.Map(t.Values, func(s string) string {
-		switch s {
-		case "open":
-			return styles.Grey.Render(s)
-		case "in progress":
-			return styles.Blue.Render(s)
-		case "in review":
-			return styles.Blue.Render(s)
-		case "closed":
-			return styles.Green.Render(s)
-		default:
-			return styles.Value.Render(s)
-		}
-	})
+	vals := make([]string, len(t.Values))
+
+	for i, s := range t.Values {
+		vals[i] = t.renderValue(i, s)
+	}
 
 	return tea.NewView(t.label() + strings.Join(vals, ", "))
+}
+
+// renderValue renders the value at index i, s, with any links in it, or in
+// the color of its state.
+func (t Tag) renderValue(i int, s string) string {
+	if refs := findReferences(s, t.issues); len(refs) > 0 {
+		return t.renderLinkedValue(i, refs)
+	}
+
+	switch s {
+	case "open":
+		return styles.Grey.Render(s)
+	case "in progress":
+		return styles.Blue.Render(s)
+	case "in review":
+		return styles.Blue.Render(s)
+	case "closed":
+		return styles.Green.Render(s)
+	default:
+		return styles.Value.Render(s)
+	}
+}
+
+// tagLink is a link in one of a tag's values.
+type tagLink struct {
+	value int
+	ref   reference
+}
+
+// links returns the links in the tag's values, in order.
+func (t Tag) links() []tagLink {
+	var links []tagLink
+
+	for i, v := range t.Values {
+		for _, ref := range findReferences(v, t.issues) {
+			links = append(links, tagLink{value: i, ref: ref})
+		}
+	}
+
+	return links
+}
+
+// startLinks begins selecting the tag's links, starting with the first,
+// reporting whether it has any.
+func (t *Tag) startLinks() bool {
+	if len(t.links()) == 0 {
+		return false
+	}
+
+	t.selecting = true
+	t.link = 0
+
+	return true
+}
+
+// stopLinks stops selecting the tag's links.
+func (t *Tag) stopLinks() {
+	t.selecting = false
+}
+
+// moveLink moves the selection by delta links, stopping at the first and
+// last links.
+func (t *Tag) moveLink(delta int) {
+	t.link = min(max(t.link+delta, 0), len(t.links())-1)
+}
+
+// selectedLink returns the ID of the issue the selected link refers to, if
+// links are being selected.
+func (t Tag) selectedLink() (string, bool) {
+	links := t.links()
+
+	if !t.selecting || t.link < 0 || t.link >= len(links) {
+		return "", false
+	}
+
+	return links[t.link].ref.id, true
+}
+
+// renderLinkedValue renders the value at index i, whose references are refs,
+// with its links styled and the selected link highlighted.
+func (t Tag) renderLinkedValue(i int, refs []reference) string {
+	var selected *reference
+	links := t.links()
+
+	if t.selecting && t.link >= 0 && t.link < len(links) && links[t.link].value == i {
+		selected = &links[t.link].ref
+	}
+
+	marked := t.Values[i]
+
+	for i := len(refs) - 1; i >= 0; i-- {
+		marker := linkMarker
+		if selected != nil && *selected == refs[i] {
+			marker = selectedLinkMarker
+		}
+
+		marked = marked[:refs[i].start] + marker + marked[refs[i].start:refs[i].end] + linkEndMarker + marked[refs[i].end:]
+	}
+
+	return renderLinks(marked, styles.Value, styles.Link, styles.LinkSelected)
 }
