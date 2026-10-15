@@ -40,11 +40,14 @@ var numberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[
 //	or         = and { "or" and }
 //	and        = not { "and" not }
 //	not        = "not" not | "(" expression ")" | attribute
-//	attribute  = "{" name operator value "}"
+//	attribute  = "{" ( name | field ) operator value "}"
+//	field      = "@title" | "@author" | "@dateCreated"
 //	operator   = "=" | "!=" | "<" | ">" | "<=" | ">=" | "~"
 //	value      = "null" | "true" | "false" | number | string | regexp
 //
-// Names use letters, digits, and - _ . / . Numbers are JSON numbers, and
+// Names use letters, digits, and - _ . / , and refer to metadata
+// attributes. Fields, which start with @, refer to the issue's title, the
+// author of its first comment, and when it was created. Numbers are JSON numbers, and
 // strings are JSON strings in single or double quotes; \' is accepted as an
 // escape in either. A regexp is a regular expression literal between slashes,
 // such as /^in\s/, which is taken literally except that \/ stands for a
@@ -247,8 +250,18 @@ func (p *parser) parseAttribute() (Node, error) {
 	p.skipSpace()
 
 	start := p.pos
+	field := !p.done() && p.peek() == '@'
+
+	if field {
+		p.pos++
+	}
+
 	for !p.done() && attributeChar(p.peek()) {
 		p.pos++
+	}
+
+	if field && p.pos == start+1 {
+		return nil, p.errorAt(start, p.pos, "expected a field name: %s", fieldList)
 	}
 
 	if p.pos == start {
@@ -270,6 +283,10 @@ func (p *parser) parseAttribute() (Node, error) {
 	}
 
 	attribute := string(p.input[start:p.pos])
+
+	if _, ok := fields[attribute]; field && !ok {
+		return nil, p.errorAt(start, p.pos, "unknown field %s; the fields are %s", attribute, fieldList)
+	}
 
 	operator, err := p.parseOperator()
 	if err != nil {

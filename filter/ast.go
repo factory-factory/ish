@@ -1,9 +1,9 @@
 // Package filter parses filter expressions, which select issues by their
-// metadata, into an abstract syntax tree that can be printed back as text or
-// converted into an SQL WHERE clause for the metadata database.
+// metadata and fields, into an abstract syntax tree that can be printed back
+// as text or converted into an SQL WHERE clause for the metadata database.
 //
 // An expression is made of attribute expressions such as
-// {state != 'closed'}, joined by the logical operators and, or, and not, and
+// {state != 'closed'} or {@author = 'alice'}, joined by the logical operators and, or, and not, and
 // grouped with parentheses. See Parse.
 package filter
 
@@ -69,8 +69,11 @@ type Value struct {
 type Regexp string
 
 // AttributeExpression compares the values of a metadata attribute with a
-// value, as in {state != 'closed'}.
+// value, as in {state != 'closed'}, or the value of one of the issue's
+// fields, as in {@author = 'alice'}.
 type AttributeExpression struct {
+	// Attribute is the name of a metadata attribute, or of a field
+	// including its @, such as @title.
 	Attribute string
 	Operator  Operator
 	Value     Value
@@ -99,6 +102,17 @@ type NotExpression struct {
 	Expression  Node
 	Parentheses int
 }
+
+// fields maps the names of the issue fields that filters can compare, which
+// start with @, to their columns in the issue table.
+var fields = map[string]string{
+	"@title":       "issue.title",
+	"@author":      "issue.author",
+	"@dateCreated": "issue.dateCreated",
+}
+
+// fieldList lists the fields, for error messages.
+const fieldList = "@title, @author, and @dateCreated"
 
 func (e *AttributeExpression) parentheses() int { return e.Parentheses }
 func (e *AndExpression) parentheses() int       { return e.Parentheses }

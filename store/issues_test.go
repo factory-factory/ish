@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 )
@@ -59,6 +60,31 @@ func TestListIssues(t *testing.T) {
 	// The opening date is in the byline's time zone.
 	if got := summaries[0].Opened.Format(time.RFC3339); got != "2026-10-11T08:59:23-07:00" {
 		t.Errorf("opened = %s, want 2026-10-11T08:59:23-07:00", got)
+	}
+}
+
+func TestListIssuesWithFilter(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("First", []string{"- state: open"}),
+		"BBBBB-22222": issueSource("Second", []string{"- state: closed"}),
+		"CCCCC-33333": issueSource("Second draft", []string{"- state: open"}),
+	})
+	initDir(t, dir)
+
+	// The filter's fields and attributes work alongside the list's joins.
+	where, err := filter.Parse("{@title ~ /^Second/} and {state != 'closed'}")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	summaries, err := ListIssues(dir, where)
+
+	if err != nil {
+		t.Fatalf("ListIssues() error = %v", err)
+	}
+	if len(summaries) != 1 || summaries[0].ID != "CCCCC-33333" {
+		t.Errorf("ListIssues() = %+v, want only CCCCC-33333", summaries)
 	}
 }
 

@@ -97,10 +97,15 @@ WHERE attribute.issueId = issue.id AND attribute.key = ? AND `
 //     of =.
 //   - An issue without the attribute matches only !=, except that = null
 //     matches issues without the attribute and != null those with it.
+//     Every issue has every field, so = null never matches a field.
 //   - Strings compare as case-sensitive text. Numbers compare numerically
 //     with values that are numbers, such as "5", and don't match other
 //     values. true and false match the text "true" and "false".
 func (e *AttributeExpression) Where() (string, []any) {
+	if column, ok := fields[e.Attribute]; ok {
+		return e.fieldWhere(column)
+	}
+
 	if e.Value.Data == nil {
 		if e.Operator == NotEqual {
 			return hasAttribute, []any{e.Attribute}
@@ -117,33 +122,61 @@ func (e *AttributeExpression) Where() (string, []any) {
 		return "NOT " + clause, args
 	}
 
-	var condition string
-	var arg any
+	condition, arg := e.compare("attributeValue.value")
 
-	switch data := e.Value.Data.(type) {
-	case string:
-		arg = data
-		condition = "attributeValue.value " + string(e.Operator) + " ?"
+	return anyValue + condition + ")", []any{e.Attribute, arg}
+}
 
-		if e.Operator == Match {
-			condition = regexpFunction + "(?, attributeValue.value)"
+// fieldWhere returns an SQL condition for an expression that compares the
+// issue's field in column, which has a single value that's never NULL.
+func (e *AttributeExpression) fieldWhere(column string) (string, []any) {
+	if e.Value.Data == nil {
+		if e.Operator == NotEqual {
+			return column + " IS NOT NULL", nil
 		}
 
+		return column + " IS NULL", nil
+	}
+
+	if e.Operator == NotEqual {
+		equal := *e
+		equal.Operator = Equal
+		condition, arg := equal.compare(column)
+
+		// A number compared with text that isn't a number is NULL, which
+		// NOT would leave NULL, so != wouldn't be the opposite of =.
+		return "NOT coalesce(" + condition + ", 0)", []any{arg}
+	}
+
+	condition, arg := e.compare(column)
+
+	return condition, []any{arg}
+}
+
+// compare returns an SQL condition that compares the text value with the
+// expression's value, other than null, using the expression's operator other
+// than !=, and the parameter for its placeholder.
+func (e *AttributeExpression) compare(value string) (string, any) {
+	switch data := e.Value.Data.(type) {
+	case string:
+		if e.Operator == Match {
+			return regexpFunction + "(?, " + value + ")", data
+		}
+
+		return value + " " + string(e.Operator) + " ?", data
+
 	case Regexp:
-		arg = string(data)
-		condition = regexpFunction + "(?, attributeValue.value)"
+		return regexpFunction + "(?, " + value + ")", string(data)
 
 	case json.Number:
 		n, _ := data.Float64()
-		arg = n
-		condition = numberFunction + "(attributeValue.value) " + string(e.Operator) + " ?"
+		return numberFunction + "(" + value + ") " + string(e.Operator) + " ?", n
 
 	case bool:
-		arg = strconv.FormatBool(data)
-		condition = "attributeValue.value " + string(e.Operator) + " ?"
+		return value + " " + string(e.Operator) + " ?", strconv.FormatBool(data)
 	}
 
-	return anyValue + condition + ")", []any{e.Attribute, arg}
+	return "0", nil
 }
 
 func (e *AndExpression) Where() (string, []any) {
