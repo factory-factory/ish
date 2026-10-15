@@ -190,9 +190,9 @@ func TestCommentKeyInOtherModes(t *testing.T) {
 	ish.setCursor(ish.firstCard())
 	ish = update(t, ish, right, cKey)
 
-	if len(ish.Conversation) != 2 || ish.cardIndex() != 1 || ish.Conversation[0].selectingTodo {
+	if len(ish.Conversation) != 2 || ish.cardIndex() != 1 || ish.Conversation[0].selecting {
 		t.Errorf("cards, cardIndex, selecting todos = %d, %d, %v, want the new comment selected",
-			len(ish.Conversation), ish.cardIndex(), ish.Conversation[0].selectingTodo)
+			len(ish.Conversation), ish.cardIndex(), ish.Conversation[0].selecting)
 	}
 
 	if footer := footerText(commentingIssue(t, nil, "First")); !strings.Contains(footer, "c comment") {

@@ -287,6 +287,28 @@ func TestCurrent(t *testing.T) {
 	}
 }
 
+func TestIssueIDs(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("First", nil),
+		"BBBBB-22222": issueSource("Second", nil),
+	})
+	initDir(t, dir)
+
+	ids, err := IssueIDs(dir)
+
+	if err != nil {
+		t.Fatalf("IssueIDs() error = %v", err)
+	}
+	if len(ids) != 2 || !ids["AAAAA-11111"] || !ids["BBBBB-22222"] {
+		t.Errorf("IssueIDs() = %v, want both issues", ids)
+	}
+
+	if _, err := IssueIDs(t.TempDir()); err == nil {
+		t.Error("IssueIDs() without a database error = nil, want an error")
+	}
+}
+
 func TestCountIssues(t *testing.T) {
 	dir := t.TempDir()
 

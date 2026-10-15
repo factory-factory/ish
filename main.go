@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/factory-factory/ish/app"
-	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/store"
 
@@ -29,23 +28,18 @@ var (
 				os.Exit(1)
 			}
 
-			var model tea.Model
+			var model app.Model
+			var err error
 
 			if len(args) == 1 {
-				issue := parse.InitialModel(issueIdFromPath(args[0]))
-				issue.SetSave(func(issue models.Issue) error {
-					return store.SaveIssue(parse.IssuesDir, issue)
-				})
-				issue.SetAuthor(app.CurrentUser(parse.IssuesDir))
-				model = issue
+				model, err = app.Open(parse.IssuesDir, issueIdFromPath(args[0]))
 			} else {
-				list, err := app.New(parse.IssuesDir)
-				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
-				}
+				model, err = app.New(parse.IssuesDir)
+			}
 
-				model = list
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
 			}
 
 			p := tea.NewProgram(model)

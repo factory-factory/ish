@@ -20,7 +20,7 @@ type keyMap struct {
 	Comment      key.Binding
 	AddTag       key.Binding
 	DeleteTag    key.Binding
-	Todos        key.Binding
+	Select       key.Binding
 	Back         key.Binding
 	Help         key.Binding
 	Quit         key.Binding
@@ -76,11 +76,11 @@ var keys = func() keyMap {
 			key.WithHelp("⌫", "delete field"),
 			key.WithDisabled(),
 		),
-		// Todos is enabled only while the cursor is on a card with todo
-		// items.
-		Todos: key.NewBinding(
+		// Select is enabled only while the cursor is on a card with todo
+		// items or links, or a tag with links.
+		Select: key.NewBinding(
 			key.WithKeys("right", "l"),
-			key.WithHelp("→/l", "todos"),
+			key.WithHelp("→/l", "select"),
 			key.WithDisabled(),
 		),
 		// Back is enabled only for issues that can be closed. See
@@ -102,12 +102,12 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Todos, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Todos},
+		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select},
 		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
@@ -157,17 +157,17 @@ func (k editKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.Save, k.Cancel, k.Quit}}
 }
 
-// todoKeyMap holds the key bindings used while selecting a card's todo items.
-// Other keys work as they do in the issue view.
-type todoKeyMap struct {
+// itemKeyMap holds the key bindings used while selecting a card's todo items
+// and links, or a tag's links. Other keys work as they do in the issue view.
+type itemKeyMap struct {
 	Up     key.Binding
 	Down   key.Binding
-	Toggle key.Binding
+	Choose key.Binding
 	Done   key.Binding
 	Quit   key.Binding
 }
 
-var todoKeys = todoKeyMap{
+var itemKeys = itemKeyMap{
 	Up: key.NewBinding(
 		key.WithKeys("up", "k"),
 		key.WithHelp("↑/k", "previous item"),
@@ -176,9 +176,9 @@ var todoKeys = todoKeyMap{
 		key.WithKeys("down", "j"),
 		key.WithHelp("↓/j", "next item"),
 	),
-	Toggle: key.NewBinding(
+	Choose: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "check/uncheck"),
+		key.WithHelp("enter", "check/open"),
 	),
 	Done: key.NewBinding(
 		key.WithKeys("left", "h", "esc"),
@@ -187,11 +187,11 @@ var todoKeys = todoKeyMap{
 	Quit: keys.Quit,
 }
 
-func (k todoKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Toggle, k.Done, k.Quit}
+func (k itemKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Choose, k.Done, k.Quit}
 }
 
-func (k todoKeyMap) FullHelp() [][]key.Binding {
+func (k itemKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{k.ShortHelp()}
 }
 
