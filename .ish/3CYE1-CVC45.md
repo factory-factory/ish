@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-14T22:53:31-07:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 
 ---
@@ -130,3 +130,15 @@ Done, and left in `in review`.
 
 - The line reads `• prio: high, low` after `shift+tab`, and keeps the colon directly after the key while typing, with the cursor within the key, and with the key deleted.
 - In a real terminal, on a copy of `.ish`, `prio` was followed by the colon in reverse video (the cursor), then ` high` in grey. After typing `r`, the cursor stayed on the colon after `prior`.
+
+---
+
+[brendan@berg.industries 2026-10-15T10:06:09-07:00]
+
+Please make the dimmed color for values the same as the default color used for keys when not edititng them.
+
+---
+
+[Claude 2026-10-15T10:07:20-07:00]
+
+Done, and left in `in review`. After `shift+tab`, the values after the key are now drawn in bright yellow (11), the colour of keys that aren't being edited, instead of grey. The colour is taken from the key style, so they'll stay the same if it changes. A test checks that they match.

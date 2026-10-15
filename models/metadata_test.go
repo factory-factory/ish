@@ -493,6 +493,9 @@ func TestValuesDimmedWhileKeyEditedAgain(t *testing.T) {
 	if header := ish.renderHeader(); !strings.Contains(header, styles.TagDraft.Render(" high, low")) {
 		t.Errorf("header %q, want the values dimmed after the key", header)
 	}
+	if got, want := styles.TagDraft.GetForeground(), styles.Tag.GetForeground(); got != want {
+		t.Errorf("dimmed values color = %v, want the color of keys %v", got, want)
+	}
 
 	// The colon, under the cursor, and the values follow the key without
 	// a gap, as the key grows, and with the cursor within the key.
