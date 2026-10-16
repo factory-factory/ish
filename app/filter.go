@@ -44,9 +44,15 @@ type filterField struct {
 // filterLabel is shown before the filter menu or custom filter field.
 const filterLabel = "Filter:"
 
-// filterRow is the line of the heading the filter menu is on: the line with
-// the badge's name, which the custom filter field's text lines up with too.
-const filterRow = 1
+// The filter menu's trigger and the custom filter field are boxes as wide as
+// the space after the label, within these limits, including their borders.
+const (
+	minFilterBoxWidth = 60
+	maxFilterBoxWidth = 90
+)
+
+// filterArrow marks the filter menu's trigger as a menu.
+const filterArrow = "▼"
 
 // filterIndent returns the width of the heading before the filter label: the
 // badge, and the space after it, less the label's own padding.
@@ -226,14 +232,30 @@ func (m *Model) applyFilter() {
 // filterWidth returns the width inside the custom filter field's border and
 // padding.
 func (m Model) filterWidth() int {
-	width := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() -
-		labelWidth() - styles.FilterBox.GetHorizontalFrameSize()
+	return m.filterBoxWidth() - styles.FilterBox.GetHorizontalFrameSize()
+}
 
-	if m.width <= 0 {
-		width = 40
+// filterBoxWidth returns the width of the filter menu's trigger and the
+// custom filter field, including their borders.
+func (m Model) filterBoxWidth() int {
+	available := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - labelWidth()
+
+	return min(max(available, minFilterBoxWidth), maxFilterBoxWidth)
+}
+
+// renderTrigger renders the filter menu's trigger: a box with the chosen
+// filter's name, and an arrow at its right edge. It's grey, and bright white
+// with a blue border while it's selected, whether or not the menu is open.
+func (m Model) renderTrigger() string {
+	style := styles.FilterTrigger
+	if m.filter.selected {
+		style = styles.FilterTriggerSelected
 	}
 
-	return max(width, 1)
+	name := m.filter.menu.Selected()
+	space := m.filterBoxWidth() - style.GetHorizontalFrameSize() - lipgloss.Width(name) - lipgloss.Width(filterArrow)
+
+	return style.Render(name + strings.Repeat(" ", max(space, 1)) + filterArrow)
 }
 
 // renderFilter renders the applied filter shown in the field when it isn't
@@ -247,12 +269,14 @@ func renderFilter(node filter.Node) string {
 // field if it's replaced the menu.
 func (m Model) renderHeading() string {
 	label := styles.FilterLabel.Render(filterLabel)
-	row := strings.Repeat("\n", filterRow) + label + m.filter.menu.TriggerView()
+	box := m.renderTrigger()
 
 	if m.filter.custom {
-		// The label lines up with the first line of text inside the box.
-		row = lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderCustomFilter())
+		box = m.renderCustomFilter()
 	}
+
+	// The label lines up with the first line of text inside the box.
+	row := lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, box)
 
 	gap := strings.Repeat(" ", m.filterIndent()-m.badge.width())
 	parts := []string{lipgloss.JoinHorizontal(lipgloss.Top, m.badge.View().Content, gap, row)}
@@ -279,9 +303,9 @@ func (m Model) renderCustomFilter() string {
 	case m.filter.editing:
 		content = m.filter.input.View()
 	case m.filter.node != nil:
-		content = lipgloss.NewStyle().Width(width).Render(renderFilter(m.filter.node))
+		content = fitLine(renderFilter(m.filter.node), width)
 	default:
-		content = lipgloss.NewStyle().Width(width).Render(styles.FilterPlaceholder.Render("No filter: every issue is listed"))
+		content = fitLine(styles.FilterPlaceholder.Render("No filter: every issue is listed"), width)
 	}
 
 	box := styles.FilterBox
@@ -290,4 +314,15 @@ func (m Model) renderCustomFilter() string {
 	}
 
 	return box.Render(content)
+}
+
+// fitLine fits styled text to a single line of the given width, padding it,
+// or cutting it short with an ellipsis, so the custom filter field is as tall
+// as the filter menu's trigger while it isn't being edited.
+func fitLine(text string, width int) string {
+	if lipgloss.Width(text) > width {
+		text = lipgloss.NewStyle().MaxWidth(width-1).Render(text) + "…"
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(text)
 }

@@ -485,12 +485,11 @@ func (m *Model) resize() {
 	}
 
 	// The menu's panel opens under its trigger, which follows the badge
-	// and the label, on the line with the badge's name.
-	width, height := m.filter.menu.TriggerSize()
+	// and the label.
 	m.filter.menu.SetBounds(
-		styles.Header.GetPaddingTop()+filterRow,
+		styles.Header.GetPaddingTop(),
 		styles.Header.GetPaddingLeft()+m.filterIndent()+labelWidth(),
-		width, height,
+		m.filterBoxWidth(), lipgloss.Height(m.renderTrigger()),
 	)
 
 	chrome := lipgloss.Height(m.renderHeading()) + lipgloss.Height(m.renderFooter())

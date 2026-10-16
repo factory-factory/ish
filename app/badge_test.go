@@ -41,7 +41,7 @@ func TestBadgeBesideFilter(t *testing.T) {
 
 	// The badge is in the upper left corner, and the filter is 5 spaces
 	// after it, on the line with its name.
-	for i, want := range []string{"╭     ╮", "  ish       Filter: [ All unclosed issues", "╰     ╯"} {
+	for i, want := range []string{"╭     ╮", "  ish       Filter: │ All unclosed issues", "╰     ╯"} {
 		if got := lines[top+i][left:]; !strings.HasPrefix(got, want) {
 			t.Errorf("heading line %d = %q, want it to start with %q", i, got, want)
 		}
@@ -52,10 +52,10 @@ func TestBadgeBesideFilter(t *testing.T) {
 	lines = strings.Split(escapes.ReplaceAllString(m.View().Content, ""), "\n")
 	column := left + m.filterIndent() + labelWidth()
 
-	if got := []rune(lines[top+filterRow+1]); len(got) <= column || got[column] != '╭' {
+	if got := []rune(lines[top+3]); len(got) <= column || got[column] != '╭' {
 		t.Errorf("line under the trigger = %q, want the menu's panel from column %d", string(got), column)
 	}
-	if got := lines[top+filterRow+2]; !strings.Contains(got, "All unclosed issues") {
+	if got := lines[top+4]; !strings.Contains(got, "All unclosed issues") {
 		t.Errorf("panel line %q, want the menu's items", got)
 	}
 }
@@ -67,7 +67,7 @@ func TestCustomFilterBesideBadge(t *testing.T) {
 	top := styles.Header.GetPaddingTop()
 
 	// The custom field's text lines up with the badge's name.
-	if got := lines[top+filterRow]; !strings.Contains(got, "  ish       Filter: ") {
+	if got := lines[top+1]; !strings.Contains(got, "  ish       Filter: ") {
 		t.Errorf("heading line %q, want the badge's name, then the label", got)
 	}
 

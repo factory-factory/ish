@@ -85,7 +85,7 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	if got := ids(m); got != "AAA BBB" {
 		t.Errorf("listed %q, want the unclosed issues assigned to alice", got)
 	}
-	if view := plainView(m); !strings.Contains(view, "[ Issues assigned to me") {
+	if view := plainView(m); !strings.Contains(view, "│ Issues assigned to me") {
 		t.Errorf("View() = %q, want the menu showing the chosen filter", view)
 	}
 
@@ -137,7 +137,7 @@ func TestChooseCustomFilter(t *testing.T) {
 	if got := m.filter.input.Value(); got != `{assignees = "alice@example.com"} and {state != 'closed'}` {
 		t.Errorf("custom filter starts as %q, want the applied filter", got)
 	}
-	if view := plainView(m); strings.Contains(view, "[ ") || !strings.Contains(view, "┏") {
+	if view := plainView(m); strings.Contains(view, "▼") || !strings.Contains(view, "┏") {
 		t.Errorf("View() = %q, want the custom field in place of the menu", view)
 	}
 

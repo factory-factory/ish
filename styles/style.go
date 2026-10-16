@@ -108,6 +108,15 @@ var FilterBoxSelected = FilterBox.
 	Border(lipgloss.ThickBorder(), true).
 	BorderForeground(lipgloss.Color("4"))
 
+// FilterTrigger is the filter menu's trigger, which keeps its thin, rounded
+// border when it's selected, to tell it apart from the custom filter field.
+var FilterTrigger = FilterBox.
+	Foreground(lipgloss.Color("8"))
+
+var FilterTriggerSelected = FilterTrigger.
+	BorderForeground(lipgloss.Color("4")).
+	Foreground(lipgloss.Color("15"))
+
 // TagDraft sets apart the values of a new tag while its key is edited
 // again, in the color of keys that aren't being edited.
 var TagDraft = lipgloss.NewStyle().
