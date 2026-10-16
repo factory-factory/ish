@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/filter"
 )
 
@@ -218,5 +219,36 @@ func TestKeysWhileMenuOpen(t *testing.T) {
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Error("ctrl+c with the menu open didn't quit")
+	}
+}
+
+func TestMenuSeparatesCustomFilter(t *testing.T) {
+	m := openMenu(t, menuModel(t))
+	view := plainView(m)
+
+	mine := strings.Index(view, presetLabels[presetMine])
+	custom := strings.Index(view, presetLabels[presetCustom])
+
+	if mine < 0 || custom < 0 {
+		t.Fatalf("View() = %q, want every item", view)
+	}
+
+	between := strings.Split(view[mine:custom], "\n")
+	if len(between) != 3 || !strings.Contains(between[1], "────") {
+		t.Errorf("between the saved filters and Custom...: %q, want a rule on its own line", between)
+	}
+
+	// The rule is the color of unselected fields' borders.
+	rule := lipgloss.NewStyle().Foreground(lipgloss.Color(separatorColor)).Render("─")
+	if separatorColor != "11" || !strings.Contains(m.View().Content, strings.TrimSuffix(rule, "\x1b[m")+"──") {
+		t.Errorf("View() = %q, want the rule in color 11", m.View().Content)
+	}
+
+	// The rule isn't selectable: down from the last saved filter chooses
+	// the custom filter.
+	m = choose(t, menuModel(t), presetCustom)
+
+	if !m.filter.custom {
+		t.Error("choosing the item after the rule didn't choose Custom...")
 	}
 }

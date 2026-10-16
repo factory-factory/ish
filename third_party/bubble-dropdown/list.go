@@ -1,6 +1,7 @@
 package dropdownv2
 
 import (
+	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -60,6 +61,44 @@ type listModel struct {
 	borderStyle lipgloss.Style
 	normalStyle lipgloss.Style
 	cursorStyle lipgloss.Style
+
+	// separators holds the indices of the items with a rule drawn above
+	// them. Local patch for ish; see WithSeparators.
+	separators     map[int]bool
+	separatorColor string
+}
+
+// setSeparators sets the items to draw a rule above, and the rules' color,
+// or the border's if it's empty. A rule above the first item would separate
+// nothing, so it's ignored. Local patch for ish.
+func (m *listModel) setSeparators(before []int, color string) {
+	m.separators = map[int]bool{}
+	m.separatorColor = color
+
+	for _, i := range before {
+		if i > 0 && i < len(m.items) {
+			m.separators[i] = true
+		}
+	}
+}
+
+// rows returns the panel's rows between its borders, in order: the index of
+// each visible item, or -1 for a rule above one. Local patch for ish.
+func (m listModel) rows() []int {
+	end := min(m.offset+m.maxVisible, len(m.items))
+	rows := make([]int, 0, end-m.offset)
+
+	for i := m.offset; i < end; i++ {
+		// A rule at the top of the panel, above a scrolled list, would
+		// separate nothing visible.
+		if m.separators[i] && i > m.offset {
+			rows = append(rows, -1)
+		}
+
+		rows = append(rows, i)
+	}
+
+	return rows
 }
 
 func newListModel(items []string, initialCursor, maxVisible, minContentW int, styles listStyles) listModel {
@@ -116,12 +155,8 @@ func (m listModel) contentWidth() int {
 // PanelSize returns the display-cell dimensions of View().
 // Use this before opening so Dropdown can compute the overlay origin.
 func (m listModel) PanelSize() (w, h int) {
-	visible := len(m.items)
-	if visible > m.maxVisible {
-		visible = m.maxVisible
-	}
-	// +2 for top and bottom border
-	return m.contentWidth() + 2, visible + 2
+	// +2 for top and bottom border. Local patch for ish: rows include rules.
+	return m.contentWidth() + 2, len(m.rows()) + 2
 }
 
 // View renders the bordered item list.
@@ -131,14 +166,19 @@ func (m listModel) View() string {
 	normal := m.normalStyle.Width(cw)
 	cursor := m.cursorStyle.Width(cw)
 
-	visibleEnd := m.offset + m.maxVisible
-	if visibleEnd > len(m.items) {
-		visibleEnd = len(m.items)
+	// Local patch for ish: rules are drawn between items, in their color
+	// or the border's.
+	var ruleColor color.Color = m.borderStyle.GetBorderTopForeground()
+	if m.separatorColor != "" {
+		ruleColor = lipgloss.Color(m.separatorColor)
 	}
+	rule := lipgloss.NewStyle().Foreground(ruleColor).Render(strings.Repeat("─", cw))
 
-	rows := make([]string, 0, visibleEnd-m.offset)
-	for i := m.offset; i < visibleEnd; i++ {
-		if i == m.cursor {
+	rows := make([]string, 0, m.maxVisible)
+	for _, i := range m.rows() {
+		if i < 0 {
+			rows = append(rows, rule)
+		} else if i == m.cursor {
 			rows = append(rows, cursor.Render(m.items[i]))
 		} else {
 			rows = append(rows, normal.Render(m.items[i]))
@@ -159,15 +199,13 @@ func (m listModel) scrollToCursor() listModel {
 }
 
 func (m listModel) itemAtY(y int) (abs int, ok bool) {
-	itemRow := y - 1 // 0-based item index relative to offset
-	if itemRow < 0 {
+	// Local patch for ish: rows include rules, which aren't items.
+	row := y - 1 // 0-based row below the top border
+	rows := m.rows()
+	if row < 0 || row >= len(rows) || rows[row] < 0 {
 		return 0, false
 	}
-	abs = m.offset + itemRow
-	if abs < 0 || abs >= len(m.items) {
-		return 0, false
-	}
-	return abs, true
+	return rows[row], true
 }
 
 // Update handles key and mouse events for the open panel.

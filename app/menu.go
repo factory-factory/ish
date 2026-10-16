@@ -27,6 +27,10 @@ var presetLabels = []string{
 // matching the selected filter field and comment cards.
 const menuAccent = "4"
 
+// separatorColor is the color of the rule between the saved filters and the
+// custom filter in the menu, matching the borders of unselected fields.
+const separatorColor = "11"
+
 // presetFilter returns the filter expression for a preset, other than the
 // custom one, for the user who's running ish. Neither lists closed issues.
 func presetFilter(preset int, user string) string {
@@ -39,11 +43,14 @@ func presetFilter(preset int, user string) string {
 	return DefaultFilter
 }
 
-// newFilterMenu returns the filter menu, with the default filter selected.
+// newFilterMenu returns the filter menu, with the default filter selected,
+// and a rule between the saved filters and the custom filter.
 func newFilterMenu() *dropdown.Dropdown {
 	return dropdown.New(
 		dropdown.WithOptions(presetLabels),
 		dropdown.WithInitialIndex(presetUnclosed),
+		dropdown.WithSeparators(presetCustom),
+		dropdown.WithSeparatorColor(separatorColor),
 		dropdown.WithAccentColor(menuAccent),
 	)
 }

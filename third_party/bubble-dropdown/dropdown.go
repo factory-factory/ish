@@ -44,6 +44,11 @@ type Dropdown struct {
 	placeholder string
 	maxVisible  int
 
+	// separators are the indices of the items with a rule above them in the
+	// open panel. Local patch for ish; see WithSeparators.
+	separators     []int
+	separatorColor string
+
 	// trigger position and size (set by SetBounds each frame)
 	row, col int
 	w, h     int
@@ -107,6 +112,9 @@ func New(opts ...Option) *Dropdown {
 		options:     cfg.Options,
 		placeholder: cfg.Placeholder,
 		maxVisible:  cfg.MaxVisible,
+		separators:  cfg.Separators,
+
+		separatorColor: cfg.SeparatorColor,
 	}
 
 	// accent stays empty (neutral) unless the caller opts in.
@@ -609,6 +617,7 @@ func (d *Dropdown) doOpen() (*Dropdown, tea.Cmd) {
 	}
 
 	next.list = newListModel(d.options, d.selectedIdx, d.maxVisible, minW, d.panelStyles())
+	next.list.setSeparators(d.separators, d.separatorColor)
 	next.open = true
 	next.ignoreNextRelease = true
 
