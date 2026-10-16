@@ -9,6 +9,10 @@ type Config struct {
 	Placeholder  string
 	MaxVisible   int
 
+	// Separators are the indices of the items with a rule drawn above them
+	// in the open panel. Local patch for ish.
+	Separators []int
+
 	// Styling. Each style has a corresponding Custom* flag so New can tell an
 	// intentionally-empty style apart from "not set".
 	TriggerStyle lipgloss.Style
@@ -47,6 +51,15 @@ func WithInitialIndex(i int) Option {
 func WithPlaceholder(p string) Option {
 	return func(c *Config) {
 		c.Placeholder = p
+	}
+}
+
+// WithSeparators draws a horizontal rule above each of the items at the
+// given indices in the open panel, to group the items. The rules aren't items:
+// the cursor skips them, and item indices are unchanged. Local patch for ish.
+func WithSeparators(before ...int) Option {
+	return func(c *Config) {
+		c.Separators = append([]int(nil), before...)
 	}
 }
 

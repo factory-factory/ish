@@ -220,3 +220,28 @@ func TestKeysWhileMenuOpen(t *testing.T) {
 		t.Error("ctrl+c with the menu open didn't quit")
 	}
 }
+
+func TestMenuSeparatesCustomFilter(t *testing.T) {
+	m := openMenu(t, menuModel(t))
+	view := plainView(m)
+
+	mine := strings.Index(view, presetLabels[presetMine])
+	custom := strings.Index(view, presetLabels[presetCustom])
+
+	if mine < 0 || custom < 0 {
+		t.Fatalf("View() = %q, want every item", view)
+	}
+
+	between := strings.Split(view[mine:custom], "\n")
+	if len(between) != 3 || !strings.Contains(between[1], "────") {
+		t.Errorf("between the saved filters and Custom...: %q, want a rule on its own line", between)
+	}
+
+	// The rule isn't selectable: down from the last saved filter chooses
+	// the custom filter.
+	m = choose(t, menuModel(t), presetCustom)
+
+	if !m.filter.custom {
+		t.Error("choosing the item after the rule didn't choose Custom...")
+	}
+}

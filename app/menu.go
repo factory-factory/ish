@@ -39,11 +39,13 @@ func presetFilter(preset int, user string) string {
 	return DefaultFilter
 }
 
-// newFilterMenu returns the filter menu, with the default filter selected.
+// newFilterMenu returns the filter menu, with the default filter selected,
+// and a rule between the saved filters and the custom filter.
 func newFilterMenu() *dropdown.Dropdown {
 	return dropdown.New(
 		dropdown.WithOptions(presetLabels),
 		dropdown.WithInitialIndex(presetUnclosed),
+		dropdown.WithSeparators(presetCustom),
 		dropdown.WithAccentColor(menuAccent),
 	)
 }
