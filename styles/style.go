@@ -28,6 +28,15 @@ var BylineEmphasis = lipgloss.NewStyle().
 var Header = lipgloss.NewStyle().
 	Padding(1)
 
+// BadgeCorner and BadgeName style the ish badge in the issue list's upper
+// left corner.
+// Green ("2") also looks nice...
+var BadgeCorner = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("6"))
+
+var BadgeName = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("5"))
+
 var Rule = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("8")).
 	Margin(0, 1, 0)

@@ -29,6 +29,7 @@ type Model struct {
 
 	table table.Model
 	help  help.Model
+	badge Badge
 
 	// issue is the open issue's view, or nil while the list is shown, and
 	// openId is its ID.
@@ -483,11 +484,12 @@ func (m *Model) resize() {
 		m.filter.input.SetWidth(m.filterWidth())
 	}
 
-	// The menu's panel opens under its trigger, which follows the label.
+	// The menu's panel opens under its trigger, which follows the badge
+	// and the label, on the line with the badge's name.
 	width, height := m.filter.menu.TriggerSize()
 	m.filter.menu.SetBounds(
-		styles.Header.GetPaddingTop(),
-		styles.Header.GetPaddingLeft()+labelWidth(),
+		styles.Header.GetPaddingTop()+filterRow,
+		styles.Header.GetPaddingLeft()+m.filterIndent()+labelWidth(),
 		width, height,
 	)
 

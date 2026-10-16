@@ -44,6 +44,16 @@ type filterField struct {
 // filterLabel is shown before the filter menu or custom filter field.
 const filterLabel = "Filter:"
 
+// filterRow is the line of the heading the filter menu is on: the line with
+// the badge's name, which the custom filter field's text lines up with too.
+const filterRow = 1
+
+// filterIndent returns the width of the heading before the filter label: the
+// badge, and the space after it, less the label's own padding.
+func (m Model) filterIndent() int {
+	return m.badge.width() + badgeGap - styles.FilterLabel.GetPaddingLeft()
+}
+
 // labelWidth returns the width of the rendered filter label.
 func labelWidth() int {
 	return lipgloss.Width(styles.FilterLabel.Render(filterLabel))
@@ -216,7 +226,7 @@ func (m *Model) applyFilter() {
 // filterWidth returns the width inside the custom filter field's border and
 // padding.
 func (m Model) filterWidth() int {
-	width := m.width - styles.Header.GetHorizontalFrameSize() -
+	width := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() -
 		labelWidth() - styles.FilterBox.GetHorizontalFrameSize()
 
 	if m.width <= 0 {
@@ -237,17 +247,22 @@ func renderFilter(node filter.Node) string {
 // field if it's replaced the menu.
 func (m Model) renderHeading() string {
 	label := styles.FilterLabel.Render(filterLabel)
-	row := label + m.filter.menu.TriggerView()
+	row := strings.Repeat("\n", filterRow) + label + m.filter.menu.TriggerView()
 
 	if m.filter.custom {
 		// The label lines up with the first line of text inside the box.
 		row = lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderCustomFilter())
 	}
 
-	parts := []string{row}
+	gap := strings.Repeat(" ", m.filterIndent()-m.badge.width())
+	parts := []string{lipgloss.JoinHorizontal(lipgloss.Top, m.badge.View().Content, gap, row)}
 
 	if m.filter.err != nil {
-		parts = append(parts, lipgloss.NewStyle().Width(m.filterWidth()).Render(styles.Error.Render(m.filter.err.Error())))
+		// The error lines up with the filter, after the badge.
+		parts = append(parts, lipgloss.NewStyle().
+			Width(m.filterWidth()+m.filterIndent()).
+			PaddingLeft(m.filterIndent()).
+			Render(styles.Error.Render(m.filter.err.Error())))
 	}
 
 	return styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
