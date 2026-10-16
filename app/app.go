@@ -113,15 +113,6 @@ func New(dir string) (Model, error) {
 		return Model{}, err
 	}
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		BorderBottom(true)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("15")).
-		Background(lipgloss.Color("4"))
-
 	m := Model{
 		dir:    dir,
 		issues: issues,
@@ -138,7 +129,7 @@ func New(dir string) (Model, error) {
 	m.table = table.New(
 		table.WithColumns(m.columns(0)),
 		table.WithRows(rows(issues)),
-		table.WithStyles(s),
+		table.WithStyles(tableStyles(true)),
 		table.WithFocused(true),
 	)
 
@@ -165,6 +156,26 @@ func Open(dir, id string) (Model, error) {
 	shown, _ := m.show(*issue)
 
 	return shown.(Model), nil
+}
+
+// tableStyles returns the issue table's styles. The selected issue is bold,
+// bright white on blue while the table has the focus, and in normal text on
+// grey while the filter has it instead.
+func tableStyles(focused bool) table.Styles {
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("8")).
+		BorderBottom(true)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("15")).
+		Background(lipgloss.Color("4"))
+
+	if !focused {
+		s.Selected = lipgloss.NewStyle().Background(lipgloss.Color("8"))
+	}
+
+	return s
 }
 
 func (m Model) Init() tea.Cmd {

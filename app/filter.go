@@ -145,6 +145,7 @@ func (m *Model) selectFilter() {
 	m.filter.selected = true
 	m.filter.menu.SetFocused(!m.filter.custom)
 	m.table.Blur()
+	m.table.SetStyles(tableStyles(false))
 	m.resize()
 }
 
@@ -154,6 +155,7 @@ func (m *Model) selectTable() {
 	m.filter.part = partField
 	m.filter.menu.SetFocused(false)
 	m.table.Focus()
+	m.table.SetStyles(tableStyles(true))
 	m.resize()
 }
 
