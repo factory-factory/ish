@@ -54,7 +54,6 @@ var menuKeys = struct {
 	Move   key.Binding
 	Choose key.Binding
 	Cancel key.Binding
-	Menu   key.Binding
 }{
 	Open: key.NewBinding(
 		key.WithKeys("enter", " "),
@@ -71,10 +70,6 @@ var menuKeys = struct {
 	Cancel: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "cancel"),
-	),
-	Menu: key.NewBinding(
-		key.WithKeys("esc"),
-		key.WithHelp("esc", "filter menu"),
 	),
 }
 
@@ -126,6 +121,7 @@ func (m *Model) chooseFilter(preset int) tea.Cmd {
 // starts editing it, beginning with the filter that's applied.
 func (m *Model) editCustomFilter() tea.Cmd {
 	m.filter.custom = true
+	m.filter.part = partField
 	m.filter.menu.SetSelectedIndex(presetCustom)
 
 	return m.editFilter()
@@ -135,6 +131,7 @@ func (m *Model) editCustomFilter() tea.Cmd {
 // and applies the filter that was chosen from it before.
 func (m *Model) leaveCustomFilter() {
 	m.filter.custom = false
+	m.filter.part = partField
 	m.filter.err = nil
 	m.filter.menu.SetSelectedIndex(m.filter.preset)
 	m.applyFilterText(presetFilter(m.filter.preset, m.user))

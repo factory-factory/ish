@@ -29,6 +29,7 @@ type Model struct {
 
 	table table.Model
 	help  help.Model
+	badge Badge
 
 	// issue is the open issue's view, or nil while the list is shown, and
 	// openId is its ID.
@@ -260,12 +261,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, filterKeys.Table):
 				m.selectTable()
 
-			case m.filter.custom && key.Matches(msg, filterKeys.Edit):
-				cmd := m.editFilter()
-				return m, cmd
+			case m.filter.custom && key.Matches(msg, partKeys.Move):
+				m.movePart(msg)
 
-			case m.filter.custom && key.Matches(msg, menuKeys.Menu):
-				m.leaveCustomFilter()
+			case m.filter.custom && key.Matches(msg, filterKeys.Edit):
+				cmd := m.pressPart()
+				return m, cmd
 
 			case !m.filter.custom && key.Matches(msg, menuKeys.Open):
 				// The menu opens on enter or space. Other keys, such as up,
@@ -483,12 +484,12 @@ func (m *Model) resize() {
 		m.filter.input.SetWidth(m.filterWidth())
 	}
 
-	// The menu's panel opens under its trigger, which follows the label.
-	width, height := m.filter.menu.TriggerSize()
+	// The menu's panel opens under its trigger, which follows the badge
+	// and the label.
 	m.filter.menu.SetBounds(
 		styles.Header.GetPaddingTop(),
-		styles.Header.GetPaddingLeft()+labelWidth(),
-		width, height,
+		styles.Header.GetPaddingLeft()+m.filterIndent()+labelWidth(),
+		m.filterBoxWidth(), lipgloss.Height(m.renderTrigger()),
 	)
 
 	chrome := lipgloss.Height(m.renderHeading()) + lipgloss.Height(m.renderFooter())
@@ -543,7 +544,7 @@ func (m Model) renderFooter() string {
 	case m.filter.menu.Open():
 		keyMap = openMenuKeys{}
 	case m.filter.selected && m.filter.custom:
-		keyMap = selectedFilterKeys{}
+		keyMap = selectedFilterKeys{part: m.filter.part}
 	case m.filter.selected:
 		keyMap = selectedMenuKeys{}
 	}

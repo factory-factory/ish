@@ -37,12 +37,32 @@ type filterField struct {
 	editing  bool
 	input    textarea.Model
 
+	// part is the part of the custom filter row that's selected while the
+	// row is: the field, or one of the buttons beside it.
+	part int
+
 	// err is the error from the last attempt to apply an edited filter.
 	err error
 }
 
 // filterLabel is shown before the filter menu or custom filter field.
 const filterLabel = "Filter:"
+
+// The filter menu's trigger and the custom filter field are boxes as wide as
+// the space after the label, within these limits, including their borders.
+const (
+	minFilterBoxWidth = 60
+	maxFilterBoxWidth = 90
+)
+
+// filterArrow marks the filter menu's trigger as a menu.
+const filterArrow = "▼"
+
+// filterIndent returns the width of the heading before the filter label: the
+// badge, and the space after it, less the label's own padding.
+func (m Model) filterIndent() int {
+	return m.badge.width() + badgeGap - styles.FilterLabel.GetPaddingLeft()
+}
 
 // labelWidth returns the width of the rendered filter label.
 func labelWidth() int {
@@ -85,10 +105,22 @@ var filterKeys = struct {
 
 // selectedFilterKeys are listed in the help footer while the custom filter
 // field is selected.
-type selectedFilterKeys struct{}
+type selectedFilterKeys struct {
+	// part is the selected part of the custom filter row.
+	part int
+}
 
-func (selectedFilterKeys) ShortHelp() []key.Binding {
-	return []key.Binding{filterKeys.Edit, menuKeys.Menu, filterKeys.Table, keys.New, keys.Quit}
+func (k selectedFilterKeys) ShortHelp() []key.Binding {
+	press := filterKeys.Edit
+
+	switch k.part {
+	case partReset:
+		press = partKeys.Reset
+	case partSave:
+		press = partKeys.Save
+	}
+
+	return []key.Binding{press, partKeys.Move, filterKeys.Table, keys.New, keys.Quit}
 }
 
 func (k selectedFilterKeys) FullHelp() [][]key.Binding {
@@ -119,6 +151,7 @@ func (m *Model) selectFilter() {
 // selectTable gives the table the focus.
 func (m *Model) selectTable() {
 	m.filter.selected = false
+	m.filter.part = partField
 	m.filter.menu.SetFocused(false)
 	m.table.Focus()
 	m.resize()
@@ -216,14 +249,44 @@ func (m *Model) applyFilter() {
 // filterWidth returns the width inside the custom filter field's border and
 // padding.
 func (m Model) filterWidth() int {
-	width := m.width - styles.Header.GetHorizontalFrameSize() -
-		labelWidth() - styles.FilterBox.GetHorizontalFrameSize()
+	return m.customBoxWidth() - styles.FilterBox.GetHorizontalFrameSize()
+}
 
-	if m.width <= 0 {
-		width = 40
+// customBoxWidth returns the width of the custom filter field, including its
+// border: the width of the filter menu's trigger, or less if that's needed to
+// fit the buttons beside it.
+func (m Model) customBoxWidth() int {
+	width := m.filterBoxWidth()
+
+	if m.width > 0 {
+		available := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - labelWidth() - m.buttonsWidth()
+		width = min(width, available)
 	}
 
-	return max(width, 1)
+	return max(width, styles.FilterBox.GetHorizontalFrameSize()+1)
+}
+
+// filterBoxWidth returns the width of the filter menu's trigger and the
+// custom filter field, including their borders.
+func (m Model) filterBoxWidth() int {
+	available := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - labelWidth()
+
+	return min(max(available, minFilterBoxWidth), maxFilterBoxWidth)
+}
+
+// renderTrigger renders the filter menu's trigger: a box with the chosen
+// filter's name, and an arrow at its right edge. It's grey, and bright white
+// with a blue border while it's selected, whether or not the menu is open.
+func (m Model) renderTrigger() string {
+	style := styles.FilterTrigger
+	if m.filter.selected {
+		style = styles.FilterTriggerSelected
+	}
+
+	name := m.filter.menu.Selected()
+	space := m.filterBoxWidth() - style.GetHorizontalFrameSize() - lipgloss.Width(name) - lipgloss.Width(filterArrow)
+
+	return style.Render(name + strings.Repeat(" ", max(space, 1)) + filterArrow)
 }
 
 // renderFilter renders the applied filter shown in the field when it isn't
@@ -237,17 +300,28 @@ func renderFilter(node filter.Node) string {
 // field if it's replaced the menu.
 func (m Model) renderHeading() string {
 	label := styles.FilterLabel.Render(filterLabel)
-	row := label + m.filter.menu.TriggerView()
+
+	// The label lines up with the first line of text inside the box.
+	row := lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderTrigger())
 
 	if m.filter.custom {
-		// The label lines up with the first line of text inside the box.
 		row = lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderCustomFilter())
+
+		// The buttons are on the line with the field's text, at the
+		// heading's right edge.
+		space := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - lipgloss.Width(row) - lipgloss.Width(m.renderButtons())
+		row = lipgloss.JoinHorizontal(lipgloss.Top, row, "\n"+strings.Repeat(" ", max(space, buttonGap))+m.renderButtons())
 	}
 
-	parts := []string{row}
+	gap := strings.Repeat(" ", m.filterIndent()-m.badge.width())
+	parts := []string{lipgloss.JoinHorizontal(lipgloss.Top, m.badge.View().Content, gap, row)}
 
 	if m.filter.err != nil {
-		parts = append(parts, lipgloss.NewStyle().Width(m.filterWidth()).Render(styles.Error.Render(m.filter.err.Error())))
+		// The error lines up with the filter, after the badge.
+		parts = append(parts, lipgloss.NewStyle().
+			Width(m.filterWidth()+m.filterIndent()).
+			PaddingLeft(m.filterIndent()).
+			Render(styles.Error.Render(m.filter.err.Error())))
 	}
 
 	return styles.Header.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
@@ -264,15 +338,26 @@ func (m Model) renderCustomFilter() string {
 	case m.filter.editing:
 		content = m.filter.input.View()
 	case m.filter.node != nil:
-		content = lipgloss.NewStyle().Width(width).Render(renderFilter(m.filter.node))
+		content = fitLine(renderFilter(m.filter.node), width)
 	default:
-		content = lipgloss.NewStyle().Width(width).Render(styles.FilterPlaceholder.Render("No filter: every issue is listed"))
+		content = fitLine(styles.FilterPlaceholder.Render("No filter: every issue is listed"), width)
 	}
 
 	box := styles.FilterBox
-	if m.filter.selected {
+	if m.filter.selected && m.filter.part == partField {
 		box = styles.FilterBoxSelected
 	}
 
 	return box.Render(content)
+}
+
+// fitLine fits styled text to a single line of the given width, padding it,
+// or cutting it short with an ellipsis, so the custom filter field is as tall
+// as the filter menu's trigger while it isn't being edited.
+func fitLine(text string, width int) string {
+	if lipgloss.Width(text) > width {
+		text = lipgloss.NewStyle().MaxWidth(width-1).Render(text) + "…"
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(text)
 }

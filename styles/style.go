@@ -28,6 +28,15 @@ var BylineEmphasis = lipgloss.NewStyle().
 var Header = lipgloss.NewStyle().
 	Padding(1)
 
+// BadgeCorner and BadgeName style the ish badge in the issue list's upper
+// left corner.
+// Green ("2") also looks nice...
+var BadgeCorner = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("6"))
+
+var BadgeName = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("5"))
+
 var Rule = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("8")).
 	Margin(0, 1, 0)
@@ -92,12 +101,42 @@ var FilterLabel = lipgloss.NewStyle().
 
 var FilterBox = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder(), true).
-	BorderForeground(lipgloss.Color("8")).
+	BorderForeground(lipgloss.Color("11")).
 	Padding(0, 1)
 
 var FilterBoxSelected = FilterBox.
 	Border(lipgloss.ThickBorder(), true).
 	BorderForeground(lipgloss.Color("4"))
+
+// FilterTrigger is the filter menu's trigger, which keeps its thin, rounded
+// border when it's selected, to tell it apart from the custom filter field.
+var FilterTrigger = FilterBox.
+	Foreground(lipgloss.Color("7"))
+
+var FilterTriggerSelected = FilterTrigger.
+	BorderForeground(lipgloss.Color("4")).
+	Foreground(lipgloss.Color("15"))
+
+// Button is a button beside the custom filter field, and ButtonSelected the
+// selected button.
+var Button = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("7")).
+	Background(lipgloss.Color("8"))
+
+var ButtonCancelSelected = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("10")).
+	Bold(true)
+
+var ButtonSelected = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("5")).
+	Bold(true)
+
+// TagDraft sets apart the values of a new tag while its key is edited
+// again, in the color of keys that aren't being edited.
+var TagDraft = lipgloss.NewStyle().
+	Foreground(Tag.GetForeground())
 
 var FilterPlaceholder = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("8"))

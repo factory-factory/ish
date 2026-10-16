@@ -26,6 +26,14 @@ type Tag struct {
 	editingKey bool
 	keyInput   textinput.Model
 
+	// draft holds the values typed for a new tag while its key is edited
+	// again, to be restored when its values are. They're shown dimmed after
+	// the key.
+	draft string
+
+	// width is the width the tag's editor fits within.
+	width int
+
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
 	deleting bool
@@ -64,8 +72,7 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, nil
 		}
 
-		var cmd tea.Cmd
-		t.keyInput, cmd = t.keyInput.Update(msg)
+		cmd := t.updateKey(msg)
 		return t, cmd
 	}
 
@@ -120,6 +127,12 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	t.input.Prompt = ""
 	t.input.SetStyles(textinput.DefaultStyles(isDark))
 	t.input.SetValue(strings.Join(t.Values, ", "))
+
+	if t.draft != "" {
+		t.input.SetValue(t.draft)
+		t.draft = ""
+	}
+
 	t.input.CursorEnd()
 	t.sizeEditor(width)
 	t.editing = true
@@ -127,10 +140,65 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	return t.input.Focus()
 }
 
+// editKeyAgain stops editing a new tag's values and returns to editing its
+// key, keeping the values typed so far for when its values are edited again.
+func (t *Tag) editKeyAgain() tea.Cmd {
+	t.draft = t.input.Value()
+	t.input.Blur()
+	t.editing = false
+	t.editingKey = true
+	t.sizeEditor(t.width)
+
+	return t.keyInput.Focus()
+}
+
+// updateKey passes msg to the key input. While it's only as wide as the key,
+// it would scroll as the key grows, so it's given the full width while it's
+// updated.
+func (t *Tag) updateKey(msg tea.Msg) tea.Cmd {
+	t.keyInput.SetWidth(max(t.width-lipgloss.Width(keyPrefix), 1))
+
+	var cmd tea.Cmd
+	t.keyInput, cmd = t.keyInput.Update(msg)
+	t.sizeEditor(t.width)
+
+	return cmd
+}
+
+// draftSeparator separates the key being edited from the dimmed values
+// after it.
+const draftSeparator = ": "
+
+// pasteKey handles text pasted while a new tag's key is being edited. The
+// text before the first colon is pasted into the key, and the text after it,
+// without surrounding space, is returned as values, reporting whether there
+// was a colon.
+func (t *Tag) pasteKey(text string) (values string, split bool) {
+	key, values, split := strings.Cut(text, ":")
+
+	t.updateKey(tea.PasteMsg{Content: key})
+
+	return strings.TrimSpace(values), split
+}
+
 // sizeEditor fits the input, with the key, within width.
 func (t *Tag) sizeEditor(width int) {
+	t.width = width
+
 	if t.editingKey {
-		t.keyInput.SetWidth(max(width-lipgloss.Width(keyPrefix), 1))
+		available := width - lipgloss.Width(keyPrefix)
+
+		// The input is padded to its width, so with values shown after it,
+		// it's only as wide as the key. The cursor at the end is drawn
+		// beyond it, where the colon is shown. An empty key has no width,
+		// so it isn't padded at all.
+		if t.draft != "" {
+			available = min(available-lipgloss.Width(draftSeparator+t.draft), lipgloss.Width(t.keyInput.Value()))
+			t.keyInput.SetWidth(max(available, 0))
+			return
+		}
+
+		t.keyInput.SetWidth(max(available, 1))
 		return
 	}
 
@@ -172,7 +240,22 @@ func splitValues(s string) []string {
 
 func (t Tag) View() tea.View {
 	if t.editingKey {
-		return tea.NewView(styles.TagSelected.Render(keyPrefix) + t.keyInput.View())
+		key := t.keyInput.View()
+
+		if t.draft == "" {
+			return tea.NewView(styles.TagSelected.Render(keyPrefix) + key)
+		}
+
+		// The input ends with a blank cell: the cursor, or the padding
+		// that stands in for it when the cursor is within the key. The
+		// colon goes in that cell, so it follows the key directly, and the
+		// cursor at the end is drawn on it.
+		if i := strings.LastIndex(key, " "); i >= 0 {
+			key = key[:i] + ":" + key[i+1:]
+		}
+
+		return tea.NewView(styles.TagSelected.Render(keyPrefix) + key +
+			styles.TagDraft.Render(draftSeparator[1:]+t.draft))
 	}
 
 	if t.deleting {

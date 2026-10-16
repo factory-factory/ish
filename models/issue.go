@@ -116,6 +116,71 @@ func (ish *Issue) addTag() tea.Cmd {
 	return cmd
 }
 
+// updateNewTag handles a key press or paste while a new tag is being edited,
+// reporting whether it was handled:
+//
+//   - tab or a colon in the key moves on to editing the values, unless the
+//     key is empty, as keys can't contain colons.
+//   - shift+tab in the values returns to editing the key, keeping the values
+//     typed so far.
+//   - Text pasted into the key is split at its first colon, with the text
+//     after it, without surrounding space, pasted into the values.
+func (ish *Issue) updateNewTag(msg tea.Msg) (tea.Cmd, bool) {
+	i := ish.tagIndex()
+
+	if !ish.newTag || i < 0 {
+		return nil, false
+	}
+
+	tag := &ish.Metadata[i]
+	keys := ish.editKeyMap()
+
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch {
+		case tag.editingKey && key.Matches(msg, keys.Next):
+			return ish.editNewTagValues(""), true
+
+		case tag.editing && key.Matches(msg, keys.Prev):
+			return tag.editKeyAgain(), true
+		}
+
+	case tea.PasteMsg:
+		if !tag.editingKey {
+			return nil, false
+		}
+
+		values, split := tag.pasteKey(msg.Content)
+
+		if !split {
+			return nil, true
+		}
+
+		return ish.editNewTagValues(values), true
+	}
+
+	return nil, false
+}
+
+// editNewTagValues saves the key of the new tag being edited and moves on to
+// editing its values, replacing any values typed so far with values if it
+// isn't empty. With an empty key, it does nothing.
+func (ish *Issue) editNewTagValues(values string) tea.Cmd {
+	tag := &ish.Metadata[ish.tagIndex()]
+
+	if tag.editedKey() == "" {
+		return nil
+	}
+
+	if values != "" {
+		tag.draft = values
+	}
+
+	tag.commitKey()
+
+	return tag.startEdit(ish.headerWidth(), !ish.light)
+}
+
 // saveNewTag handles saving while a new tag is being edited, reporting
 // whether it was handled. Saving the key moves on to editing the values,
 // unless the key is empty, which removes the tag. Saving without values
@@ -421,7 +486,14 @@ func (ish *Issue) revealItem() {
 // editKeyMap returns the key bindings for editing the field under the
 // cursor.
 func (ish Issue) editKeyMap() editKeyMap {
-	return editKeys(ish.cardIndex() >= 0)
+	k := editKeys(ish.cardIndex() >= 0)
+
+	if i := ish.tagIndex(); i >= 0 && ish.newTag {
+		k.Next.SetEnabled(ish.Metadata[i].editingKey)
+		k.Prev.SetEnabled(ish.Metadata[i].editing)
+	}
+
+	return k
 }
 
 const (
@@ -696,7 +768,16 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 	case tea.WindowSizeMsg, tea.BackgroundColorMsg:
 		return nil, false
 
+	case tea.PasteMsg:
+		if cmd, handled := ish.updateNewTag(msg); handled {
+			return cmd, true
+		}
+
 	case tea.KeyPressMsg:
+		if cmd, handled := ish.updateNewTag(msg); handled {
+			return cmd, true
+		}
+
 		keys := ish.editKeyMap()
 
 		switch {

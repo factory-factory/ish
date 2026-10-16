@@ -53,7 +53,7 @@ func TestFilterFieldInitially(t *testing.T) {
 	view := plainView(m)
 
 	// The label and the menu, showing the default filter, share a row.
-	if !strings.Contains(view, "Filter: [ All unclosed issues") || strings.Contains(view, "Issues\n") {
+	if !strings.Contains(view, "Filter: │ All unclosed issues") || strings.Contains(view, "Issues\n") {
 		t.Errorf("View() = %q, want the filter label and menu in place of the title", view)
 	}
 

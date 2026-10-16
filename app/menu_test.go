@@ -85,7 +85,7 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	if got := ids(m); got != "AAA BBB" {
 		t.Errorf("listed %q, want the unclosed issues assigned to alice", got)
 	}
-	if view := plainView(m); !strings.Contains(view, "[ Issues assigned to me") {
+	if view := plainView(m); !strings.Contains(view, "│ Issues assigned to me") {
 		t.Errorf("View() = %q, want the menu showing the chosen filter", view)
 	}
 
@@ -137,7 +137,7 @@ func TestChooseCustomFilter(t *testing.T) {
 	if got := m.filter.input.Value(); got != `{assignees = "alice@example.com"} and {state != 'closed'}` {
 		t.Errorf("custom filter starts as %q, want the applied filter", got)
 	}
-	if view := plainView(m); strings.Contains(view, "[ ") || !strings.Contains(view, "┏") {
+	if view := plainView(m); strings.Contains(view, "▼") || !strings.Contains(view, "┏") {
 		t.Errorf("View() = %q, want the custom field in place of the menu", view)
 	}
 
@@ -149,12 +149,19 @@ func TestChooseCustomFilter(t *testing.T) {
 	if got := ids(m); got != "CCC" {
 		t.Errorf("listed %q, want the closed issue", got)
 	}
-	if footer := escapes.ReplaceAllString(m.renderFooter(), ""); !strings.Contains(footer, "esc filter menu") {
+	// Esc no longer leaves the custom filter.
+	if m = update(t, m, esc); !m.filter.custom {
+		t.Fatal("esc on the custom filter returned to the menu, want only Reset to")
+	}
+
+	// Reset returns to the menu, applying the filter chosen from it before.
+	m = update(t, m, right)
+
+	if footer := escapes.ReplaceAllString(m.renderFooter(), ""); !strings.Contains(footer, "enter reset to the filter menu") {
 		t.Errorf("footer = %q, want a way back to the menu", footer)
 	}
 
-	// Esc returns to the menu, applying the filter chosen from it before.
-	m = update(t, m, esc)
+	m = update(t, m, enter)
 
 	if m.filter.custom || m.filter.menu.SelectedIndex() != presetMine || !m.filter.menu.Focused() {
 		t.Errorf("custom, menu selection, focused = %v, %d, %v, want the menu back on %d",
