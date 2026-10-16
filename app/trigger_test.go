@@ -102,7 +102,10 @@ func TestTriggerStyles(t *testing.T) {
 }
 
 func TestCustomFieldMatchesTrigger(t *testing.T) {
+	// In a wide terminal, the field and the buttons beside it fit at the
+	// trigger's width.
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
+	m = update(t, m, tea.WindowSizeMsg{Width: 200, Height: 30})
 	trigger := m.renderTrigger()
 
 	m = update(t, m, slash, enter)

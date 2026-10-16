@@ -37,6 +37,10 @@ type filterField struct {
 	editing  bool
 	input    textarea.Model
 
+	// part is the part of the custom filter row that's selected while the
+	// row is: the field, or one of the buttons beside it.
+	part int
+
 	// err is the error from the last attempt to apply an edited filter.
 	err error
 }
@@ -101,10 +105,22 @@ var filterKeys = struct {
 
 // selectedFilterKeys are listed in the help footer while the custom filter
 // field is selected.
-type selectedFilterKeys struct{}
+type selectedFilterKeys struct {
+	// part is the selected part of the custom filter row.
+	part int
+}
 
-func (selectedFilterKeys) ShortHelp() []key.Binding {
-	return []key.Binding{filterKeys.Edit, menuKeys.Menu, filterKeys.Table, keys.New, keys.Quit}
+func (k selectedFilterKeys) ShortHelp() []key.Binding {
+	press := filterKeys.Edit
+
+	switch k.part {
+	case partReset:
+		press = partKeys.Reset
+	case partSave:
+		press = partKeys.Save
+	}
+
+	return []key.Binding{press, partKeys.Move, filterKeys.Table, keys.New, keys.Quit}
 }
 
 func (k selectedFilterKeys) FullHelp() [][]key.Binding {
@@ -135,6 +151,7 @@ func (m *Model) selectFilter() {
 // selectTable gives the table the focus.
 func (m *Model) selectTable() {
 	m.filter.selected = false
+	m.filter.part = partField
 	m.filter.menu.SetFocused(false)
 	m.table.Focus()
 	m.resize()
@@ -232,7 +249,21 @@ func (m *Model) applyFilter() {
 // filterWidth returns the width inside the custom filter field's border and
 // padding.
 func (m Model) filterWidth() int {
-	return m.filterBoxWidth() - styles.FilterBox.GetHorizontalFrameSize()
+	return m.customBoxWidth() - styles.FilterBox.GetHorizontalFrameSize()
+}
+
+// customBoxWidth returns the width of the custom filter field, including its
+// border: the width of the filter menu's trigger, or less if that's needed to
+// fit the buttons beside it.
+func (m Model) customBoxWidth() int {
+	width := m.filterBoxWidth()
+
+	if m.width > 0 {
+		available := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - labelWidth() - m.buttonsWidth()
+		width = min(width, available)
+	}
+
+	return max(width, styles.FilterBox.GetHorizontalFrameSize()+1)
 }
 
 // filterBoxWidth returns the width of the filter menu's trigger and the
@@ -269,14 +300,18 @@ func renderFilter(node filter.Node) string {
 // field if it's replaced the menu.
 func (m Model) renderHeading() string {
 	label := styles.FilterLabel.Render(filterLabel)
-	box := m.renderTrigger()
-
-	if m.filter.custom {
-		box = m.renderCustomFilter()
-	}
 
 	// The label lines up with the first line of text inside the box.
-	row := lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, box)
+	row := lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderTrigger())
+
+	if m.filter.custom {
+		row = lipgloss.JoinHorizontal(lipgloss.Top, "\n"+label, m.renderCustomFilter())
+
+		// The buttons are on the line with the field's text, at the
+		// heading's right edge.
+		space := m.width - styles.Header.GetHorizontalFrameSize() - m.filterIndent() - lipgloss.Width(row) - lipgloss.Width(m.renderButtons())
+		row = lipgloss.JoinHorizontal(lipgloss.Top, row, "\n"+strings.Repeat(" ", max(space, buttonGap))+m.renderButtons())
+	}
 
 	gap := strings.Repeat(" ", m.filterIndent()-m.badge.width())
 	parts := []string{lipgloss.JoinHorizontal(lipgloss.Top, m.badge.View().Content, gap, row)}
@@ -309,7 +344,7 @@ func (m Model) renderCustomFilter() string {
 	}
 
 	box := styles.FilterBox
-	if m.filter.selected {
+	if m.filter.selected && m.filter.part == partField {
 		box = styles.FilterBoxSelected
 	}
 

@@ -117,6 +117,22 @@ var FilterTriggerSelected = FilterTrigger.
 	BorderForeground(lipgloss.Color("4")).
 	Foreground(lipgloss.Color("15"))
 
+// Button is a button beside the custom filter field, and ButtonSelected the
+// selected button.
+var Button = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("7")).
+	Background(lipgloss.Color("8"))
+
+var ButtonCancelSelected = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("10")).
+	Bold(true)
+
+var ButtonSelected = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("5")).
+	Bold(true)
+
 // TagDraft sets apart the values of a new tag while its key is edited
 // again, in the color of keys that aren't being edited.
 var TagDraft = lipgloss.NewStyle().
