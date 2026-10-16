@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-15T00:58:04-07:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 
 ---
@@ -99,3 +99,22 @@ In an 80-column terminal, the 60-column minimum doesn't quite fit. The heading n
 - **Custom field:** the same width and height as the trigger at rest, including with a long filter, which is cut short with `…`.
 - **Menu panel:** it opens under the box. The tests that looked for the old `[ … ▼ ]` trigger now look for the box.
 - **In a real terminal,** on a copy of `.ish`, the trigger was grey at rest. When selected, it had a blue border and bright white text, and the menu opened under it and showed its items.
+
+---
+
+[brendan@berg.industries 2026-10-15T18:23:25-07:00]
+
+I'd like to tweak some of the colors. Let's use a different grey (11) for the unfocused border, and for unfocused text, instead of the current grey, use plain white (7).
+
+---
+
+[Claude 2026-10-15T18:26:20-07:00]
+
+Done, and left in `in review`.
+
+- The unfocused border is now colour 11, and the unfocused text and arrow are plain white (7).
+- The custom filter field's unfocused border is 11 too, so both keep the same border colours, as you asked earlier.
+- Focused, they're unchanged: a blue (4) border, with bright white (15) text in the trigger.
+- The trigger's style test now checks for the new colours.
+
+One check: in the standard 16-colour palette, 11 is bright yellow, so it will only look grey in a theme that maps it to grey. The card borders use 11 as well.

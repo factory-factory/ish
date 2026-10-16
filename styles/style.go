@@ -101,7 +101,7 @@ var FilterLabel = lipgloss.NewStyle().
 
 var FilterBox = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder(), true).
-	BorderForeground(lipgloss.Color("8")).
+	BorderForeground(lipgloss.Color("11")).
 	Padding(0, 1)
 
 var FilterBoxSelected = FilterBox.
@@ -111,7 +111,7 @@ var FilterBoxSelected = FilterBox.
 // FilterTrigger is the filter menu's trigger, which keeps its thin, rounded
 // border when it's selected, to tell it apart from the custom filter field.
 var FilterTrigger = FilterBox.
-	Foreground(lipgloss.Color("8"))
+	Foreground(lipgloss.Color("7"))
 
 var FilterTriggerSelected = FilterTrigger.
 	BorderForeground(lipgloss.Color("4")).

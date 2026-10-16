@@ -81,7 +81,7 @@ func TestTriggerStyles(t *testing.T) {
 		style              lipgloss.Style
 		border, foreground string
 	}{
-		{"unselected", styles.FilterTrigger, "8", "8"},
+		{"unselected", styles.FilterTrigger, "11", "7"},
 		{"selected", styles.FilterTriggerSelected, "4", "15"},
 	} {
 		if tt.style.GetBorderStyle() != lipgloss.RoundedBorder() {
