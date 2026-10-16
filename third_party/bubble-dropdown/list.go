@@ -1,6 +1,7 @@
 package dropdownv2
 
 import (
+	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -63,13 +64,16 @@ type listModel struct {
 
 	// separators holds the indices of the items with a rule drawn above
 	// them. Local patch for ish; see WithSeparators.
-	separators map[int]bool
+	separators     map[int]bool
+	separatorColor string
 }
 
-// setSeparators sets the items to draw a rule above. A rule above the first
-// item would separate nothing, so it's ignored. Local patch for ish.
-func (m *listModel) setSeparators(before []int) {
+// setSeparators sets the items to draw a rule above, and the rules' color,
+// or the border's if it's empty. A rule above the first item would separate
+// nothing, so it's ignored. Local patch for ish.
+func (m *listModel) setSeparators(before []int, color string) {
 	m.separators = map[int]bool{}
+	m.separatorColor = color
 
 	for _, i := range before {
 		if i > 0 && i < len(m.items) {
@@ -162,11 +166,13 @@ func (m listModel) View() string {
 	normal := m.normalStyle.Width(cw)
 	cursor := m.cursorStyle.Width(cw)
 
-	// Local patch for ish: rules are drawn between items, in the border's
-	// style.
-	rule := lipgloss.NewStyle().
-		Foreground(m.borderStyle.GetBorderTopForeground()).
-		Render(strings.Repeat("─", cw))
+	// Local patch for ish: rules are drawn between items, in their color
+	// or the border's.
+	var ruleColor color.Color = m.borderStyle.GetBorderTopForeground()
+	if m.separatorColor != "" {
+		ruleColor = lipgloss.Color(m.separatorColor)
+	}
+	rule := lipgloss.NewStyle().Foreground(ruleColor).Render(strings.Repeat("─", cw))
 
 	rows := make([]string, 0, m.maxVisible)
 	for _, i := range m.rows() {

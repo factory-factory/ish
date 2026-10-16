@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-15T22:47:45-07:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 
 ---
@@ -30,3 +30,24 @@ Done, and moved to `in review`. I had no questions.
 - **In the vendored package:** the rule is drawn between the right items, and the panel's height includes it. Down from the item above it moves to the item below it, and the mouse finds no item on its row. A rule at the top of a scrolled list isn't shown.
 - **In ish:** the open menu shows the rule on its own line between the saved filters and "Custom...", and the item after it chooses the custom filter.
 - **In a real terminal,** on a copy of `.ish`, the rule was drawn between "Issues assigned to me" and "Custom...".
+
+---
+
+[brendan@berg.industries 2026-10-15T23:02:44-07:00]
+
+This looks good, but can the separator be the same border color used elsewhere in the UI? (Grey 11).
+
+---
+
+[Claude 2026-10-15T23:04:58-07:00]
+
+Done, and left in `in review`. The rule is now grey (11), the border colour of unselected fields, rather than the panel's blue border colour.
+
+- The vendored `bubble-dropdown` has a new `WithSeparatorColor` option, alongside `WithSeparators` and also marked "Local patch for ish". Without it, rules still take the border's colour.
+- ish sets it to 11, with a `separatorColor` constant in `app/menu.go`.
+
+## Testing
+
+- **In the vendored package:** a rule is drawn in the border's colour by default, and in its own colour when one is set.
+- **In ish:** the menu test checks that the rule is drawn in 11.
+- **In a real terminal,** on a copy of `.ish`, the rule was drawn in 11, between the panel's blue borders.

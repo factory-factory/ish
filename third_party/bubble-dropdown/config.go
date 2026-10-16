@@ -13,6 +13,10 @@ type Config struct {
 	// in the open panel. Local patch for ish.
 	Separators []int
 
+	// SeparatorColor is the color of the separators' rules. Empty means the
+	// panel border's color. Local patch for ish.
+	SeparatorColor string
+
 	// Styling. Each style has a corresponding Custom* flag so New can tell an
 	// intentionally-empty style apart from "not set".
 	TriggerStyle lipgloss.Style
@@ -60,6 +64,14 @@ func WithPlaceholder(p string) Option {
 func WithSeparators(before ...int) Option {
 	return func(c *Config) {
 		c.Separators = append([]int(nil), before...)
+	}
+}
+
+// WithSeparatorColor sets the color of the rules drawn by WithSeparators,
+// which otherwise take the panel border's color. Local patch for ish.
+func WithSeparatorColor(color string) Option {
+	return func(c *Config) {
+		c.SeparatorColor = color
 	}
 }
 

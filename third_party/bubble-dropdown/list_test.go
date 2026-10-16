@@ -32,7 +32,7 @@ func TestListModelSetStylesNilSafe(t *testing.T) {
 // Local patch for ish: separators.
 func TestListModelSeparators(t *testing.T) {
 	m := newListModel([]string{"a", "b", "c"}, 0, 8, 1, defaultListStyles(""))
-	m.setSeparators([]int{0, 2, 9})
+	m.setSeparators([]int{0, 2, 9}, "")
 
 	lines := strings.Split(m.View(), "\n")
 	want := []string{"a", "b", "─", "c"}
@@ -67,9 +67,24 @@ func TestListModelSeparators(t *testing.T) {
 
 	// Scrolled so that c is at the top, the rule above it isn't shown.
 	m = newListModel([]string{"a", "b", "c"}, 2, 1, 1, defaultListStyles(""))
-	m.setSeparators([]int{2})
+	m.setSeparators([]int{2}, "")
 
 	if got := len(strings.Split(m.View(), "\n")); got != 3 {
 		t.Errorf("scrolled View() has %d lines, want 3:\n%s", got, m.View())
+	}
+}
+
+// Local patch for ish: separator colors.
+func TestListModelSeparatorColor(t *testing.T) {
+	m := newListModel([]string{"a", "b"}, 0, 8, 1, defaultListStyles("#0000FF"))
+
+	m.setSeparators([]int{1}, "")
+	if rule := strings.Split(m.View(), "\n")[2]; !strings.Contains(rule, fgSeq(t, "#0000FF")) {
+		t.Errorf("rule %q, want the border's color", rule)
+	}
+
+	m.setSeparators([]int{1}, "#FF0000")
+	if rule := strings.Split(m.View(), "\n")[2]; !strings.Contains(rule, fgSeq(t, "#FF0000")) {
+		t.Errorf("rule %q, want its own color", rule)
 	}
 }

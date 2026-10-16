@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/filter"
 )
 
@@ -235,6 +236,12 @@ func TestMenuSeparatesCustomFilter(t *testing.T) {
 	between := strings.Split(view[mine:custom], "\n")
 	if len(between) != 3 || !strings.Contains(between[1], "────") {
 		t.Errorf("between the saved filters and Custom...: %q, want a rule on its own line", between)
+	}
+
+	// The rule is the color of unselected fields' borders.
+	rule := lipgloss.NewStyle().Foreground(lipgloss.Color(separatorColor)).Render("─")
+	if separatorColor != "11" || !strings.Contains(m.View().Content, strings.TrimSuffix(rule, "\x1b[m")+"──") {
+		t.Errorf("View() = %q, want the rule in color 11", m.View().Content)
 	}
 
 	// The rule isn't selectable: down from the last saved filter chooses
