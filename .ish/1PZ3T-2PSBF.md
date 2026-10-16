@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2023-06-04T18:18:40-04:00]
 
-- state: open
+- state: planning
 - assignees: brendan@berg.industries
 
 ---
