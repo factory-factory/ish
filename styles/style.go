@@ -115,7 +115,8 @@ var FilterTrigger = FilterBox.
 
 var FilterTriggerSelected = FilterTrigger.
 	BorderForeground(lipgloss.Color("4")).
-	Foreground(lipgloss.Color("15"))
+	Foreground(lipgloss.Color("15")).
+	Bold(true)
 
 // Button is a button beside the custom filter field, and ButtonSelected the
 // selected button.
