@@ -66,7 +66,7 @@ func TestButtonStyles(t *testing.T) {
 		foreground, background string
 	}{
 		{"button", styles.Button, "7", "8"},
-		{"selected button", styles.ButtonSelected, "15", "4"},
+		{"selected button", styles.ButtonSelected, "15", "5"},
 	} {
 		if tt.style.GetForeground() != lipgloss.Color(tt.foreground) || tt.style.GetBackground() != lipgloss.Color(tt.background) {
 			t.Errorf("%s colors = %v on %v, want %s on %s", tt.name,
@@ -108,7 +108,16 @@ func TestMoveBetweenFieldAndButtons(t *testing.T) {
 			t.Errorf("after %s: footer %q, want %q and the move keys", tt.key, footer, tt.help)
 		}
 
-		selected := tt.label != "" && strings.Contains(m.renderButtons(), styles.ButtonSelected.Render("  "+tt.label+"  "))
+		var style lipgloss.Style
+
+		switch tt.part {
+		case partReset:
+			style = styles.ButtonCancelSelected
+		case partSave:
+			style = styles.ButtonSelected
+		}
+
+		selected := tt.label != "" && strings.Contains(m.renderButtons(), style.Render("  "+tt.label+"  "))
 		if tt.label != "" && !selected {
 			t.Errorf("after %s: buttons %q, want %s highlighted", tt.key, m.renderButtons(), tt.label)
 		}
