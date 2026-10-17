@@ -141,8 +141,11 @@ func (ish *Issue) addTag() tea.Cmd {
 // updateNewTag handles a key press or paste while a new tag is being edited,
 // reporting whether it was handled:
 //
-//   - A colon in the key moves on to editing the values, unless the key is
-//     empty, as keys can't contain colons.
+//   - Tab or a colon in the key moves on to editing the values, unless the
+//     key is empty, as keys can't contain colons. With a suggestion shown,
+//     tab accepts it first; see updateEditing.
+//   - shift+tab in the values returns to editing the key, keeping the values
+//     typed so far.
 //   - Text pasted into the key is split at its first colon, with the text
 //     after it, without surrounding space, pasted into the values.
 func (ish *Issue) updateNewTag(msg tea.Msg) (tea.Cmd, bool) {
@@ -160,6 +163,9 @@ func (ish *Issue) updateNewTag(msg tea.Msg) (tea.Cmd, bool) {
 		switch {
 		case tag.editingKey && key.Matches(msg, keys.Next):
 			return ish.editNewTagValues(""), true
+
+		case tag.editing && key.Matches(msg, keys.Prev):
+			return tag.editKeyAgain(), true
 		}
 
 	case tea.PasteMsg:
@@ -507,10 +513,10 @@ func (ish Issue) editKeyMap() editKeyMap {
 
 	if i := ish.tagIndex(); i >= 0 {
 		tag := ish.Metadata[i]
-		input := tag.activeInput()
 
 		k.Next.SetEnabled(ish.newTag && tag.editingKey)
-		k.Suggest.SetEnabled(len(input.MatchedSuggestions()) > 1)
+		k.Prev.SetEnabled(ish.newTag && tag.editing)
+		k.Accept.SetEnabled(tag.suggesting())
 	}
 
 	return k
@@ -803,6 +809,12 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 		}
 
 	case tea.KeyPressMsg:
+		// Tab accepts a suggested completion. Without one, a new tag's key
+		// moves on to its values.
+		if i := ish.tagIndex(); i >= 0 && key.Matches(msg, acceptKey) && ish.Metadata[i].acceptSuggestion() {
+			return nil, true
+		}
+
 		if cmd, handled := ish.updateNewTag(msg); handled {
 			return cmd, true
 		}
@@ -817,10 +829,10 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 			return ish.exit(tea.Quit), true
 
 		case key.Matches(msg, keys.Save):
-			// Enter accepts a suggested completion first. In a key, it
-			// then moves on to the values, as it does without one.
-			if i := ish.tagIndex(); i >= 0 && ish.Metadata[i].acceptSuggestion() && !ish.Metadata[i].editingKey {
-				return nil, true
+			// Enter accepts a suggested completion, then moves on to the
+			// values or saves the tag, as it does without one.
+			if i := ish.tagIndex(); i >= 0 {
+				ish.Metadata[i].acceptSuggestion()
 			}
 
 			if cmd, handled := ish.saveNewTag(); handled {

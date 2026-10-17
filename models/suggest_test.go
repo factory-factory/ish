@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/factory-factory/ish/styles"
 )
 
@@ -64,29 +63,36 @@ func TestKeySuggestions(t *testing.T) {
 		t.Errorf("key = %q, want only what was typed", ish.Metadata[1].keyInput.Value())
 	}
 
-	// Tab and shift+tab cycle through the matches.
-	for _, tt := range []struct {
-		key  tea.KeyPressMsg
-		want string
-	}{
-		{tab, "relation.parent"},
-		{shiftTab, "relation.blocked-by"},
-	} {
-		if ish = update(t, ish, tt.key); suggestion(ish) != tt.want {
-			t.Errorf("after %s: suggestion = %q, want %q", tt.key, suggestion(ish), tt.want)
-		}
+	if footer := footerText(ish); !strings.Contains(footer, "tab accept suggestion") {
+		t.Errorf("footer %q with a suggestion, want tab to accept it", footer)
 	}
 
-	if footer := footerText(ish); !strings.Contains(footer, "tab/shift+tab suggestions") {
-		t.Errorf("footer %q with several suggestions, want the keys to cycle them", footer)
-	}
-
-	// Enter accepts the suggestion and moves on to the values.
-	ish = update(t, ish, tab, enter)
+	// Tab accepts the suggestion, and a second tab moves on to the values.
+	ish = update(t, ish, tab)
 	tag := ish.Metadata[1]
 
-	if tag.Key != "relation.parent" || tag.editingKey || !tag.editing {
-		t.Errorf("after enter: key, editing key, editing values = %q, %v, %v, want relation.parent, false, true",
+	if !tag.editingKey || tag.keyInput.Value() != "relation.blocked-by" || suggestion(ish) != "" {
+		t.Fatalf("after tab: editing key, key, suggestion = %v, %q, %q, want the suggestion accepted in the key",
+			tag.editingKey, tag.keyInput.Value(), suggestion(ish))
+	}
+
+	ish = update(t, ish, tab)
+
+	if tag := ish.Metadata[1]; tag.Key != "relation.blocked-by" || tag.editingKey || !tag.editing {
+		t.Errorf("after a second tab: key, editing key, editing values = %q, %v, %v, want relation.blocked-by, false, true",
+			tag.Key, tag.editingKey, tag.editing)
+	}
+}
+
+func TestEnterAcceptsKeySuggestion(t *testing.T) {
+	ish := suggestingIssue(t)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "rel")
+	ish = update(t, ish, enter)
+
+	// Enter accepts the suggestion and moves on to the values at once.
+	if tag := ish.Metadata[1]; tag.Key != "relation.blocked-by" || tag.editingKey || !tag.editing {
+		t.Errorf("after enter: key, editing key, editing values = %q, %v, %v, want relation.blocked-by, false, true",
 			tag.Key, tag.editingKey, tag.editing)
 	}
 }
@@ -116,6 +122,25 @@ func TestColonKeepsTypedKey(t *testing.T) {
 
 	if tag := ish.Metadata[1]; tag.Key != "pri" || !tag.editing {
 		t.Errorf("key, editing values = %q, %v after a colon, want pri, true", tag.Key, tag.editing)
+	}
+}
+
+func TestNoSuggestionsWhileDeleting(t *testing.T) {
+	ish := suggestingIssue(t)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "prio")
+
+	// Dismissed, the suggestion stays away while deleting, even with 3
+	// letters left.
+	ish = update(t, ish, backspace, backspace)
+
+	if key := ish.Metadata[1].keyInput.Value(); key != "pri" || suggestion(ish) != "" {
+		t.Fatalf("key, suggestion = %q, %q, want pri and no suggestion", key, suggestion(ish))
+	}
+
+	// Adding a character suggests again.
+	if ish = typeText(t, ish, "o"); suggestion(ish) != "priority" {
+		t.Errorf("suggestion after typing = %q, want priority", suggestion(ish))
 	}
 }
 
@@ -167,18 +192,24 @@ func TestValueSuggestions(t *testing.T) {
 		t.Fatalf("suggestion = %q, want alice after zaphine", got)
 	}
 
-	// Enter accepts it, then saves the tag.
-	ish = update(t, ish, enter)
+	// Tab accepts it, and keeps editing the values.
+	ish = update(t, ish, tab)
 	tag := ish.Metadata[1]
 
 	if !tag.editing || tag.input.Value() != "zaphine, alice" {
-		t.Fatalf("after enter: editing, values = %v, %q, want the suggestion accepted", tag.editing, tag.input.Value())
+		t.Fatalf("after tab: editing, values = %v, %q, want the suggestion accepted", tag.editing, tag.input.Value())
 	}
 
+	// Enter accepts a suggestion and saves the tag at once.
+	ish = suggestingIssue(t)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "assignees")
+	ish = update(t, ish, colon)
+	ish = typeText(t, ish, "ali")
 	ish = update(t, ish, enter)
 
-	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(tag.Values, []string{"zaphine", "alice"}) {
-		t.Errorf("after a second enter: editing, values = %v, %q, want the tag saved", tag.editing, tag.Values)
+	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(tag.Values, []string{"alice"}) {
+		t.Errorf("after enter: editing, values = %v, %q, want the suggestion accepted and the tag saved", tag.editing, tag.Values)
 	}
 }
 

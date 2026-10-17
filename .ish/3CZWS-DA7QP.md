@@ -2,7 +2,7 @@
 
 [brendan@berg.industries 2026-10-15T23:49:34-07:00]
 
-- state: in review
+- state: closed
 - assignees: brendan@berg.industries
 
 ---
@@ -114,3 +114,57 @@ As you asked, the binding is gone, but the code isn't. `editKeyAgain`, the dimme
 - **In a real terminal,** on a copy of `.ish`:
   - adding a tag, `rel` suggested `relation.depends-on`, and enter accepted it
   - then `#3C` suggested `#3CZWN-EBVEH`, enter accepted it, and a second enter saved `relation.depends-on: #3CZWN-EBVEH`
+
+---
+
+[brendan@berg.industries 2026-10-16T23:49:06-07:00]
+
+I think we're almost there.
+
+## Key bindings
+
+Let's change some behavior. Instead of cycling through matches with `tab`, pressing `tab` should accept the suggested match. If the cursor is in the key field pressing `tab` a second time should move to the value field. This also lets us revert the `shift+tab` behavior when editing the value field.
+
+Pressing `enter` in the key field should accept the match *and* move to the value field. Pressing `enter` in the value field should accept the match and save the attribute.
+
+## Backspace behavior
+
+The current implementation shows suggestions while deleting text. Once the suggestion is dismissed, no suggestions should be shown until characters are added to the field.
+
+---
+
+[Claude 2026-10-17T00:06:31-07:00]
+
+Done, and left in `in review`.
+
+## Keys
+
+- **`tab`:** it accepts the suggestion shown after the cursor. In the key field, a second `tab` moves on to the values, as `:` does. In the value field, `tab` without a suggestion does nothing.
+- **Enter:**
+  - In the key field, it accepts the suggestion and moves on to the values.
+  - In the value field, it accepts the suggestion and saves the tag in one press.
+  - Without a suggestion, it works as before.
+- **`shift+tab`:** it returns from a new tag's values to its key again, keeping the values typed so far and showing them dimmed after the key, as in #3CYE1-CVC45.
+- **Cycling through matches:** there's no longer a key for it. Only the first match, in alphabetical order, is suggested, so typing more letters narrows it down. I turned off the text input's own keys for cycling, which default to `↑`/`↓` and `ctrl+n`/`ctrl+p`, so they don't change the suggestion without any sign of it. If you'd like cycling back on another key, it's a small change.
+- **Help footer:** it shows `tab accept suggestion` while a suggestion is shown, `tab/: values` while a new tag's key is edited, and `shift+tab key` while its values are.
+
+## Backspace
+
+Once a suggestion is dismissed, nothing more is suggested while deleting, even with 3 or more characters left. Adding a character suggests again.
+
+## Testing
+
+- **`tab`:** it accepts a key suggestion, and a second `tab` moves on to the values. `tab` and `:` move on from a key without a suggestion. In the value field, `tab` accepts a suggestion and keeps editing.
+- **Enter:** it accepts a key suggestion and moves on in one press, and accepts a value suggestion and saves the tag in one press.
+- **`shift+tab`:** it returns from a new tag's values to its key, and does nothing on an existing tag.
+- **Backspace:** after dismissing, deleting to 3 letters suggests nothing, and typing a letter suggests again.
+- **The help footer** for each of these.
+- **In a real terminal,** on a copy of `.ish`:
+  - `rel` and `tab` accepted `relation.depends-on`, and a second `tab` moved to the values
+  - `#3C` and enter accepted `#3CZWN-EBVEH` and saved the tag
+
+---
+
+[brendan@berg.industries 2026-10-17T20:53:27-07:00]
+
+I've re-enabled cycling through suggestsions (with `↑`/`↓` and `ctrl+p`/`ctrl+n`). Otherwise, everything looks good.

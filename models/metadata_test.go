@@ -349,42 +349,37 @@ func editKeyAgain(t *testing.T, ish Issue) Issue {
 	return ish
 }
 
-func TestColonMovesToValues(t *testing.T) {
-	ish := taggingIssue(t, nil)
-	ish = update(t, ish, mKey)
+func TestTabAndColonMoveToValues(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{tab, colon} {
+		ish := taggingIssue(t, nil)
+		ish = update(t, ish, mKey)
 
-	if footer := footerText(ish); !strings.Contains(footer, ": values") {
-		t.Errorf("footer %q while editing a new key, want the colon", footer)
-	}
+		if footer := footerText(ish); !strings.Contains(footer, "tab/: values") || strings.Contains(footer, "shift+tab") {
+			t.Errorf("footer %q while editing a new key, want tab/: and not shift+tab", footer)
+		}
 
-	// Tab no longer moves on from the key.
-	ish = typeText(t, ish, "priority")
-	ish = update(t, ish, tab)
+		ish = typeText(t, ish, "priority")
+		ish = update(t, ish, key)
+		tag := ish.Metadata[1]
 
-	if tag := ish.Metadata[1]; !tag.editingKey || tag.keyInput.Value() != "priority" {
-		t.Fatalf("after tab: editing key, key = %v, %q, want the key still being edited", tag.editingKey, tag.keyInput.Value())
-	}
+		if tag.Key != "priority" || tag.editingKey || !tag.editing {
+			t.Fatalf("after %s: key, editing key, editing values = %q, %v, %v, want priority, false, true",
+				key, tag.Key, tag.editingKey, tag.editing)
+		}
+		if tag.input.Value() != "" {
+			t.Errorf("after %s: values input = %q, want it empty", key, tag.input.Value())
+		}
+		if footer := footerText(ish); !strings.Contains(footer, "shift+tab key") || strings.Contains(footer, "tab/:") {
+			t.Errorf("footer %q while editing a new tag's values, want shift+tab and not tab/:", footer)
+		}
 
-	ish = update(t, ish, colon)
-	tag := ish.Metadata[1]
+		// A colon in the values is just text.
+		ish = typeText(t, ish, "a:b")
+		ish = update(t, ish, enter)
 
-	if tag.Key != "priority" || tag.editingKey || !tag.editing {
-		t.Fatalf("after a colon: key, editing key, editing values = %q, %v, %v, want priority, false, true",
-			tag.Key, tag.editingKey, tag.editing)
-	}
-	if tag.input.Value() != "" {
-		t.Errorf("after a colon: values input = %q, want it empty", tag.input.Value())
-	}
-	if footer := footerText(ish); strings.Contains(footer, ": values") || strings.Contains(footer, "shift+tab key") {
-		t.Errorf("footer %q while editing a new tag's values, want neither the colon nor a way back to the key", footer)
-	}
-
-	// A colon in the values is just text.
-	ish = typeText(t, ish, "a:b")
-	ish = update(t, ish, enter)
-
-	if got := ish.Metadata[1].Values; !slices.Equal(got, []string{"a:b"}) {
-		t.Errorf("values = %q, want [a:b]", got)
+		if got := ish.Metadata[1].Values; !slices.Equal(got, []string{"a:b"}) {
+			t.Errorf("after %s: values = %q, want [a:b]", key, got)
+		}
 	}
 }
 
@@ -431,22 +426,35 @@ func TestEditKeyAgain(t *testing.T) {
 	}
 }
 
-func TestShiftTabStaysInValues(t *testing.T) {
-	// On a new tag's values.
+func TestShiftTabReturnsToKey(t *testing.T) {
 	ish := taggingIssue(t, nil)
 	ish = update(t, ish, mKey)
 	ish = typeText(t, ish, "prio")
-	ish = update(t, ish, colon, shiftTab)
+	ish = update(t, ish, colon)
+	ish = typeText(t, ish, "high")
+	ish = update(t, ish, shiftTab)
 
-	if tag := ish.Metadata[1]; tag.editingKey || !tag.editing {
-		t.Errorf("editing key, editing values = %v, %v after shift+tab on a new tag, want its values still edited",
-			tag.editingKey, tag.editing)
+	if tag := ish.Metadata[1]; !tag.editingKey || tag.editing || tag.keyInput.Value() != "prio" {
+		t.Fatalf("editing key, editing values, key = %v, %v, %q after shift+tab, want the key being edited again",
+			tag.editingKey, tag.editing, tag.keyInput.Value())
 	}
 
-	// On an existing tag's values.
-	ish = taggingIssue(t, nil)
+	// Shift+tab does nothing more while the key is edited.
+	if ish = update(t, ish, shiftTab); !ish.Metadata[1].editingKey {
+		t.Error("shift+tab on the key stopped editing it")
+	}
+}
+
+func TestShiftTabOnExistingTag(t *testing.T) {
+	ish := taggingIssue(t, nil)
 	ish.setCursor(2)
-	ish = update(t, ish, enter, shiftTab)
+	ish = update(t, ish, enter)
+
+	if footer := footerText(ish); strings.Contains(footer, "shift+tab") {
+		t.Errorf("footer %q while editing an existing tag, want no shift+tab", footer)
+	}
+
+	ish = update(t, ish, shiftTab)
 
 	if tag := ish.Metadata[0]; tag.editingKey || !tag.editing {
 		t.Errorf("editing key, editing values = %v, %v after shift+tab on an existing tag, want its values still edited",

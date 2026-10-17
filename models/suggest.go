@@ -20,15 +20,12 @@ type MetadataValues map[string][]string
 // typed before completions are suggested.
 const minSuggestion = 3
 
-// suggestionKeys cycle through the suggested completions of the key or value
-// being typed. Enter accepts the suggestion; see Issue.updateEditing.
-var suggestionKeys = struct {
-	Next key.Binding
-	Prev key.Binding
-}{
-	Next: key.NewBinding(key.WithKeys("tab")),
-	Prev: key.NewBinding(key.WithKeys("shift+tab")),
-}
+// acceptKey accepts the suggested completion of the key or value being
+// typed. See Issue.updateEditing.
+var acceptKey = key.NewBinding(
+	key.WithKeys("tab"),
+	key.WithHelp("tab", "accept suggestion"),
+)
 
 // tagInputStyles returns the styles for a tag's key and value inputs, with
 // suggested completions in their own style.
@@ -39,14 +36,13 @@ func tagInputStyles(isDark bool) textinput.Styles {
 	return s
 }
 
-// useSuggestions sets up input to show suggested completions after the
-// cursor, which tab and shift+tab cycle through. Enter accepts them, so the
-// input's own key for that is turned off.
+// useSuggestions sets up input to show the first suggested completion after
+// the cursor. Tab and enter accept it, which the issue view handles, so the
+// input's own keys for accepting and cycling through suggestions are turned
+// off.
 func useSuggestions(input *textinput.Model) {
 	input.ShowSuggestions = true
 	input.KeyMap.AcceptSuggestion = key.NewBinding(key.WithDisabled())
-	input.KeyMap.NextSuggestion = suggestionKeys.Next
-	input.KeyMap.PrevSuggestion = suggestionKeys.Prev
 }
 
 // activeInput returns the input being edited: the key's or the values'.
@@ -60,7 +56,8 @@ func (t *Tag) activeInput() *textinput.Model {
 
 // updateInput passes msg to the input being edited, then updates the
 // suggested completions for what's in it. With a completion shown, backspace
-// dismisses it, rather than deleting a character; typing brings it back.
+// dismisses it, rather than deleting a character. Nothing more is suggested
+// until characters are added.
 func (t *Tag) updateInput(msg tea.Msg) tea.Cmd {
 	input := t.activeInput()
 
@@ -75,7 +72,7 @@ func (t *Tag) updateInput(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	*input, cmd = input.Update(msg)
 
-	if input.Value() != before {
+	if utf8.RuneCountInString(input.Value()) > utf8.RuneCountInString(before) {
 		t.dismissed = false
 	}
 
