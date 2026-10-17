@@ -10,6 +10,8 @@ import (
 type keyMap struct {
 	Up           key.Binding
 	Down         key.Binding
+	NextComment  key.Binding
+	PrevComment  key.Binding
 	PageUp       key.Binding
 	PageDown     key.Binding
 	HalfPageUp   key.Binding
@@ -33,12 +35,20 @@ var keys = func() keyMap {
 
 	return keyMap{
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "previous card"),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "scroll up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "next card"),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "scroll down"),
+		),
+		NextComment: key.NewBinding(
+			key.WithKeys("j"),
+			key.WithHelp("j", "next comment"),
+		),
+		PrevComment: key.NewBinding(
+			key.WithKeys("k"),
+			key.WithHelp("k", "previous comment"),
 		),
 		PageUp:       pager.PageUp,
 		PageDown:     pager.PageDown,
@@ -102,13 +112,13 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.NextComment, k.PrevComment, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select},
-		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
+		{k.NextComment, k.PrevComment, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select},
+		{k.Up, k.Down, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
 }

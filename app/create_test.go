@@ -137,7 +137,7 @@ func TestNewIssueFromEmptyList(t *testing.T) {
 
 	// Leave the title blank and write a comment instead.
 	m, issue := openNew(t, m)
-	m = update(t, m, esc, down, enter)
+	m = update(t, m, esc, tea.KeyPressMsg{Code: 'j', Text: "j"}, enter)
 	m = typeText(t, m, "First comment")
 	m = update(t, m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	m = closeIssue(t, m, esc)

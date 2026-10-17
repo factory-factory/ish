@@ -572,7 +572,7 @@ func TestUnwritableEditKeepsIssueOpen(t *testing.T) {
 	m := newTestModel(t, map[string]string{"AAA": source})
 
 	// Add a horizontal rule to the comment, which can't be written.
-	m = update(t, m, enter, down, enter)
+	m = update(t, m, enter, tea.KeyPressMsg{Code: 'j', Text: "j"}, enter)
 	m = update(t, m, enter, enter)
 	m = typeText(t, m, "---")
 	m = update(t, m, enter, enter, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})

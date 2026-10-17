@@ -666,17 +666,26 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ish.setCursor(c)
 
 			if i := ish.cardIndex(); i >= 0 {
-				ish.reveal(ish.spans[i], next)
+				ish.scrollToCard(i)
 			}
 
 			return ish, nil
 
+		case key.Matches(msg, keys.NextComment):
+			ish.moveComment(1)
+			return ish, nil
+
+		case key.Matches(msg, keys.PrevComment):
+			ish.moveComment(-1)
+			return ish, nil
+
+		// The arrows scroll the view, leaving the selection as it is.
 		case key.Matches(msg, keys.Down):
-			ish.scrollDown()
+			ish.viewport.ScrollDown(1)
 			return ish, nil
 
 		case key.Matches(msg, keys.Up):
-			ish.scrollUp()
+			ish.viewport.ScrollUp(1)
 			return ish, nil
 		}
 	}
@@ -996,46 +1005,39 @@ func (ish *Issue) selectAt(c int, selected bool) {
 	}
 }
 
-// scrollDown scrolls the rest of the selected card into view one line at a
-// time, then moves the selection to the next card once the selected card's
-// last line is visible.
-func (ish *Issue) scrollDown() {
-	i := ish.cardIndex()
-	bottom := ish.viewport.YOffset() + ish.viewport.Height()
-
-	switch {
-	case len(ish.spans) == 0:
-		return
-	case i < 0:
-		ish.setCursor(ish.firstCard())
-		ish.reveal(ish.spans[0], true)
-	case ish.spans[i].bottom() > bottom:
-		ish.viewport.ScrollDown(1)
-	case i+1 < len(ish.spans):
-		ish.setCursor(ish.cursor + 1)
-		ish.reveal(ish.spans[i+1], true)
-	}
+// scrollToCard scrolls the card at index i to the top of the view, with its
+// byline first. The view doesn't scroll past the end of the last card, so a
+// card near the end may be shown lower down.
+func (ish *Issue) scrollToCard(i int) {
+	ish.viewport.SetYOffset(ish.spans[i].top)
 }
 
-// scrollUp scrolls the rest of the selected card into view one line at a
-// time, then moves the selection to the previous card once the selected
-// card's first line is visible.
-func (ish *Issue) scrollUp() {
+// moveComment selects the card delta cards after the selected one, or before
+// it if delta is negative, and scrolls it to the top of the view. It stops at
+// the first and last cards. With the title, a tag, or nothing selected, it
+// selects the first card going forward, or the last going back.
+func (ish *Issue) moveComment(delta int) {
+	n := len(ish.Conversation)
+
+	if n == 0 {
+		return
+	}
+
 	i := ish.cardIndex()
-	last := len(ish.spans) - 1
 
 	switch {
-	case len(ish.spans) == 0:
-		return
+	case i < 0 && delta > 0:
+		i = 0
 	case i < 0:
-		ish.setCursor(ish.firstCard() + last)
-		ish.reveal(ish.spans[last], false)
-	case ish.spans[i].top < ish.viewport.YOffset():
-		ish.viewport.ScrollUp(1)
-	case i > 0:
-		ish.setCursor(ish.cursor - 1)
-		ish.reveal(ish.spans[i-1], false)
+		i = n - 1
+	case i+delta < 0 || i+delta >= n:
+		return
+	default:
+		i += delta
 	}
+
+	ish.setCursor(ish.firstCard() + i)
+	ish.scrollToCard(i)
 }
 
 // reveal scrolls the viewport so that s is visible. A card taller than the
