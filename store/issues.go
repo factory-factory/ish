@@ -143,6 +143,45 @@ func IssueIDs(dir string) (ids map[string]bool, err error) {
 	return ids, rows.Err()
 }
 
+// MetadataValues returns the metadata keys used in the issues in the
+// metadata database in dir, each with the distinct values used with it,
+// sorted regardless of case.
+func MetadataValues(dir string) (values map[string][]string, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	rows, err := db.Query(`SELECT DISTINCT attribute.key, attributeValue.value
+FROM attribute, json_each(attribute.value) AS attributeValue
+ORDER BY attribute.key, attributeValue.value COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	values = map[string][]string{}
+
+	for rows.Next() {
+		var key, value string
+
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+
+		values[key] = append(values[key], value)
+	}
+
+	return values, rows.Err()
+}
+
 // ListIssues returns a summary of each issue in the metadata database in dir
 // that matches where, ordered by ID. If where is nil, every issue is listed.
 func ListIssues(dir string, where filter.Node) (summaries []Summary, err error) {

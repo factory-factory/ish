@@ -34,6 +34,14 @@ type Tag struct {
 	// width is the width the tag's editor fits within.
 	width int
 
+	// known holds the keys and values used in the issues, to suggest as
+	// completions, leaving out takenKeys, the keys of the issue's other
+	// tags. dismissed reports whether the suggestion for what's typed was
+	// dismissed with backspace. See refreshSuggestions.
+	known     MetadataValues
+	takenKeys map[string]bool
+	dismissed bool
+
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
 	deleting bool
@@ -77,8 +85,7 @@ func (t Tag) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if t.editing {
-		var cmd tea.Cmd
-		t.input, cmd = t.input.Update(msg)
+		cmd := t.updateInput(msg)
 		return t, cmd
 	}
 
@@ -101,9 +108,11 @@ const keyPrefix = "• "
 func (t *Tag) startKeyEdit(width int, isDark bool) tea.Cmd {
 	t.keyInput = textinput.New()
 	t.keyInput.Prompt = ""
-	t.keyInput.SetStyles(textinput.DefaultStyles(isDark))
+	t.keyInput.SetStyles(tagInputStyles(isDark))
+	useSuggestions(&t.keyInput)
 	t.sizeEditor(width)
 	t.editingKey = true
+	t.dismissed = false
 
 	return t.keyInput.Focus()
 }
@@ -125,7 +134,8 @@ func (t *Tag) commitKey() {
 func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	t.input = textinput.New()
 	t.input.Prompt = ""
-	t.input.SetStyles(textinput.DefaultStyles(isDark))
+	t.input.SetStyles(tagInputStyles(isDark))
+	useSuggestions(&t.input)
 	t.input.SetValue(strings.Join(t.Values, ", "))
 
 	if t.draft != "" {
@@ -136,6 +146,8 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	t.input.CursorEnd()
 	t.sizeEditor(width)
 	t.editing = true
+	t.dismissed = false
+	t.refreshSuggestions()
 
 	return t.input.Focus()
 }
@@ -158,8 +170,7 @@ func (t *Tag) editKeyAgain() tea.Cmd {
 func (t *Tag) updateKey(msg tea.Msg) tea.Cmd {
 	t.keyInput.SetWidth(max(t.width-lipgloss.Width(keyPrefix), 1))
 
-	var cmd tea.Cmd
-	t.keyInput, cmd = t.keyInput.Update(msg)
+	cmd := t.updateInput(msg)
 	t.sizeEditor(t.width)
 
 	return cmd

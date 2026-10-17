@@ -83,6 +83,21 @@ type Issue struct {
 	// issues reports which issues exist, to link references to them. See
 	// SetIssueLookup.
 	issues IssueLookup
+
+	// known holds the metadata keys and values used in the issues, to
+	// suggest as tags are edited. See SetMetadataValues.
+	known MetadataValues
+}
+
+// SetMetadataValues sets the metadata keys, and the values used with each,
+// that are suggested as completions while tags are edited. Without them,
+// nothing is suggested.
+func (ish *Issue) SetMetadataValues(known MetadataValues) {
+	ish.known = known
+
+	for i := range ish.Metadata {
+		ish.Metadata[i].known = known
+	}
 }
 
 // SetIssueLookup sets the function that reports which issues exist, so that
@@ -103,7 +118,14 @@ func (ish *Issue) SetIssueLookup(issues IssueLookup) {
 // addTag appends a blank metadata tag, selects it, and starts editing its
 // key.
 func (ish *Issue) addTag() tea.Cmd {
-	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues})
+	// A key can only appear once, so the keys the issue has aren't
+	// suggested.
+	taken := map[string]bool{}
+	for _, tag := range ish.Metadata {
+		taken[tag.Key] = true
+	}
+
+	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues, known: ish.known, takenKeys: taken})
 	ish.setCursor(1 + len(ish.Metadata))
 
 	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)
@@ -119,10 +141,8 @@ func (ish *Issue) addTag() tea.Cmd {
 // updateNewTag handles a key press or paste while a new tag is being edited,
 // reporting whether it was handled:
 //
-//   - tab or a colon in the key moves on to editing the values, unless the
-//     key is empty, as keys can't contain colons.
-//   - shift+tab in the values returns to editing the key, keeping the values
-//     typed so far.
+//   - A colon in the key moves on to editing the values, unless the key is
+//     empty, as keys can't contain colons.
 //   - Text pasted into the key is split at its first colon, with the text
 //     after it, without surrounding space, pasted into the values.
 func (ish *Issue) updateNewTag(msg tea.Msg) (tea.Cmd, bool) {
@@ -140,9 +160,6 @@ func (ish *Issue) updateNewTag(msg tea.Msg) (tea.Cmd, bool) {
 		switch {
 		case tag.editingKey && key.Matches(msg, keys.Next):
 			return ish.editNewTagValues(""), true
-
-		case tag.editing && key.Matches(msg, keys.Prev):
-			return tag.editKeyAgain(), true
 		}
 
 	case tea.PasteMsg:
@@ -488,9 +505,12 @@ func (ish *Issue) revealItem() {
 func (ish Issue) editKeyMap() editKeyMap {
 	k := editKeys(ish.cardIndex() >= 0)
 
-	if i := ish.tagIndex(); i >= 0 && ish.newTag {
-		k.Next.SetEnabled(ish.Metadata[i].editingKey)
-		k.Prev.SetEnabled(ish.Metadata[i].editing)
+	if i := ish.tagIndex(); i >= 0 {
+		tag := ish.Metadata[i]
+		input := tag.activeInput()
+
+		k.Next.SetEnabled(ish.newTag && tag.editingKey)
+		k.Suggest.SetEnabled(len(input.MatchedSuggestions()) > 1)
 	}
 
 	return k
@@ -797,6 +817,12 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 			return ish.exit(tea.Quit), true
 
 		case key.Matches(msg, keys.Save):
+			// Enter accepts a suggested completion first. In a key, it
+			// then moves on to the values, as it does without one.
+			if i := ish.tagIndex(); i >= 0 && ish.Metadata[i].acceptSuggestion() && !ish.Metadata[i].editingKey {
+				return nil, true
+			}
+
 			if cmd, handled := ish.saveNewTag(); handled {
 				return cmd, true
 			}
@@ -933,8 +959,8 @@ func (ish *Issue) styleEditor() {
 		ish.titleInput.SetStyles(textinput.DefaultStyles(dark))
 
 	case ish.tagIndex() >= 0:
-		ish.Metadata[ish.tagIndex()].input.SetStyles(textinput.DefaultStyles(dark))
-		ish.Metadata[ish.tagIndex()].keyInput.SetStyles(textinput.DefaultStyles(dark))
+		ish.Metadata[ish.tagIndex()].input.SetStyles(tagInputStyles(dark))
+		ish.Metadata[ish.tagIndex()].keyInput.SetStyles(tagInputStyles(dark))
 
 	case ish.cardIndex() >= 0:
 		ish.Conversation[ish.cardIndex()].editor.SetStyles(textarea.DefaultStyles(dark))

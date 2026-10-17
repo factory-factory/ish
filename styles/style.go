@@ -134,6 +134,11 @@ var ButtonSelected = lipgloss.NewStyle().
 	Background(lipgloss.Color("5")).
 	Bold(true)
 
+// Suggestion is the rest of a suggested completion, after the cursor, as a
+// tag's key or values are typed.
+var Suggestion = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8"))
+
 // TagDraft sets apart the values of a new tag while its key is edited
 // again, in the color of keys that aren't being edited.
 var TagDraft = lipgloss.NewStyle().

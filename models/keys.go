@@ -126,11 +126,11 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // editKeyMap holds the key bindings used while a field is being edited. All
 // other keys are handled by the field's editor.
 type editKeyMap struct {
-	Save   key.Binding
-	Next   key.Binding
-	Prev   key.Binding
-	Cancel key.Binding
-	Quit   key.Binding
+	Save    key.Binding
+	Next    key.Binding
+	Suggest key.Binding
+	Cancel  key.Binding
+	Quit    key.Binding
 }
 
 // editKeys returns the key bindings for editing a field. Multiline fields
@@ -150,16 +150,19 @@ func editKeys(multiline bool) editKeyMap {
 
 	return editKeyMap{
 		Save: save,
-		// Next and Prev are enabled only while a new tag's key or values
-		// are being edited, to move between them.
+		// Next is enabled only while a new tag's key is being edited, to
+		// move on to its values.
 		Next: key.NewBinding(
-			key.WithKeys("tab", ":"),
-			key.WithHelp("tab/:", "values"),
+			key.WithKeys(":"),
+			key.WithHelp(":", "values"),
 			key.WithDisabled(),
 		),
-		Prev: key.NewBinding(
-			key.WithKeys("shift+tab"),
-			key.WithHelp("shift+tab", "key"),
+		// Suggest is only listed in the help footer, while there's more
+		// than one suggestion to cycle through. The tag's input handles
+		// the keys.
+		Suggest: key.NewBinding(
+			key.WithKeys("tab", "shift+tab"),
+			key.WithHelp("tab/shift+tab", "suggestions"),
 			key.WithDisabled(),
 		),
 		Cancel: key.NewBinding(
@@ -174,11 +177,11 @@ func editKeys(multiline bool) editKeyMap {
 }
 
 func (k editKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.Next, k.Prev, k.Cancel}
+	return []key.Binding{k.Save, k.Next, k.Suggest, k.Cancel}
 }
 
 func (k editKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Save, k.Next, k.Prev, k.Cancel, k.Quit}}
+	return [][]key.Binding{{k.Save, k.Next, k.Suggest, k.Cancel, k.Quit}}
 }
 
 // itemKeyMap holds the key bindings used while selecting a card's todo items
