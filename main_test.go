@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -190,5 +192,69 @@ func TestEnsureDatabaseRebuildsOldSchema(t *testing.T) {
 	}
 	if current, err := store.Current(dir); !current || err != nil {
 		t.Errorf("Current() after rebuilding = %v, %v, want true, nil", current, err)
+	}
+}
+
+// commit makes an empty commit by author in the git repository root.
+func commit(t *testing.T, root string, author store.User) {
+	t.Helper()
+
+	cmd := exec.Command("git", "-C", root, "commit", "-q", "--allow-empty", "-m", "commit by "+author.Name)
+	cmd.Env = append(cmd.Environ(),
+		"GIT_AUTHOR_NAME="+author.Name, "GIT_AUTHOR_EMAIL="+author.Email,
+		"GIT_COMMITTER_NAME=ish", "GIT_COMMITTER_EMAIL=ish@example.com",
+	)
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+}
+
+func TestUsersFromGitHistory(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git isn't installed")
+	}
+
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+
+	root := t.TempDir()
+	dir := filepath.Join(root, ".ish")
+
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+
+	alice := store.User{Name: "Alice", Email: "alice@example.com"}
+	bob := store.User{Name: "Bob", Email: "bob@example.com"}
+	commit(t, root, alice)
+	commit(t, root, bob)
+
+	// Init indexes every author, and says so.
+	var stdout, stderr bytes.Buffer
+
+	if code := runInit(dir, &stdout, &stderr); code != 0 {
+		t.Fatalf("runInit() = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Indexed 2 users from the git history\n") {
+		t.Errorf("stdout = %q, want the users reported", stdout.String())
+	}
+
+	// Starting ish adds new authors quietly.
+	carol := store.User{Name: "Carol", Email: "carol@example.com"}
+	commit(t, root, carol)
+	stdout.Reset()
+
+	if !ensureDatabase(dir, &stdout, &stderr) || stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Errorf("ensureDatabase(): output %q %q, want none", stdout.String(), stderr.String())
+	}
+
+	users, err := store.Users(dir)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []store.User{alice, bob, carol}; !slices.Equal(users, want) {
+		t.Errorf("Users() = %q, want %q", users, want)
 	}
 }

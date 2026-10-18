@@ -36,12 +36,14 @@ const gitignoreEntry = ".metadata.ish*"
 // schemaVersion is stored in the database's user_version, so ish can tell
 // which schema a database has, and rebuild one with an older schema.
 //
-// Version 2 stopped allowing colons in attribute keys.
-const schemaVersion = 2
+// Version 2 stopped allowing colons in attribute keys, and version 3 added the
+// user table.
+const schemaVersion = 3
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Attribute
-// values are JSON arrays of strings.
+// values are JSON arrays of strings. Users are the authors of the commits in
+// the git repository the issues are in.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -73,6 +75,16 @@ CREATE TABLE comment (
 	content           TEXT NOT NULL,
 	UNIQUE (issueId, sortIndex)
 );
+
+CREATE TABLE user (
+	id    TEXT PRIMARY KEY,
+	name  TEXT NOT NULL,
+	email TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX userNameEmail ON user (name, email);
+CREATE INDEX userName ON user (name);
+CREATE INDEX userEmail ON user (email);
 `
 
 // keyPattern matches the characters an attribute key may contain.
@@ -95,6 +107,10 @@ type Result struct {
 
 	// Failed holds the issue files that couldn't be added to the database.
 	Failed []FileError
+
+	// Users is the number of commit authors added to the database, from
+	// the repository's whole history.
+	Users int
 }
 
 // FileError is an error indexing an issue file.
@@ -113,7 +129,8 @@ func (e FileError) Unwrap() error {
 
 // Init sets up the base directory dir and its metadata database. It creates
 // dir if it doesn't exist, makes sure dir's .gitignore ignores the database,
-// and builds the database from the issue files in dir, replacing any
+// and builds the database from the issue files in dir, and the authors of
+// every commit in the git repository dir is in, if any, replacing any
 // database that's already there.
 //
 // Issue files that can't be indexed are skipped and listed in the result's
@@ -199,7 +216,7 @@ func build(dir, path string, result *Result) error {
 }
 
 // populate installs the schema in the empty database at path, and adds the
-// issue files in dir to it.
+// issue files in dir, and the authors of every commit, to it.
 func populate(path, dir string, result *Result) (err error) {
 	db, err := Open(path)
 	if err != nil {
@@ -216,7 +233,13 @@ func populate(path, dir string, result *Result) (err error) {
 		return err
 	}
 
-	return index(db, dir, result)
+	if err := index(db, dir, result); err != nil {
+		return err
+	}
+
+	result.Users, err = addUsers(db, commitAuthors(dir, 0))
+
+	return err
 }
 
 // Open opens the database at path with foreign keys enforced.

@@ -105,6 +105,10 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "Indexed %d %s\n", len(result.Indexed), noun)
 
+	if result.Users > 0 {
+		fmt.Fprintf(stdout, "Indexed %d %s from the git history\n", result.Users, plural(result.Users, "user"))
+	}
+
 	for _, failure := range result.Failed {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
@@ -120,7 +124,8 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 // reports whether there's a database to use. If the database doesn't exist
 // yet, or has an older schema, it's built with runInit. Otherwise, it's
 // brought up to date with any issue files that changed, were added, or were
-// removed since it was last updated. Issue files that can't be indexed are reported, but don't stop ish,
+// removed since it was last updated, and the authors of the repository's
+// most recent commits are added to it. Issue files that can't be indexed are reported, but don't stop ish,
 // since the database holds every other issue.
 func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	exists, err := store.Exists(dir)
@@ -182,6 +187,12 @@ func syncDatabase(dir string, stdout, stderr io.Writer) bool {
 
 	for _, failure := range result.Failed {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
+	}
+
+	// The authors of recent commits are added quietly. The database can be
+	// used without them, so a problem is only reported.
+	if _, err := store.IndexUsers(dir); err != nil {
+		fmt.Fprintf(stderr, "Couldn't index the git history's users: %v\n", err)
 	}
 
 	return true
