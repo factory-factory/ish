@@ -87,6 +87,21 @@ type Issue struct {
 	// known holds the metadata keys and values used in the issues, to
 	// suggest as tags are edited. See SetMetadataValues.
 	known MetadataValues
+
+	// refs holds the issue IDs and user names suggested for values starting
+	// with # and @. See SetReferences.
+	refs References
+}
+
+// SetReferences sets the issue IDs and user names that are suggested as
+// completions for values starting with # and @ while tags are edited.
+func (ish *Issue) SetReferences(refs References) {
+	ish.refs = refs
+
+	for i := range ish.Metadata {
+		ish.Metadata[i].refs = refs
+		ish.Metadata[i].issueID = ish.Id
+	}
 }
 
 // SetMetadataValues sets the metadata keys, and the values used with each,
@@ -125,7 +140,13 @@ func (ish *Issue) addTag() tea.Cmd {
 		taken[tag.Key] = true
 	}
 
-	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues, known: ish.known, takenKeys: taken})
+	ish.Metadata = append(ish.Metadata, Tag{
+		issues:    ish.issues,
+		known:     ish.known,
+		takenKeys: taken,
+		refs:      ish.refs,
+		issueID:   ish.Id,
+	})
 	ish.setCursor(1 + len(ish.Metadata))
 
 	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)

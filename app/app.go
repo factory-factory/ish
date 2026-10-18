@@ -3,6 +3,8 @@
 package app
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -458,14 +460,25 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	issue.SetAuthor(CurrentUser(m.dir))
 
 	// Without the IDs of the other issues, references aren't linked, and
-	// without their metadata, nothing is suggested as tags are edited.
+	// without their metadata and the repository's users, nothing is
+	// suggested as tags are edited.
+	var refs models.References
+
 	if ids, err := store.IssueIDs(m.dir); err == nil {
 		issue.SetIssueLookup(func(id string) bool { return ids[id] })
+
+		refs.IssueIDs = slices.Sorted(maps.Keys(ids))
 	}
 
 	if values, err := store.MetadataValues(m.dir); err == nil {
 		issue.SetMetadataValues(values)
 	}
+
+	if users, err := store.Users(m.dir); err == nil {
+		refs.UserNames = userNames(users)
+	}
+
+	issue.SetReferences(refs)
 
 	m.issue = issue
 	m.openId = issue.Id
@@ -479,6 +492,20 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(m.issue.Init(), cmd)
+}
+
+// userNames returns the distinct names of users, in order. A user with
+// several emails has one name.
+func userNames(users []store.User) []string {
+	var names []string
+
+	for _, user := range users {
+		if user.Name != "" && !slices.Contains(names, user.Name) {
+			names = append(names, user.Name)
+		}
+	}
+
+	return names
 }
 
 // saveIssue writes an issue's changes to its file in the list's directory,

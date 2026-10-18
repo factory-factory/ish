@@ -42,6 +42,12 @@ type Tag struct {
 	takenKeys map[string]bool
 	dismissed bool
 
+	// refs holds the issue IDs and user names suggested for values
+	// starting with # and @, leaving out issueID, the ID of the tag's own
+	// issue.
+	refs    References
+	issueID string
+
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
 	deleting bool
