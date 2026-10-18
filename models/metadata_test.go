@@ -337,8 +337,20 @@ func TestNewTagKeyStartsEmpty(t *testing.T) {
 	}
 }
 
+var colon = tea.KeyPressMsg{Code: ':', Text: ":"}
+
+// editKeyAgain returns from a new tag's values to its key. It has no key
+// binding, but is kept for a later one.
+func editKeyAgain(t *testing.T, ish Issue) Issue {
+	t.Helper()
+
+	ish.Metadata[ish.tagIndex()].editKeyAgain()
+
+	return ish
+}
+
 func TestTabAndColonMoveToValues(t *testing.T) {
-	for _, key := range []tea.KeyPressMsg{tab, {Code: ':', Text: ":"}} {
+	for _, key := range []tea.KeyPressMsg{tab, colon} {
 		ish := taggingIssue(t, nil)
 		ish = update(t, ish, mKey)
 
@@ -372,7 +384,7 @@ func TestTabAndColonMoveToValues(t *testing.T) {
 }
 
 func TestTabAndColonWithEmptyKey(t *testing.T) {
-	for _, key := range []tea.KeyPressMsg{tab, {Code: ':', Text: ":"}} {
+	for _, key := range []tea.KeyPressMsg{tab, colon} {
 		ish := taggingIssue(t, nil)
 		ish = update(t, ish, mKey, key)
 		tag := ish.Metadata[1]
@@ -384,13 +396,13 @@ func TestTabAndColonWithEmptyKey(t *testing.T) {
 	}
 }
 
-func TestShiftTabReturnsToKey(t *testing.T) {
+func TestEditKeyAgain(t *testing.T) {
 	ish := taggingIssue(t, nil)
 	ish = update(t, ish, mKey)
 	ish = typeText(t, ish, "prio")
-	ish = update(t, ish, tab)
+	ish = update(t, ish, colon)
 	ish = typeText(t, ish, "high")
-	ish = update(t, ish, shiftTab)
+	ish = editKeyAgain(t, ish)
 	tag := ish.Metadata[1]
 
 	if !tag.editingKey || tag.editing || tag.keyInput.Value() != "prio" {
@@ -398,10 +410,8 @@ func TestShiftTabReturnsToKey(t *testing.T) {
 			tag.editingKey, tag.editing, tag.keyInput.Value())
 	}
 
-	// Shift+tab does nothing more while the key is edited.
-	ish = update(t, ish, shiftTab)
 	ish = typeText(t, ish, "rity")
-	ish = update(t, ish, tab)
+	ish = update(t, ish, colon)
 	tag = ish.Metadata[1]
 
 	if tag.Key != "priority" || !tag.editing || tag.input.Value() != "high" {
@@ -413,6 +423,25 @@ func TestShiftTabReturnsToKey(t *testing.T) {
 
 	if tag := ish.Metadata[1]; tag.Key != "priority" || !slices.Equal(tag.Values, []string{"high"}) {
 		t.Errorf("saved tag %q: %q, want priority: [high]", tag.Key, tag.Values)
+	}
+}
+
+func TestShiftTabReturnsToKey(t *testing.T) {
+	ish := taggingIssue(t, nil)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "prio")
+	ish = update(t, ish, colon)
+	ish = typeText(t, ish, "high")
+	ish = update(t, ish, shiftTab)
+
+	if tag := ish.Metadata[1]; !tag.editingKey || tag.editing || tag.keyInput.Value() != "prio" {
+		t.Fatalf("editing key, editing values, key = %v, %v, %q after shift+tab, want the key being edited again",
+			tag.editingKey, tag.editing, tag.keyInput.Value())
+	}
+
+	// Shift+tab does nothing more while the key is edited.
+	if ish = update(t, ish, shiftTab); !ish.Metadata[1].editingKey {
+		t.Error("shift+tab on the key stopped editing it")
 	}
 }
 
@@ -473,9 +502,10 @@ func TestPasteReplacesKeptValues(t *testing.T) {
 	ish := taggingIssue(t, nil)
 	ish = update(t, ish, mKey)
 	ish = typeText(t, ish, "x")
-	ish = update(t, ish, tab)
+	ish = update(t, ish, colon)
 	ish = typeText(t, ish, "kept")
-	ish = update(t, ish, shiftTab, ctrlU, tea.PasteMsg{Content: "state: done"})
+	ish = editKeyAgain(t, ish)
+	ish = update(t, ish, ctrlU, tea.PasteMsg{Content: "state: done"})
 
 	if tag := ish.Metadata[1]; tag.Key != "state" || tag.input.Value() != "done" {
 		t.Errorf("key, values = %q, %q, want state, done", tag.Key, tag.input.Value())
@@ -486,9 +516,9 @@ func TestValuesDimmedWhileKeyEditedAgain(t *testing.T) {
 	ish := taggingIssue(t, nil)
 	ish = update(t, ish, mKey)
 	ish = typeText(t, ish, "prio")
-	ish = update(t, ish, tab)
+	ish = update(t, ish, colon)
 	ish = typeText(t, ish, "high, low")
-	ish = update(t, ish, shiftTab)
+	ish = editKeyAgain(t, ish)
 
 	if header := ish.renderHeader(); !strings.Contains(header, styles.TagDraft.Render(" high, low")) {
 		t.Errorf("header %q, want the values dimmed after the key", header)
@@ -528,7 +558,7 @@ func TestValuesDimmedWhileKeyEditedAgain(t *testing.T) {
 	ish = typeText(t, ish, "priority")
 
 	// Moving on to the values shows them in the input again, undimmed.
-	ish = update(t, ish, tab)
+	ish = update(t, ish, colon)
 
 	if header := ish.renderHeader(); strings.Contains(header, styles.TagDraft.Render(" high, low")) {
 		t.Errorf("header %q, want the values in their input", header)

@@ -115,7 +115,8 @@ var FilterTrigger = FilterBox.
 
 var FilterTriggerSelected = FilterTrigger.
 	BorderForeground(lipgloss.Color("4")).
-	Foreground(lipgloss.Color("15"))
+	Foreground(lipgloss.Color("15")).
+	Bold(true)
 
 // Button is a button beside the custom filter field, and ButtonSelected the
 // selected button.
@@ -132,6 +133,11 @@ var ButtonSelected = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("15")).
 	Background(lipgloss.Color("5")).
 	Bold(true)
+
+// Suggestion is the rest of a suggested completion, after the cursor, as a
+// tag's key or values are typed.
+var Suggestion = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("8"))
 
 // TagDraft sets apart the values of a new tag while its key is edited
 // again, in the color of keys that aren't being edited.

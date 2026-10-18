@@ -80,9 +80,10 @@ func TestTriggerStyles(t *testing.T) {
 		name               string
 		style              lipgloss.Style
 		border, foreground string
+		bold               bool
 	}{
-		{"unselected", styles.FilterTrigger, "11", "7"},
-		{"selected", styles.FilterTriggerSelected, "4", "15"},
+		{"unselected", styles.FilterTrigger, "11", "7", false},
+		{"selected", styles.FilterTriggerSelected, "4", "15", true},
 	} {
 		if tt.style.GetBorderStyle() != lipgloss.RoundedBorder() {
 			t.Errorf("%s trigger border isn't thin and rounded", tt.name)
@@ -90,6 +91,9 @@ func TestTriggerStyles(t *testing.T) {
 		if tt.style.GetBorderTopForeground() != lipgloss.Color(tt.border) || tt.style.GetForeground() != lipgloss.Color(tt.foreground) {
 			t.Errorf("%s trigger colors = border %v, text %v, want %s, %s", tt.name,
 				tt.style.GetBorderTopForeground(), tt.style.GetForeground(), tt.border, tt.foreground)
+		}
+		if tt.style.GetBold() != tt.bold {
+			t.Errorf("%s trigger bold = %v, want %v", tt.name, tt.style.GetBold(), tt.bold)
 		}
 	}
 

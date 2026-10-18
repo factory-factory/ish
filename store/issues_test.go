@@ -309,6 +309,40 @@ func TestIssueIDs(t *testing.T) {
 	}
 }
 
+func TestMetadataValues(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("First", []string{"- assignees: zaphine, alice", "- state: open"}),
+		"BBBBB-22222": issueSource("Second", []string{"- assignees: Bob, alice", "- state: closed"}),
+	})
+	initDir(t, dir)
+
+	values, err := MetadataValues(dir)
+
+	if err != nil {
+		t.Fatalf("MetadataValues() error = %v", err)
+	}
+
+	// Each value appears once, in order regardless of case.
+	want := map[string][]string{
+		"assignees": {"alice", "Bob", "zaphine"},
+		"state":     {"closed", "open"},
+	}
+
+	if len(values) != len(want) {
+		t.Errorf("MetadataValues() = %v, want %v", values, want)
+	}
+	for key, w := range want {
+		if !slices.Equal(values[key], w) {
+			t.Errorf("values for %s = %q, want %q", key, values[key], w)
+		}
+	}
+
+	if _, err := MetadataValues(t.TempDir()); err == nil {
+		t.Error("MetadataValues() without a database error = nil, want an error")
+	}
+}
+
 func TestCountIssues(t *testing.T) {
 	dir := t.TempDir()
 

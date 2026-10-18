@@ -83,6 +83,21 @@ type Issue struct {
 	// issues reports which issues exist, to link references to them. See
 	// SetIssueLookup.
 	issues IssueLookup
+
+	// known holds the metadata keys and values used in the issues, to
+	// suggest as tags are edited. See SetMetadataValues.
+	known MetadataValues
+}
+
+// SetMetadataValues sets the metadata keys, and the values used with each,
+// that are suggested as completions while tags are edited. Without them,
+// nothing is suggested.
+func (ish *Issue) SetMetadataValues(known MetadataValues) {
+	ish.known = known
+
+	for i := range ish.Metadata {
+		ish.Metadata[i].known = known
+	}
 }
 
 // SetIssueLookup sets the function that reports which issues exist, so that
@@ -103,7 +118,14 @@ func (ish *Issue) SetIssueLookup(issues IssueLookup) {
 // addTag appends a blank metadata tag, selects it, and starts editing its
 // key.
 func (ish *Issue) addTag() tea.Cmd {
-	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues})
+	// A key can only appear once, so the keys the issue has aren't
+	// suggested.
+	taken := map[string]bool{}
+	for _, tag := range ish.Metadata {
+		taken[tag.Key] = true
+	}
+
+	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues, known: ish.known, takenKeys: taken})
 	ish.setCursor(1 + len(ish.Metadata))
 
 	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)
@@ -119,8 +141,9 @@ func (ish *Issue) addTag() tea.Cmd {
 // updateNewTag handles a key press or paste while a new tag is being edited,
 // reporting whether it was handled:
 //
-//   - tab or a colon in the key moves on to editing the values, unless the
-//     key is empty, as keys can't contain colons.
+//   - Tab or a colon in the key moves on to editing the values, unless the
+//     key is empty, as keys can't contain colons. With a suggestion shown,
+//     tab accepts it first; see updateEditing.
 //   - shift+tab in the values returns to editing the key, keeping the values
 //     typed so far.
 //   - Text pasted into the key is split at its first colon, with the text
@@ -488,9 +511,12 @@ func (ish *Issue) revealItem() {
 func (ish Issue) editKeyMap() editKeyMap {
 	k := editKeys(ish.cardIndex() >= 0)
 
-	if i := ish.tagIndex(); i >= 0 && ish.newTag {
-		k.Next.SetEnabled(ish.Metadata[i].editingKey)
-		k.Prev.SetEnabled(ish.Metadata[i].editing)
+	if i := ish.tagIndex(); i >= 0 {
+		tag := ish.Metadata[i]
+
+		k.Next.SetEnabled(ish.newTag && tag.editingKey)
+		k.Prev.SetEnabled(ish.newTag && tag.editing)
+		k.Accept.SetEnabled(tag.suggesting())
 	}
 
 	return k
@@ -666,17 +692,26 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ish.setCursor(c)
 
 			if i := ish.cardIndex(); i >= 0 {
-				ish.reveal(ish.spans[i], next)
+				ish.scrollToCard(i)
 			}
 
 			return ish, nil
 
+		case key.Matches(msg, keys.NextComment):
+			ish.moveComment(1)
+			return ish, nil
+
+		case key.Matches(msg, keys.PrevComment):
+			ish.moveComment(-1)
+			return ish, nil
+
+		// The arrows scroll the view, leaving the selection as it is.
 		case key.Matches(msg, keys.Down):
-			ish.scrollDown()
+			ish.viewport.ScrollDown(1)
 			return ish, nil
 
 		case key.Matches(msg, keys.Up):
-			ish.scrollUp()
+			ish.viewport.ScrollUp(1)
 			return ish, nil
 		}
 	}
@@ -774,6 +809,12 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 		}
 
 	case tea.KeyPressMsg:
+		// Tab accepts a suggested completion. Without one, a new tag's key
+		// moves on to its values.
+		if i := ish.tagIndex(); i >= 0 && key.Matches(msg, acceptKey) && ish.Metadata[i].acceptSuggestion() {
+			return nil, true
+		}
+
 		if cmd, handled := ish.updateNewTag(msg); handled {
 			return cmd, true
 		}
@@ -788,6 +829,12 @@ func (ish *Issue) updateEditing(msg tea.Msg) (tea.Cmd, bool) {
 			return ish.exit(tea.Quit), true
 
 		case key.Matches(msg, keys.Save):
+			// Enter accepts a suggested completion, then moves on to the
+			// values or saves the tag, as it does without one.
+			if i := ish.tagIndex(); i >= 0 {
+				ish.Metadata[i].acceptSuggestion()
+			}
+
 			if cmd, handled := ish.saveNewTag(); handled {
 				return cmd, true
 			}
@@ -924,8 +971,8 @@ func (ish *Issue) styleEditor() {
 		ish.titleInput.SetStyles(textinput.DefaultStyles(dark))
 
 	case ish.tagIndex() >= 0:
-		ish.Metadata[ish.tagIndex()].input.SetStyles(textinput.DefaultStyles(dark))
-		ish.Metadata[ish.tagIndex()].keyInput.SetStyles(textinput.DefaultStyles(dark))
+		ish.Metadata[ish.tagIndex()].input.SetStyles(tagInputStyles(dark))
+		ish.Metadata[ish.tagIndex()].keyInput.SetStyles(tagInputStyles(dark))
 
 	case ish.cardIndex() >= 0:
 		ish.Conversation[ish.cardIndex()].editor.SetStyles(textarea.DefaultStyles(dark))
@@ -996,46 +1043,39 @@ func (ish *Issue) selectAt(c int, selected bool) {
 	}
 }
 
-// scrollDown scrolls the rest of the selected card into view one line at a
-// time, then moves the selection to the next card once the selected card's
-// last line is visible.
-func (ish *Issue) scrollDown() {
-	i := ish.cardIndex()
-	bottom := ish.viewport.YOffset() + ish.viewport.Height()
-
-	switch {
-	case len(ish.spans) == 0:
-		return
-	case i < 0:
-		ish.setCursor(ish.firstCard())
-		ish.reveal(ish.spans[0], true)
-	case ish.spans[i].bottom() > bottom:
-		ish.viewport.ScrollDown(1)
-	case i+1 < len(ish.spans):
-		ish.setCursor(ish.cursor + 1)
-		ish.reveal(ish.spans[i+1], true)
-	}
+// scrollToCard scrolls the card at index i to the top of the view, with its
+// byline first. The view doesn't scroll past the end of the last card, so a
+// card near the end may be shown lower down.
+func (ish *Issue) scrollToCard(i int) {
+	ish.viewport.SetYOffset(ish.spans[i].top)
 }
 
-// scrollUp scrolls the rest of the selected card into view one line at a
-// time, then moves the selection to the previous card once the selected
-// card's first line is visible.
-func (ish *Issue) scrollUp() {
+// moveComment selects the card delta cards after the selected one, or before
+// it if delta is negative, and scrolls it to the top of the view. It stops at
+// the first and last cards. With the title, a tag, or nothing selected, it
+// selects the first card going forward, or the last going back.
+func (ish *Issue) moveComment(delta int) {
+	n := len(ish.Conversation)
+
+	if n == 0 {
+		return
+	}
+
 	i := ish.cardIndex()
-	last := len(ish.spans) - 1
 
 	switch {
-	case len(ish.spans) == 0:
-		return
+	case i < 0 && delta > 0:
+		i = 0
 	case i < 0:
-		ish.setCursor(ish.firstCard() + last)
-		ish.reveal(ish.spans[last], false)
-	case ish.spans[i].top < ish.viewport.YOffset():
-		ish.viewport.ScrollUp(1)
-	case i > 0:
-		ish.setCursor(ish.cursor - 1)
-		ish.reveal(ish.spans[i-1], false)
+		i = n - 1
+	case i+delta < 0 || i+delta >= n:
+		return
+	default:
+		i += delta
 	}
+
+	ish.setCursor(ish.firstCard() + i)
+	ish.scrollToCard(i)
 }
 
 // reveal scrolls the viewport so that s is visible. A card taller than the

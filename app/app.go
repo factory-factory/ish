@@ -457,9 +457,14 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	issue.SetSave(m.saveIssue)
 	issue.SetAuthor(CurrentUser(m.dir))
 
-	// Without the IDs of the other issues, references aren't linked.
+	// Without the IDs of the other issues, references aren't linked, and
+	// without their metadata, nothing is suggested as tags are edited.
 	if ids, err := store.IssueIDs(m.dir); err == nil {
 		issue.SetIssueLookup(func(id string) bool { return ids[id] })
+	}
+
+	if values, err := store.MetadataValues(m.dir); err == nil {
+		issue.SetMetadataValues(values)
 	}
 
 	m.issue = issue

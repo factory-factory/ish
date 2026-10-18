@@ -113,114 +113,180 @@ func TestViewPinsHeaderAndFooter(t *testing.T) {
 	}
 }
 
-func TestDownSelectsFirstCard(t *testing.T) {
-	ish := resize(t, newTestIssue(lines(1), lines(1)), 40)
-	ish = update(t, ish, down)
-
-	if got := ish.cardIndex(); got != 0 {
-		t.Errorf("cardIndex() = %d, want 0", got)
-	}
-	if !ish.Conversation[0].selected {
-		t.Error("first card is not selected")
-	}
+// maxOffset returns the furthest the issue's view can scroll, which puts
+// the bottom of the last card at the bottom of the view.
+func maxOffset(ish Issue) int {
+	return max(ish.viewport.TotalLineCount()-ish.viewport.Height(), 0)
 }
 
-func TestDownMovesBetweenCardsThatFit(t *testing.T) {
-	ish := resize(t, newTestIssue(lines(1), lines(1), lines(1)), 40)
-	ish = update(t, ish, down, down, down)
+var k = tea.KeyPressMsg{Code: 'k', Text: "k"}
 
-	if got := ish.cardIndex(); got != 2 {
-		t.Errorf("cardIndex() = %d, want 2", got)
-	}
-	if offset(ish) != 0 {
-		t.Errorf("offset = %d, want 0", offset(ish))
-	}
-	if ish.Conversation[0].selected || ish.Conversation[1].selected {
-		t.Error("previously selected cards are still selected")
-	}
-
-	// Down on the last card, fully in view, does nothing.
-	ish = update(t, ish, down)
-	if got := ish.cardIndex(); got != 2 {
-		t.Errorf("cardIndex() after extra down = %d, want 2", got)
-	}
-}
-
-func TestDownScrollsThroughTallCard(t *testing.T) {
+func TestArrowsScrollWithoutChangingSelection(t *testing.T) {
 	ish := resize(t, newTestIssue(lines(10), lines(1)), 6)
-	spans, area := ish.spans, ish.viewport.Height()
-	hidden := spans[0].bottom() - area
 
-	if hidden <= 0 {
-		t.Fatalf("first card has height %d, want taller than area %d", spans[0].height, area)
-	}
+	for _, cursor := range []int{0, 1, ish.firstCard() + 1} {
+		ish.setCursor(cursor)
+		ish.viewport.SetYOffset(0)
 
-	ish = update(t, ish, down)
+		for i := 1; i <= 3; i++ {
+			ish = update(t, ish, down)
 
-	for i := 1; i <= hidden; i++ {
-		ish = update(t, ish, down)
-
-		if offset(ish) != i {
-			t.Fatalf("offset after %d scrolls = %d, want %d", i, offset(ish), i)
+			if offset(ish) != i || ish.cursor != cursor {
+				t.Fatalf("cursor %d: offset, cursor after %d downs = %d, %d, want %d, %d",
+					cursor, i, offset(ish), ish.cursor, i, cursor)
+			}
 		}
-		if got := ish.cardIndex(); got != 0 {
-			t.Fatalf("cardIndex() after %d scrolls = %d, want 0", i, got)
-		}
-	}
 
-	ish = update(t, ish, down)
-
-	if got := ish.cardIndex(); got != 1 {
-		t.Errorf("cardIndex() = %d, want 1", got)
-	}
-	if s := spans[1]; s.bottom() > offset(ish)+area || s.top < offset(ish) {
-		t.Errorf("second card %+v not in view at offset %d with area %d", s, offset(ish), area)
-	}
-}
-
-func TestUpRevealsBottomOfTallCard(t *testing.T) {
-	ish := resize(t, newTestIssue(lines(10), lines(1)), 6)
-	spans, area := ish.spans, ish.viewport.Height()
-
-	ish.setCursor(ish.firstCard() + 1)
-	ish.viewport.SetYOffset(spans[1].bottom() - area)
-	ish = update(t, ish, up)
-
-	if got := ish.cardIndex(); got != 0 {
-		t.Fatalf("cardIndex() = %d, want 0", got)
-	}
-	if s := spans[0]; s.bottom() <= offset(ish) || s.bottom() > offset(ish)+area {
-		t.Errorf("bottom of card %+v not in view at offset %d with area %d", s, offset(ish), area)
-	}
-
-	for offset(ish) > 0 {
-		before := offset(ish)
 		ish = update(t, ish, up)
 
-		if offset(ish) != before-1 {
-			t.Fatalf("offset = %d, want %d", offset(ish), before-1)
+		if offset(ish) != 2 || ish.cursor != cursor {
+			t.Errorf("cursor %d: offset, cursor after up = %d, %d, want 2, %d", cursor, offset(ish), ish.cursor, cursor)
 		}
 	}
 
-	// Up on the first card, fully scrolled to its top, does nothing.
-	ish = update(t, ish, up)
-	if got := ish.cardIndex(); got != 0 || offset(ish) != 0 {
-		t.Errorf("cardIndex(), offset = %d, %d, want 0, 0", got, offset(ish))
+	// The view stops at either end.
+	ish = update(t, ish, up, up, up)
+	if offset(ish) != 0 {
+		t.Errorf("offset after scrolling past the top = %d, want 0", offset(ish))
+	}
+
+	for range maxOffset(ish) + 2 {
+		ish = update(t, ish, down)
+	}
+	if offset(ish) != maxOffset(ish) {
+		t.Errorf("offset after scrolling past the end = %d, want %d", offset(ish), maxOffset(ish))
 	}
 }
 
-func TestTabRevealsSelectedCard(t *testing.T) {
-	ish := resize(t, newTestIssue(lines(3), lines(3), lines(3)), 6)
-	spans, area := ish.spans, ish.viewport.Height()
+// endIssue returns an issue whose last comment can't be scrolled to the top
+// of the view, since the view stops at the end of it.
+func endIssue(t *testing.T) Issue {
+	t.Helper()
 
+	ish := resize(t, newTestIssue(lines(3), lines(3), lines(1)), 6)
+
+	if spans := ish.spans; maxOffset(ish) <= spans[1].top || maxOffset(ish) >= spans[2].top {
+		t.Fatalf("max offset %d, want only the last card unable to reach the top (spans %+v)", maxOffset(ish), spans)
+	}
+
+	return ish
+}
+
+func TestJSelectsNextCommentAtTop(t *testing.T) {
+	ish := endIssue(t)
+	spans := ish.spans
+
+	// With nothing selected, j selects the first comment.
+	for i, want := range []int{spans[0].top, spans[1].top, maxOffset(ish)} {
+		ish = update(t, ish, j)
+
+		if got := ish.cardIndex(); got != i {
+			t.Fatalf("after %d j: cardIndex() = %d, want %d", i+1, got, i)
+		}
+		if offset(ish) != want {
+			t.Errorf("after %d j: offset = %d, want %d", i+1, offset(ish), want)
+		}
+	}
+
+	// On the last comment, j does nothing.
+	if ish = update(t, ish, j); ish.cardIndex() != 2 || offset(ish) != maxOffset(ish) {
+		t.Errorf("j on the last comment: cardIndex(), offset = %d, %d, want 2, %d", ish.cardIndex(), offset(ish), maxOffset(ish))
+	}
+
+	// With the last comment already in view, j only moves the selection.
 	ish.setCursor(ish.firstCard() + 1)
+	ish.viewport.SetYOffset(maxOffset(ish))
+	ish = update(t, ish, j)
+
+	if ish.cardIndex() != 2 || offset(ish) != maxOffset(ish) {
+		t.Errorf("j with the last comment in view: cardIndex(), offset = %d, %d, want 2, %d", ish.cardIndex(), offset(ish), maxOffset(ish))
+	}
+}
+
+func TestKSelectsPreviousCommentAtTop(t *testing.T) {
+	ish := endIssue(t)
+	spans := ish.spans
+
+	// From the title, k selects the last comment.
+	ish.setCursor(1)
+	ish = update(t, ish, k)
+
+	if ish.cardIndex() != 2 || offset(ish) != maxOffset(ish) {
+		t.Fatalf("k from the title: cardIndex(), offset = %d, %d, want 2, %d", ish.cardIndex(), offset(ish), maxOffset(ish))
+	}
+
+	for i := 1; i >= 0; i-- {
+		ish = update(t, ish, k)
+
+		if ish.cardIndex() != i || offset(ish) != min(spans[i].top, maxOffset(ish)) {
+			t.Errorf("k to comment %d: cardIndex(), offset = %d, %d, want %d, %d",
+				i, ish.cardIndex(), offset(ish), i, min(spans[i].top, maxOffset(ish)))
+		}
+	}
+
+	// On the first comment, k does nothing.
+	if ish = update(t, ish, k); ish.cardIndex() != 0 || offset(ish) != 0 {
+		t.Errorf("k on the first comment: cardIndex(), offset = %d, %d, want 0, 0", ish.cardIndex(), offset(ish))
+	}
+}
+
+func TestJFromFieldSelectsFirstComment(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(3), lines(3)), 6)
+	ish.setCursor(2)
+	ish = update(t, ish, j)
+
+	if ish.cardIndex() != 0 || offset(ish) != 0 {
+		t.Errorf("j from a tag: cardIndex(), offset = %d, %d, want 0, 0", ish.cardIndex(), offset(ish))
+	}
+}
+
+func TestJKWithoutComments(t *testing.T) {
+	ish := resize(t, newTestIssue(), 6)
+	ish.setCursor(1)
+	ish = update(t, ish, j, k)
+
+	if ish.cursor != 1 {
+		t.Errorf("cursor = %d after j and k without comments, want the title still selected", ish.cursor)
+	}
+}
+
+func TestTabScrollsCommentToTop(t *testing.T) {
+	ish := endIssue(t)
+	spans := ish.spans
+
+	ish.setCursor(ish.firstCard())
 	ish = update(t, ish, tab)
 
-	if got := ish.cardIndex(); got != 2 {
-		t.Fatalf("cardIndex() = %d, want 2", got)
+	if ish.cardIndex() != 1 || offset(ish) != spans[1].top {
+		t.Errorf("tab: cardIndex(), offset = %d, %d, want 1, %d", ish.cardIndex(), offset(ish), spans[1].top)
 	}
-	if s := spans[2]; s.top < offset(ish) || s.top >= offset(ish)+area {
-		t.Errorf("top of card %+v not in view at offset %d with area %d", s, offset(ish), area)
+
+	// Near the end, the last comment's bottom stays at the bottom of the
+	// view.
+	ish = update(t, ish, tab)
+
+	if ish.cardIndex() != 2 || offset(ish) != maxOffset(ish) {
+		t.Errorf("tab: cardIndex(), offset = %d, %d, want 2, %d", ish.cardIndex(), offset(ish), maxOffset(ish))
+	}
+
+	ish = update(t, ish, shiftTab, shiftTab)
+
+	if ish.cardIndex() != 0 || offset(ish) != spans[0].top {
+		t.Errorf("shift+tab: cardIndex(), offset = %d, %d, want 0, %d", ish.cardIndex(), offset(ish), spans[0].top)
+	}
+}
+
+func TestNavigationHelp(t *testing.T) {
+	ish := resize(t, newTestIssue(lines(1)), 6)
+
+	if footer := footerText(ish); !strings.Contains(footer, "j next comment") || !strings.Contains(footer, "k previous comment") {
+		t.Errorf("footer %q, want j and k", footer)
+	}
+
+	ish = update(t, ish, question)
+
+	if footer := footerText(ish); !strings.Contains(footer, "scroll down") || !strings.Contains(footer, "scroll up") {
+		t.Errorf("full help %q, want the arrows' scrolling", footer)
 	}
 }
 

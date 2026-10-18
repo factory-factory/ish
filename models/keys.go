@@ -10,6 +10,8 @@ import (
 type keyMap struct {
 	Up           key.Binding
 	Down         key.Binding
+	NextComment  key.Binding
+	PrevComment  key.Binding
 	PageUp       key.Binding
 	PageDown     key.Binding
 	HalfPageUp   key.Binding
@@ -33,12 +35,20 @@ var keys = func() keyMap {
 
 	return keyMap{
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "previous card"),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "scroll up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "next card"),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "scroll down"),
+		),
+		NextComment: key.NewBinding(
+			key.WithKeys("j"),
+			key.WithHelp("j", "next comment"),
+		),
+		PrevComment: key.NewBinding(
+			key.WithKeys("k"),
+			key.WithHelp("k", "previous comment"),
 		),
 		PageUp:       pager.PageUp,
 		PageDown:     pager.PageDown,
@@ -102,13 +112,13 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select, k.Back, k.Quit, k.Help}
+	return []key.Binding{k.NextComment, k.PrevComment, k.Next, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select, k.Back, k.Quit, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select},
-		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
+		{k.NextComment, k.PrevComment, k.Next, k.Prev, k.Edit, k.Comment, k.AddTag, k.DeleteTag, k.Select},
+		{k.Up, k.Down, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
 		{k.Back, k.Help, k.Quit},
 	}
 }
@@ -117,6 +127,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // other keys are handled by the field's editor.
 type editKeyMap struct {
 	Save   key.Binding
+	Accept key.Binding
 	Next   key.Binding
 	Prev   key.Binding
 	Cancel key.Binding
@@ -140,6 +151,12 @@ func editKeys(multiline bool) editKeyMap {
 
 	return editKeyMap{
 		Save: save,
+		// Accept is enabled only while a suggested completion is shown.
+		Accept: func() key.Binding {
+			b := acceptKey
+			b.SetEnabled(false)
+			return b
+		}(),
 		// Next and Prev are enabled only while a new tag's key or values
 		// are being edited, to move between them.
 		Next: key.NewBinding(
@@ -164,11 +181,11 @@ func editKeys(multiline bool) editKeyMap {
 }
 
 func (k editKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.Next, k.Prev, k.Cancel}
+	return []key.Binding{k.Save, k.Accept, k.Next, k.Prev, k.Cancel}
 }
 
 func (k editKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Save, k.Next, k.Prev, k.Cancel, k.Quit}}
+	return [][]key.Binding{{k.Save, k.Accept, k.Next, k.Prev, k.Cancel, k.Quit}}
 }
 
 // itemKeyMap holds the key bindings used while selecting a card's todo items
