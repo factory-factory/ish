@@ -353,3 +353,18 @@ func TestExistingTagsGetReferences(t *testing.T) {
 		t.Errorf("suggestion = %q, want @Brendan Berg", got)
 	}
 }
+
+func TestStoredEmailSuggestions(t *testing.T) {
+	// The database stores emails without angle brackets. Typing the email
+	// suggests it as it's stored, and typing @ suggests users' names.
+	ish := referencingIssue(t)
+	ish.SetDirectory(NewDirectory([]User{{"Bob", "bob@example.com"}}))
+	ish.SetMetadataValues(MetadataValues{"assignees": {"bob@example.com"}})
+
+	if got := valueSuggestion(t, ish, "assignees", "bob"); got != "bob@example.com" {
+		t.Errorf("bob suggests %q, want the stored email", got)
+	}
+	if got := valueSuggestion(t, ish, "assignees", "@Bre"); got != "@brenda" {
+		t.Errorf("@Bre suggests %q, want a user's name", got)
+	}
+}

@@ -79,7 +79,7 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	if m.filter.menu.Open() || m.filter.preset != presetMine {
 		t.Fatalf("menu open, preset = %v, %d, want the menu closed on %d", m.filter.menu.Open(), m.filter.preset, presetMine)
 	}
-	if m.filter.text != `({assignees = "alice@example.com"} or {assignees = "<alice@example.com>"}) and {state != 'closed'}` {
+	if m.filter.text != `{assignees = "alice@example.com"} and {state != 'closed'}` {
 		t.Errorf("filter = %q, want alice's unclosed issues", m.filter.text)
 	}
 
@@ -116,19 +116,8 @@ func TestPresetFilterQuotesUser(t *testing.T) {
 			continue
 		}
 
-		// The assignee is the user's email, or the email in angle brackets,
-		// as it's written.
-		or, ok := and.LeftExpression.(*filter.OrExpression)
-		if !ok {
-			t.Errorf("presetFilter(%q) = %q, want either form of the email", user, text)
-			continue
-		}
-
-		if got := or.LeftExpression.(*filter.AttributeExpression).Value.Data; got != user {
+		if got := and.LeftExpression.(*filter.AttributeExpression).Value.Data; got != user {
 			t.Errorf("presetFilter(%q) compares with %q", user, got)
-		}
-		if got := or.RightExpression.(*filter.AttributeExpression).Value.Data; got != "<"+user+">" {
-			t.Errorf("presetFilter(%q) compares with %q, want it in angle brackets", user, got)
 		}
 		if got := and.RightExpression.String(); got != DefaultFilter {
 			t.Errorf("presetFilter(%q) also requires %q, want %q", user, got, DefaultFilter)
@@ -148,7 +137,7 @@ func TestChooseCustomFilter(t *testing.T) {
 	if !m.filter.custom || !m.filter.editing {
 		t.Fatalf("custom, editing = %v, %v, want to edit a custom filter", m.filter.custom, m.filter.editing)
 	}
-	if got := m.filter.input.Value(); got != `({assignees = "alice@example.com"} or {assignees = "<alice@example.com>"}) and {state != 'closed'}` {
+	if got := m.filter.input.Value(); got != `{assignees = "alice@example.com"} and {state != 'closed'}` {
 		t.Errorf("custom filter starts as %q, want the applied filter", got)
 	}
 	if view := plainView(m); strings.Contains(view, "▼") || !strings.Contains(view, "┏") {

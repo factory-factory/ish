@@ -78,6 +78,28 @@ func (d *Directory) mention(text string) (string, bool) {
 // emailPattern matches an email in angle brackets, as in an autolink.
 var emailPattern = regexp.MustCompile(`<([^<>@\s]+@[^<>@\s]+)>`)
 
+// StoredValue returns a metadata value as it's stored in the metadata
+// database: an email in angle brackets without the brackets, and anything
+// else as it is.
+func StoredValue(value string) string {
+	if email, ok := bracketedEmail(value); ok {
+		return email
+	}
+
+	return value
+}
+
+// AuthorEmail returns the email of a byline's author, without angle
+// brackets, or the author as it is if it isn't a mailbox.
+func AuthorEmail(author string) string {
+	box, err := ParseMailbox(author)
+	if err != nil {
+		return author
+	}
+
+	return box.Email
+}
+
 // bracketedEmail returns the email in text, if text is an email in angle
 // brackets.
 func bracketedEmail(text string) (string, bool) {
@@ -88,20 +110,16 @@ func bracketedEmail(text string) (string, bool) {
 	return "", false
 }
 
-// Show returns a metadata value as it's shown: a user's display name after
-// mentionPrefix in place of their email in angle brackets, an email in angle
-// brackets without a user's name as an ordinary email, or the value as it
-// is.
+// Show returns a metadata value from the metadata database as it's shown: a
+// user's display name after mentionPrefix in place of their email, or the
+// value as it is. The database stores emails without angle brackets, but
+// they're accepted too.
 func (d *Directory) Show(value string) string {
-	if t := d.tokenFor(value); t.Display != "" {
-		return t.Text()
+	if name, ok := d.Name(StoredValue(value)); ok {
+		return mentionPrefix + name
 	}
 
-	if email, ok := bracketedEmail(value); ok {
-		return email
-	}
-
-	return value
+	return StoredValue(value)
 }
 
 // author returns how a byline's author is shown: the user's newest display

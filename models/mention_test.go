@@ -57,7 +57,8 @@ func TestDirectory(t *testing.T) {
 	for value, want := range map[string]string{
 		"<alice@example.com>":  "@Alice",
 		"<nobody@example.com>": "nobody@example.com",
-		"alice@example.com":    "alice@example.com",
+		"alice@example.com":    "@Alice",
+		"nobody@example.com":   "nobody@example.com",
 		"open":                 "open",
 	} {
 		if got := people.Show(value); got != want {

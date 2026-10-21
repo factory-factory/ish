@@ -34,11 +34,11 @@ const separatorColor = "11"
 
 // presetFilter returns the filter expression for a preset, other than the
 // custom one, for the user who's running ish. Neither lists closed issues.
-// An assignee can be written as the user's email, or the email in angle
-// brackets, which is shown as their name.
+// The database stores assignees' emails without angle brackets, whether or
+// not the issue files have them.
 func presetFilter(preset int, user string) string {
 	if preset == presetMine {
-		return "({assignees = " + quote(user) + "} or {assignees = " + quote("<"+user+">") + "}) and " + DefaultFilter
+		return "{assignees = " + quote(user) + "} and " + DefaultFilter
 	}
 
 	return DefaultFilter

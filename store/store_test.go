@@ -135,8 +135,8 @@ func TestInitCreatesDirectory(t *testing.T) {
 	if got := query(t, db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"); !slices.Equal(got, []string{"attribute", "comment", "issue", "user"}) {
 		t.Errorf("tables = %v, want attribute, comment, issue, user", got)
 	}
-	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"4"}) {
-		t.Errorf("user_version = %v, want 4", got)
+	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"5"}) {
+		t.Errorf("user_version = %v, want 5", got)
 	}
 
 	// No temporary databases are left behind.
@@ -432,4 +432,33 @@ func TestFileError(t *testing.T) {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func TestStoredEmails(t *testing.T) {
+	dir := t.TempDir()
+	source := "# Emails\n\n[\"Alice\" <alice@example.com> 2026-10-01T09:00:00Z]\n\n" +
+		"- assignees: <bob@example.com>, carol@example.com, <not an email>\n" +
+		"\n---\n\n[<bob@example.com> 2026-10-02T09:00:00Z]\n\nHi\n" +
+		"\n---\n\n[carol@example.com 2026-10-03T09:00:00Z]\n\nHello\n"
+	writeIssues(t, dir, map[string]string{"AAAAA-11111": source})
+	initDir(t, dir)
+	db := openDB(t, dir)
+
+	// Authors are stored as their emails, without names or angle brackets.
+	if got := query(t, db, "SELECT author FROM issue"); !slices.Equal(got, []string{"alice@example.com"}) {
+		t.Errorf("issue author = %q, want alice@example.com", got)
+	}
+	if got := query(t, db, "SELECT author FROM comment ORDER BY sortIndex"); !slices.Equal(got, []string{"bob@example.com", "carol@example.com"}) {
+		t.Errorf("comment authors = %q, want the emails", got)
+	}
+
+	// Emails in attribute values are stored without angle brackets.
+	if got := query(t, db, "SELECT attributeValue.value FROM attribute, json_each(attribute.value) AS attributeValue WHERE attribute.key = 'assignees'"); !slices.Equal(got, []string{"bob@example.com", "carol@example.com", "<not an email>"}) {
+		t.Errorf("assignees = %q, want the emails without brackets", got)
+	}
+
+	// The file keeps them as they're written.
+	if got, err := os.ReadFile(filepath.Join(dir, "AAAAA-11111.md")); err != nil || string(got) != source {
+		t.Errorf("file = %q, %v, want it unchanged", got, err)
+	}
 }
