@@ -24,6 +24,10 @@ type SyncResult struct {
 	// Failed holds the new or changed issue files that couldn't be indexed.
 	// Their stale rows, if any, are removed.
 	Failed []FileError
+
+	// UserConflicts holds the byline authors that weren't added because
+	// another email has their name.
+	UserConflicts []UserConflict
 }
 
 // Changed reports whether Sync found any differences between the issue files
@@ -118,7 +122,10 @@ func Sync(dir string) (result *SyncResult, err error) {
 			return nil, err
 		}
 
-		if err := indexFile(tx, dir, path); err != nil {
+		conflicts, err := indexFile(tx, dir, path)
+		result.UserConflicts = append(result.UserConflicts, conflicts...)
+
+		if err != nil {
 			result.Failed = append(result.Failed, FileError{Path: filepath.Join(dir, path), Err: err})
 			continue
 		}
@@ -139,7 +146,10 @@ func Sync(dir string) (result *SyncResult, err error) {
 			continue
 		}
 
-		if err := indexFile(tx, dir, name); err != nil {
+		conflicts, err := indexFile(tx, dir, name)
+		result.UserConflicts = append(result.UserConflicts, conflicts...)
+
+		if err != nil {
 			result.Failed = append(result.Failed, FileError{Path: filepath.Join(dir, name), Err: err})
 			continue
 		}

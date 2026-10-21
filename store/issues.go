@@ -300,7 +300,9 @@ func IndexIssue(dir, id string) (err error) {
 		return err
 	}
 
-	if err := indexFile(tx, dir, id+".md"); err != nil {
+	// A byline author whose name another email has is skipped, with nowhere
+	// to report it while an issue is being saved.
+	if _, err := indexFile(tx, dir, id+".md"); err != nil {
 		return err
 	}
 

@@ -477,7 +477,7 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m.show(models.NewIssue(id, CurrentUser(m.dir), now()))
+	return m.show(models.NewIssue(id, CurrentAuthor(m.dir), now()))
 }
 
 // show switches to the view of issue, which is saved to the list's directory
@@ -486,7 +486,7 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
-	issue.SetAuthor(CurrentUser(m.dir))
+	issue.SetAuthor(CurrentAuthor(m.dir))
 
 	// Without the IDs of the other issues, references aren't linked, and
 	// without their metadata and the repository's users, nothing is

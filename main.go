@@ -113,6 +113,8 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
 
+	reportConflicts(stderr, result.UserConflicts)
+
 	if len(result.Failed) > 0 {
 		return 1
 	}
@@ -189,16 +191,30 @@ func syncDatabase(dir string, stdout, stderr io.Writer) bool {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
 
-	// The authors of recent commits are added quietly. The database can be
-	// used without them, so a problem is only reported.
-	if _, err := store.IndexUsers(dir); err != nil {
+	reportConflicts(stderr, result.UserConflicts)
+
+	// The authors of recent commits are added quietly, other than conflicts.
+	// The database can be used without them, so a problem is only reported.
+	_, conflicts, err := store.IndexUsers(dir)
+
+	if err != nil {
 		fmt.Fprintf(stderr, "Couldn't index the git history's users: %v\n", err)
 	}
+
+	reportConflicts(stderr, conflicts)
 
 	return true
 }
 
 // plural returns noun, made plural if n isn't 1.
+// reportConflicts reports the users who weren't added to the metadata
+// database because another email has their name.
+func reportConflicts(stderr io.Writer, conflicts []store.UserConflict) {
+	for _, c := range conflicts {
+		fmt.Fprintf(stderr, "Skipped user %v\n", c)
+	}
+}
+
 func plural(n int, noun string) string {
 	if n == 1 {
 		return noun

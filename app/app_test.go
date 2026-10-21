@@ -14,7 +14,7 @@ import (
 )
 
 func issueSource(title, state string) string {
-	source := "# " + title + "\n\n[author 2023-05-26T23:35:36-0400]\n\n"
+	source := "# " + title + "\n\n[author@example.com 2023-05-26T23:35:36-0400]\n\n"
 
 	if state != "" {
 		source += "- state: " + state + "\n"
@@ -568,7 +568,7 @@ func TestBackWithoutEditsLeavesFileUntouched(t *testing.T) {
 }
 
 func TestUnwritableEditKeepsIssueOpen(t *testing.T) {
-	source := issueSource("First", "open") + "\n---\n\n[bob 2023-05-27T13:41:50-0400]\n\nComment\n"
+	source := issueSource("First", "open") + "\n---\n\n[bob@example.com 2023-05-27T13:41:50-0400]\n\nComment\n"
 	m := newTestModel(t, map[string]string{"AAA": source})
 
 	// Add a horizontal rule to the comment, which can't be written.
@@ -613,7 +613,7 @@ var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 // issueWithMetadata returns the source of an issue with the given title,
 // metadata lines, and no comments.
 func issueWithMetadata(title string, metadata ...string) string {
-	source := "# " + title + "\n\n[author 2023-05-26T23:35:36-0400]\n"
+	source := "# " + title + "\n\n[author@example.com 2023-05-26T23:35:36-0400]\n"
 
 	if len(metadata) > 0 {
 		source += "\n" + strings.Join(metadata, "\n") + "\n"

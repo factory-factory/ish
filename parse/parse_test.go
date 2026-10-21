@@ -11,7 +11,7 @@ import (
 
 const header = `# Title
 
-[author 2023-05-26T23:35:36-0400]
+[author@example.com 2023-05-26T23:35:36-0400]
 
 - state: open
 - assignees: alice, bob
@@ -44,8 +44,8 @@ func TestParseIssueHeader(t *testing.T) {
 	if issue.Title != "Title" {
 		t.Errorf("Title = %q, want %q", issue.Title, "Title")
 	}
-	if issue.Author != "author" {
-		t.Errorf("Author = %q, want %q", issue.Author, "author")
+	if issue.Author != "author@example.com" {
+		t.Errorf("Author = %q, want %q", issue.Author, "author@example.com")
 	}
 	if issue.DateCreated != "2023-05-26T23:35:36-0400" {
 		t.Errorf("DateCreated = %q, want %q", issue.DateCreated, "2023-05-26T23:35:36-0400")
@@ -63,13 +63,13 @@ func TestParseIssueCardBylines(t *testing.T) {
 	source := header + `
 ---
 
-[carol 2023-05-27T13:41:50-0400]
+[carol@example.com 2023-05-27T13:41:50-0400]
 
 First.
 
 ---
 
-[dave 2023-05-28T13:41:50-0400]
+[dave@example.com 2023-05-28T13:41:50-0400]
 
 Second.
 `
@@ -85,8 +85,8 @@ Second.
 	}
 
 	for i, want := range []struct{ author, date string }{
-		{"carol", "2023-05-27T13:41:50-0400"},
-		{"dave", "2023-05-28T13:41:50-0400"},
+		{"carol@example.com", "2023-05-27T13:41:50-0400"},
+		{"dave@example.com", "2023-05-28T13:41:50-0400"},
 	} {
 		card := issue.Conversation[i]
 		if card.Author != want.author || card.DateCreated != want.date {
@@ -100,8 +100,8 @@ func TestParseIssueKeepsCardSource(t *testing.T) {
 	first := "- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n\n3. Three\n4. Four"
 	second := "- Item\n\n  Second paragraph\n\n  ```\n  ---\n  code\n  ```\n\n    indented code"
 
-	source := header + "\n---\n\n[carol 2023-05-27T13:41:50-0400]\n\n" + first +
-		"\n\n---\n\n[dave 2023-05-28T13:41:50-0400]\n\n" + second + "\n\n"
+	source := header + "\n---\n\n[carol@example.com 2023-05-27T13:41:50-0400]\n\n" + first +
+		"\n\n---\n\n[dave@example.com 2023-05-28T13:41:50-0400]\n\n" + second + "\n\n"
 
 	got := parse(t, source)
 
@@ -117,7 +117,7 @@ func TestParseIssueKeepsCardSource(t *testing.T) {
 }
 
 func TestParseIssueEmptyCard(t *testing.T) {
-	source := header + "\n---\n\n[carol 2023-05-27T13:41:50-0400]\n"
+	source := header + "\n---\n\n[carol@example.com 2023-05-27T13:41:50-0400]\n"
 
 	got := parse(t, source)
 
@@ -251,7 +251,7 @@ func TestListIssuesErrors(t *testing.T) {
 }
 
 func TestParseIssueWithoutMetadata(t *testing.T) {
-	source := "# Title\n\n[author 2023-05-26T23:35:36-0400]\n\n---\n\n[carol 2023-05-27T13:41:50-0400]\n\nComment\n"
+	source := "# Title\n\n[author@example.com 2023-05-26T23:35:36-0400]\n\n---\n\n[carol@example.com 2023-05-27T13:41:50-0400]\n\nComment\n"
 
 	issue, err := ParseIssue(strings.NewReader(source))
 
@@ -263,5 +263,40 @@ func TestParseIssueWithoutMetadata(t *testing.T) {
 	}
 	if len(issue.Conversation) != 1 || *issue.Conversation[0].Content != "Comment" {
 		t.Errorf("Conversation = %v, want one card with %q", issue.Conversation, "Comment")
+	}
+}
+
+func TestParseBylineForms(t *testing.T) {
+	for _, tt := range []struct {
+		byline, author, date string
+	}{
+		{"[alice@example.com 2026-10-01T09:00:00Z]", "alice@example.com", "2026-10-01T09:00:00Z"},
+		{"[<alice@example.com> 2026-10-01T09:00:00Z]", "<alice@example.com>", "2026-10-01T09:00:00Z"},
+		{`["Alice Liddell" <alice@example.com> 2026-10-01T09:00:00Z]`, `"Alice Liddell" <alice@example.com>`, "2026-10-01T09:00:00Z"},
+		{"[Alice Liddell <alice@example.com> 2026-10-01T09:00:00Z]", "Alice Liddell <alice@example.com>", "2026-10-01T09:00:00Z"},
+		{"[<alice@example.com> 2023-05-28 11:55:23 -0400]", "<alice@example.com>", "2023-05-28 11:55:23 -0400"},
+	} {
+		source := "# Title\n\n" + tt.byline + "\n"
+		issue, err := ParseIssue(strings.NewReader(source))
+
+		if err != nil {
+			t.Errorf("%s: ParseIssue() error = %v", tt.byline, err)
+			continue
+		}
+		if issue.Author != tt.author || issue.DateCreated != tt.date {
+			t.Errorf("%s: byline = %q %q, want %q %q", tt.byline, issue.Author, issue.DateCreated, tt.author, tt.date)
+		}
+
+		// The byline is written back as it was.
+		if got := FormatIssue(*issue); !strings.Contains(got, tt.byline) {
+			t.Errorf("%s: FormatIssue() = %q, want the byline unchanged", tt.byline, got)
+		}
+	}
+
+	// A byline needs an email.
+	for _, byline := range []string{"[Claude 2026-10-01T09:00:00Z]", "[Alice alice@example.com 2026-10-01T09:00:00Z]", "[alice@example.com]"} {
+		if _, err := ParseIssue(strings.NewReader("# Title\n\n" + byline + "\n")); err == nil {
+			t.Errorf("%s: ParseIssue() error = nil, want an error", byline)
+		}
 	}
 }

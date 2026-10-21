@@ -104,21 +104,25 @@ func (d *Directory) Show(value string) string {
 	return value
 }
 
-// author returns how a byline's author is shown: their display name after
-// mentionPrefix, if the author is a user's email, with or without angle
-// brackets. Otherwise, an email in angle brackets is shown as an ordinary
-// email, and any other author as it is.
+// author returns how a byline's author is shown: the user's newest display
+// name after mentionPrefix, if the author's email is a user's, or the
+// byline's own display name if it has one. Otherwise, the author's email is
+// shown on its own, or any other author as it is.
 func (d *Directory) author(author string) string {
-	email := author
-	if e, ok := bracketedEmail(author); ok {
-		email = e
+	box, err := ParseMailbox(author)
+	if err != nil {
+		return author
 	}
 
-	if name, ok := d.Name(email); ok {
+	if name, ok := d.Name(box.Email); ok {
 		return mentionPrefix + name
 	}
 
-	return email
+	if box.Name != "" {
+		return mentionPrefix + box.Name
+	}
+
+	return box.Email
 }
 
 // mentionPrefix starts a display name shown or typed in place of an email.

@@ -23,7 +23,7 @@ func addUsers(t *testing.T, m Model, users ...store.User) Model {
 	defer db.Close()
 
 	for i, u := range users {
-		if _, err := db.Exec("INSERT INTO user (id, name, email) VALUES (?, ?, ?)", "id"+string(rune('a'+i)), u.Name, u.Email); err != nil {
+		if _, err := db.Exec("INSERT INTO user (id, name, email, dateCreated) VALUES (?, ?, ?, ?)", "id"+string(rune('a'+i)), u.Name, u.Email, "2026-10-01T00:00:00Z"); err != nil {
 			t.Fatal(err)
 		}
 	}

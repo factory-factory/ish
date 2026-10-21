@@ -13,7 +13,7 @@ import (
 
 // linkedSources are issues where AAA is blocked by BBB.
 var linkedSources = map[string]string{
-	"AAA": "# First\n\n[author 2023-05-26T23:35:36-0400]\n\n- relation.blocked-by: #BBB\n",
+	"AAA": "# First\n\n[author@example.com 2023-05-26T23:35:36-0400]\n\n- relation.blocked-by: #BBB\n",
 	"BBB": issueSource("Second", "open"),
 }
 
@@ -101,7 +101,7 @@ func TestLinkOpensIssueFromList(t *testing.T) {
 
 func TestLinkedIssueIsLinkedOnlyIfItExists(t *testing.T) {
 	sources := map[string]string{
-		"AAA": "# First\n\n[author 2023-05-26T23:35:36-0400]\n\n- relation.blocked-by: #CCC\n",
+		"AAA": "# First\n\n[author@example.com 2023-05-26T23:35:36-0400]\n\n- relation.blocked-by: #CCC\n",
 	}
 
 	m := newTestModel(t, sources)

@@ -135,8 +135,8 @@ func TestInitCreatesDirectory(t *testing.T) {
 	if got := query(t, db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"); !slices.Equal(got, []string{"attribute", "comment", "issue", "user"}) {
 		t.Errorf("tables = %v, want attribute, comment, issue, user", got)
 	}
-	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"3"}) {
-		t.Errorf("user_version = %v, want 3", got)
+	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"4"}) {
+		t.Errorf("user_version = %v, want 4", got)
 	}
 
 	// No temporary databases are left behind.
@@ -288,7 +288,7 @@ func TestInitSkipsFilesThatCantBeIndexed(t *testing.T) {
 		"CCCCC-33333": issueSource("Duplicate key", []string{"- state: open", "- state: closed"}),
 		"DDDDD-44444": issueSource("Bad key", []string{"- due@date: tomorrow"}),
 		"EEEEE-55555": strings.Replace(issueSource("Bad date", nil), "2026-10-11T08:59:23-07:00", "someday", 1),
-		"FFFFF-66666": issueSource("Bad comment date", nil, "Comment") + "\n---\n\n[carol yesterday]\n\nLate\n",
+		"FFFFF-66666": issueSource("Bad comment date", nil, "Comment") + "\n---\n\n[carol@example.com yesterday]\n\nLate\n",
 		"GGGGG-77777": issueSource("Colon key", []string{"- ns:key: value"}),
 	})
 

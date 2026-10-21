@@ -13,14 +13,14 @@ import (
 
 const fullIssue = `# Title
 
-[author 2023-05-26T23:35:36-0400]
+[author@example.com 2023-05-26T23:35:36-0400]
 
 - state: in progress
 - assignees: alice, bob
 
 ---
 
-[carol 2023-05-27T13:41:50-0400]
+[carol@example.com 2023-05-27T13:41:50-0400]
 
 - [ ] Parent
   - [ ] Child
@@ -31,11 +31,11 @@ const fullIssue = `# Title
 
 ---
 
-[dave 2023-05-28 11:55:23 -0400]
+[dave@example.com 2023-05-28 11:55:23 -0400]
 
 ---
 
-[erin 2023-06-04T18:37:55-04:00]
+[erin@example.com 2023-06-04T18:37:55-04:00]
 
 Last.
 `

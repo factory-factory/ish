@@ -20,7 +20,7 @@ editing existing comments.
   - change the `state` line, and
   - append comments at the end of the file.
     Never edit the title, other metadata, or existing comments, including your own.
-- Sign appended comments with the byline `[Claude <RFC 3339 timestamp>]`.
+- Sign appended comments with the byline `[Claude \<noreply@anthropic.com\> <RFC 3339 timestamp>]`.
 - Use comments to document changes and to ask for clarification when instructions
   are unclear.
 - When the task is complete and all questions have been answered, change the

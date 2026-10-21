@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/factory-factory/ish/models"
+	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/parse"
 )
 
@@ -24,14 +25,16 @@ var (
 func stubUser(t *testing.T, email string, emailErr error, name string, nameErr error) {
 	t.Helper()
 
-	oldNow, oldEmail, oldName := now, gitUserEmail, currentUserName
+	oldNow, oldEmail, oldGitName, oldName := now, gitUserEmail, gitUserName, currentUserName
 
+	// Without git's user.name, bylines have just the email.
 	now = func() time.Time { return created }
 	gitUserEmail = func(string) (string, error) { return email, emailErr }
+	gitUserName = func(string) (string, error) { return "", errors.New("no user.name") }
 	currentUserName = func() (string, error) { return name, nameErr }
 
 	t.Cleanup(func() {
-		now, gitUserEmail, currentUserName = oldNow, oldEmail, oldName
+		now, gitUserEmail, gitUserName, currentUserName = oldNow, oldEmail, oldGitName, oldName
 	})
 }
 
@@ -279,5 +282,53 @@ func TestMetadataEditsAreSaved(t *testing.T) {
 	}
 	if saved.State() != "" || len(saved.Metadata) != 2 {
 		t.Errorf("saved metadata = %v, want the state field deleted", saved.Metadata)
+	}
+}
+
+func TestCurrentAuthor(t *testing.T) {
+	stubUser(t, "alice@example.com", nil, "alice", nil)
+
+	// With git's user.name, the author is a quoted name and the email in
+	// angle brackets, as a byline has it.
+	for name, want := range map[string]string{
+		"Alice Liddell": `"Alice Liddell" <alice@example.com>`,
+		`Say "hi"`:      `"Say \"hi\"" <alice@example.com>`,
+		"  ":            "alice@example.com",
+		"":              "alice@example.com",
+	} {
+		gitUserName = func(string) (string, error) { return name, nil }
+
+		if got := CurrentAuthor(t.TempDir()); got != want {
+			t.Errorf("CurrentAuthor() with user.name %q = %q, want %q", name, got, want)
+		}
+	}
+
+	// Without git's user.email, it's the current user.
+	stubUser(t, "", errors.New("no git"), "alice", nil)
+
+	if got := CurrentAuthor(t.TempDir()); got != "alice" {
+		t.Errorf("CurrentAuthor() without an email = %q, want alice", got)
+	}
+}
+
+func TestNewIssueBylineHasName(t *testing.T) {
+	stubUser(t, "alice@example.com", nil, "alice", nil)
+	gitUserName = func(string) (string, error) { return "Alice Liddell", nil }
+
+	m := newTestModel(t, nil)
+	m, issue := openNew(t, m)
+
+	if issue.Author != `"Alice Liddell" <alice@example.com>` {
+		t.Errorf("new issue author = %q, want the name and email", issue.Author)
+	}
+
+	// Saved, it parses, and adds the user.
+	m = typeText(t, m, "Named")
+	m = update(t, m, enter)
+	m = closeIssue(t, m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	users, err := store.Users(m.dir)
+	if err != nil || len(users) != 1 || users[0].Name != "Alice Liddell" || users[0].Email != "alice@example.com" {
+		t.Errorf("Users() = %v, %v, want Alice from the byline", users, err)
 	}
 }

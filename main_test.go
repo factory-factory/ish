@@ -53,7 +53,7 @@ func TestRunInit(t *testing.T) {
 	}
 
 	// An existing directory with one good and one bad issue.
-	good := "# Good\n\n[alice 2026-10-11T08:59:23-07:00]\n"
+	good := "# Good\n\n[alice@example.com 2026-10-11T08:59:23-07:00]\n"
 
 	for name, source := range map[string]string{"AAAAA-11111.md": good, "BBBBB-22222.md": "Not an issue\n"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o644); err != nil {
@@ -99,7 +99,7 @@ func TestEnsureDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	good := "# Good\n\n[alice 2026-10-11T08:59:23-07:00]\n"
+	good := "# Good\n\n[alice@example.com 2026-10-11T08:59:23-07:00]\n"
 
 	for name, source := range map[string]string{"AAAAA-11111.md": good, "BBBBB-22222.md": "Not an issue\n"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o644); err != nil {
@@ -254,7 +254,13 @@ func TestUsersFromGitHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []store.User{alice, bob, carol}; !slices.Equal(users, want) {
-		t.Errorf("Users() = %q, want %q", users, want)
+
+	var got []string
+	for _, u := range users {
+		got = append(got, u.Name+" "+u.Email)
+	}
+
+	if want := []string{"Alice alice@example.com", "Bob bob@example.com", "Carol carol@example.com"}; !slices.Equal(got, want) {
+		t.Errorf("Users() = %q, want %q", got, want)
 	}
 }

@@ -36,14 +36,16 @@ const gitignoreEntry = ".metadata.ish*"
 // schemaVersion is stored in the database's user_version, so ish can tell
 // which schema a database has, and rebuild one with an older schema.
 //
-// Version 2 stopped allowing colons in attribute keys, and version 3 added the
-// user table.
-const schemaVersion = 3
+// Version 2 stopped allowing colons in attribute keys, version 3 added the
+// user table, and version 4 gave each name and email one user, with the date
+// they were last seen together.
+const schemaVersion = 4
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Attribute
 // values are JSON arrays of strings. Users are the authors of the commits in
-// the git repository the issues are in.
+// the git repository the issues are in, and of bylines with display names,
+// each with the name they were last seen with.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -77,14 +79,14 @@ CREATE TABLE comment (
 );
 
 CREATE TABLE user (
-	id    TEXT PRIMARY KEY,
-	name  TEXT NOT NULL,
-	email TEXT NOT NULL
+	id          TEXT PRIMARY KEY,
+	name        TEXT NOT NULL,
+	email       TEXT NOT NULL,
+	dateCreated TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX userNameEmail ON user (name, email);
-CREATE INDEX userName ON user (name);
-CREATE INDEX userEmail ON user (email);
+CREATE UNIQUE INDEX userName ON user (name);
+CREATE UNIQUE INDEX userEmail ON user (email);
 `
 
 // keyPattern matches the characters an attribute key may contain.
@@ -111,6 +113,10 @@ type Result struct {
 	// Users is the number of commit authors added to the database, from
 	// the repository's whole history.
 	Users int
+
+	// UserConflicts holds the commit and byline authors that weren't added
+	// because another email has their name.
+	UserConflicts []UserConflict
 }
 
 // FileError is an error indexing an issue file.
@@ -237,7 +243,10 @@ func populate(path, dir string, result *Result) (err error) {
 		return err
 	}
 
-	result.Users, err = addUsers(db, commitAuthors(dir, 0))
+	var conflicts []UserConflict
+
+	result.Users, conflicts, err = addUsers(db, commitAuthors(dir, 0))
+	result.UserConflicts = append(result.UserConflicts, conflicts...)
 
 	return err
 }
@@ -292,7 +301,10 @@ func index(db *sql.DB, dir string, result *Result) error {
 
 		id := strings.TrimSuffix(name, ".md")
 
-		if err := indexFile(tx, dir, name); err != nil {
+		conflicts, err := indexFile(tx, dir, name)
+		result.UserConflicts = append(result.UserConflicts, conflicts...)
+
+		if err != nil {
 			result.Failed = append(result.Failed, FileError{Path: filepath.Join(dir, name), Err: err})
 			continue
 		}
@@ -305,26 +317,26 @@ func index(db *sql.DB, dir string, result *Result) error {
 
 // indexFile adds the issue in the file name in dir to the database. If the
 // issue can't be added, the database is left as it was.
-func indexFile(tx *sql.Tx, dir, name string) (err error) {
+func indexFile(tx *sql.Tx, dir, name string) (conflicts []UserConflict, err error) {
 	source, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	issue, err := parse.ParseIssue(bytes.NewReader(source))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	issue.Id = strings.TrimSuffix(name, ".md")
 
 	if err := validate(issue); err != nil {
-		return err
+		return nil, err
 	}
 
 	// A savepoint undoes this issue's rows if any of them can't be added.
 	if _, err := tx.Exec("SAVEPOINT issue"); err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -336,7 +348,7 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 
 	created, offset, err := utcDate(issue.DateCreated)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sum := sha256.Sum256(source)
@@ -346,27 +358,27 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		issue.Id, name, issue.Title, issue.Author, created, offset, hex.EncodeToString(sum[:]),
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, tag := range issue.Metadata {
 		value, err := json.Marshal(models.Canonical(tag.Values))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if _, err := tx.Exec(
 			`INSERT INTO attribute (uuid, issueId, key, value) VALUES (?, ?, ?, ?)`,
 			newUUID(), issue.Id, tag.Key, string(value),
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	for i, card := range issue.Conversation {
 		created, offset, err := utcDate(card.DateCreated)
 		if err != nil {
-			return fmt.Errorf("comment %d: %w", i+1, err)
+			return nil, fmt.Errorf("comment %d: %w", i+1, err)
 		}
 
 		content := ""
@@ -379,11 +391,14 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			newUUID(), issue.Id, i, card.Author, created, offset, content,
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	// Bylines with display names add their users.
+	_, conflicts, err = addUsers(tx, bylineUsers(issue))
+
+	return conflicts, err
 }
 
 // validate checks the rules the database has for an issue's attributes: each
