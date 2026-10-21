@@ -3,7 +3,7 @@
 [<brendan@berg.industries> 2026-10-20T14:16:58-07:00]
 
 - state: in review
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
@@ -149,3 +149,29 @@ Done, following your answers, and moved to `in review`.
   - the byline and a bracketed assignee showed `@Brendan Berg`
   - in a comment, `<brendan@berg.industries>` showed as `@Brendan Berg` in aqua, while the same email in a code span stayed as it was
   - quitting without edits left the file unchanged
+
+---
+
+[brendan@berg.industries 2026-10-20T18:32:13-07:00]
+
+Please fix this issue:
+
+- **Bylines:** It looks like you're expecting emails in bylines to not be enclosed in angle brackets. Let's make sure emails get parsed with or without angle brackets.
+
+---
+
+[Claude 2026-10-20T18:48:20-07:00]
+
+Fixed, and left in `in review`. Bylines now recognise a user's email with or without angle brackets, so `[<brendan@berg.industries> …]` and `[brendan@berg.industries …]` both show `@Brendan Berg`. As in metadata, an email in angle brackets with no user is shown as an ordinary email, without the brackets. Any other author, such as `Claude`, is shown as it is.
+
+Your sample files with bracketed bylines already parse, and they write back unchanged.
+
+## Testing
+
+- **Bylines:** both forms of a user's email show their name, in the issue's byline and in a comment's. An unknown email is shown without brackets, and `Claude` is shown as it is.
+- **In a real terminal,** on the clone, a bracketed byline showed `@Brendan Berg opened this issue`.
+
+## Two notes
+
+- **New comments:** these still write the author's email without angle brackets, from git's `user.email`. Should new bylines use the bracketed form, to match the files you've updated?
+- **The Go toolchain:** Homebrew upgraded Go to 1.27.3 today, but my shell's `GOROOT` still pointed to the old 1.27.0 toolchain, so builds failed with "version go1.27.0 does not match go tool version go1.27.3". I ran the tests with `GOROOT` unset rather than change your environment. You may want to remove the `GOROOT` setting from your shell profile.

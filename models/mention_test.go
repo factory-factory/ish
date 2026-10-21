@@ -173,6 +173,32 @@ func TestBylinesShowNames(t *testing.T) {
 	}
 }
 
+func TestBylineAuthors(t *testing.T) {
+	for author, want := range map[string]string{
+		"bob@example.com":      "@Bob",
+		"<bob@example.com>":    "@Bob",
+		"<nobody@example.com>": "nobody@example.com",
+		"nobody@example.com":   "nobody@example.com",
+		"Claude":               "Claude",
+	} {
+		if got := people.author(author); got != want {
+			t.Errorf("author(%q) = %q, want %q", author, got, want)
+		}
+	}
+
+	// The issue's and comments' bylines alike.
+	ish := peopleIssue(t, nil, "Hello")
+	ish.Author = "<alice@example.com>"
+	ish.Conversation[0].Author = "<bob@example.com>"
+
+	if header := ish.renderHeader(); !strings.Contains(header, styles.BylineEmphasis.Render("@Alice")) {
+		t.Errorf("header %q, want the issue's bracketed author by name", header)
+	}
+	if byline := ish.Conversation[0].renderByline(); !strings.Contains(byline, styles.BylineEmphasis.Render("@Bob")) {
+		t.Errorf("byline %q, want the comment's bracketed author by name", byline)
+	}
+}
+
 func ptr(s string) *string { return &s }
 
 func TestCommentShowsNames(t *testing.T) {
