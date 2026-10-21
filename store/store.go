@@ -37,13 +37,15 @@ const gitignoreEntry = ".metadata.ish*"
 // which schema a database has, and rebuild one with an older schema.
 //
 // Version 2 stopped allowing colons in attribute keys, version 3 added the
-// user table, and version 4 gave each name and email one user, with the date
-// they were last seen together.
-const schemaVersion = 4
+// user table, version 4 gave each name and email one user, with the date
+// they were last seen together, and version 5 stored authors as their emails
+// and emails in attribute values without angle brackets.
+const schemaVersion = 5
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
-// strings, with the byline's offset from UTC in minutes alongside. Attribute
-// values are JSON arrays of strings. Users are the authors of the commits in
+// strings, with the byline's offset from UTC in minutes alongside. Authors
+// are stored as their emails. Attribute values are JSON arrays of strings,
+// with emails stored without angle brackets. Users are the authors of the commits in
 // the git repository the issues are in, and of bylines with display names,
 // each with the name they were last seen with.
 const schema = `
@@ -356,13 +358,13 @@ func indexFile(tx *sql.Tx, dir, name string) (conflicts []UserConflict, err erro
 	if _, err := tx.Exec(
 		`INSERT INTO issue (id, path, title, author, dateCreated, dateCreatedOffset, sha256)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		issue.Id, name, issue.Title, issue.Author, created, offset, hex.EncodeToString(sum[:]),
+		issue.Id, name, issue.Title, models.AuthorEmail(issue.Author), created, offset, hex.EncodeToString(sum[:]),
 	); err != nil {
 		return nil, err
 	}
 
 	for _, tag := range issue.Metadata {
-		value, err := json.Marshal(models.Canonical(tag.Values))
+		value, err := json.Marshal(storedValues(tag.Values))
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +391,7 @@ func indexFile(tx *sql.Tx, dir, name string) (conflicts []UserConflict, err erro
 		if _, err := tx.Exec(
 			`INSERT INTO comment (uuid, issueId, sortIndex, author, dateCreated, dateCreatedOffset, content)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			newUUID(), issue.Id, i, card.Author, created, offset, content,
+			newUUID(), issue.Id, i, models.AuthorEmail(card.Author), created, offset, content,
 		); err != nil {
 			return nil, err
 		}
@@ -432,6 +434,19 @@ func utcDate(s string) (string, int, error) {
 	_, offset := t.Zone()
 
 	return t.UTC().Format(time.RFC3339), offset / 60, nil
+}
+
+// storedValues returns a tag's values as they're stored in the database, with
+// emails in angle brackets stored without the brackets. The issue files keep
+// them as they're written.
+func storedValues(tokens []models.Token) []string {
+	values := models.Canonical(tokens)
+
+	for i, v := range values {
+		values[i] = models.StoredValue(v)
+	}
+
+	return values
 }
 
 // newUUID returns a random version 4 UUID.

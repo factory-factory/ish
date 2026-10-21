@@ -99,7 +99,7 @@ var keys = func() keyMap {
 }()
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Filter, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Open, k.New, k.Filter, focusKeys.Next, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -265,6 +265,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
+
+		case focusDelta(msg) != 0:
+			m.moveFocus(focusDelta(msg))
+			return m, nil
 
 		case key.Matches(msg, keys.New):
 			return m.create()

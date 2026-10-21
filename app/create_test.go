@@ -11,8 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/factory-factory/ish/models"
-	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/store"
 )
 
 var (
