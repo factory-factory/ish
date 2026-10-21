@@ -2,8 +2,8 @@
 
 [brendan@berg.industries 2026-10-16T23:40:56-07:00]
 
-- state: in review
 - assignees: brendan@berg.industries
+- state: closed
 - relation.depends-on: #3D26C-1320A
 
 ---

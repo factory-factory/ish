@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -33,14 +34,27 @@ const separatorColor = "11"
 
 // presetFilter returns the filter expression for a preset, other than the
 // custom one, for the user who's running ish. Neither lists closed issues.
+// An assignee can be written as the user's email, or the email in angle
+// brackets, which is shown as their name.
 func presetFilter(preset int, user string) string {
 	if preset == presetMine {
-		// A JSON string is a valid filter string, with any quotes escaped.
-		quoted, _ := json.Marshal(user)
-		return "{assignees = " + string(quoted) + "} and " + DefaultFilter
+		return "({assignees = " + quote(user) + "} or {assignees = " + quote("<"+user+">") + "}) and " + DefaultFilter
 	}
 
 	return DefaultFilter
+}
+
+// quote returns s as a JSON string, which is a valid filter string, with any
+// quotes escaped. Angle brackets are kept as they are, rather than escaped
+// for HTML.
+func quote(s string) string {
+	var b strings.Builder
+
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(s)
+
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // newFilterMenu returns the filter menu, with the default filter selected,

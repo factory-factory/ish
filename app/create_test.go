@@ -260,7 +260,7 @@ func TestMetadataEditsAreSaved(t *testing.T) {
 
 	keys := []string{}
 	for _, tag := range saved.Metadata {
-		keys = append(keys, tag.Key+"="+strings.Join(tag.Values, ","))
+		keys = append(keys, tag.Key+"="+strings.Join(models.Canonical(tag.Values), ","))
 	}
 
 	if got := strings.Join(keys, " "); got != "state=open assignees=alice priority=high" {

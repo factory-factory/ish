@@ -350,7 +350,7 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 	}
 
 	for _, tag := range issue.Metadata {
-		value, err := json.Marshal(tag.Values)
+		value, err := json.Marshal(models.Canonical(tag.Values))
 		if err != nil {
 			return err
 		}

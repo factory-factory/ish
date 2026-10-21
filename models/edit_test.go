@@ -125,7 +125,7 @@ func TestEditTagValues(t *testing.T) {
 	if ish.editing || tag.editing {
 		t.Error("still editing after enter")
 	}
-	if tag.Key != "state" || strings.Join(tag.Values, "|") != "closed|blocked" {
+	if tag.Key != "state" || strings.Join(Canonical(tag.Values), "|") != "closed|blocked" {
 		t.Errorf("tag = %q %q, want state [closed blocked]", tag.Key, tag.Values)
 	}
 }
@@ -136,7 +136,7 @@ func TestEditTagCancel(t *testing.T) {
 	ish = typeText(t, ish, ", blocked")
 	ish = update(t, ish, esc)
 
-	if tag := ish.Metadata[0]; tag.editing || strings.Join(tag.Values, "|") != "open" {
+	if tag := ish.Metadata[0]; tag.editing || strings.Join(Canonical(tag.Values), "|") != "open" {
 		t.Errorf("tag editing, values = %v, %q after esc, want false, [open]", tag.editing, tag.Values)
 	}
 }

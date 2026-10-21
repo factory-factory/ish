@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/factory-factory/ish/models"
 )
 
 const header = `# Title
@@ -49,7 +51,7 @@ func TestParseIssueHeader(t *testing.T) {
 		t.Errorf("DateCreated = %q, want %q", issue.DateCreated, "2023-05-26T23:35:36-0400")
 	}
 	if len(issue.Metadata) != 2 || issue.Metadata[1].Key != "assignees" ||
-		strings.Join(issue.Metadata[1].Values, ",") != "alice,bob" {
+		strings.Join(models.Canonical(issue.Metadata[1].Values), ",") != "alice,bob" {
 		t.Errorf("Metadata = %+v, want state and assignees tags", issue.Metadata)
 	}
 	if len(issue.Conversation) != 0 {

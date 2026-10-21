@@ -116,7 +116,7 @@ func TestBackSavesChanges(t *testing.T) {
 
 	saved := s.saved[0]
 
-	if got := strings.Join(saved.Metadata[0].Values, ","); got != "open,blocked" {
+	if got := strings.Join(Canonical(saved.Metadata[0].Values), ","); got != "open,blocked" {
 		t.Errorf("saved state = %q, want %q", got, "open,blocked")
 	}
 	if got := *saved.Conversation[0].Content; got != "New Content" {
@@ -208,7 +208,7 @@ func TestCtrlCWhileEditingSavesEarlierChanges(t *testing.T) {
 	if len(s.saved) != 1 {
 		t.Fatalf("saved %d times, want 1", len(s.saved))
 	}
-	if saved := s.saved[0]; saved.Title != "Title edited" || strings.Join(saved.Metadata[0].Values, ",") != "open" {
+	if saved := s.saved[0]; saved.Title != "Title edited" || strings.Join(Canonical(saved.Metadata[0].Values), ",") != "open" {
 		t.Errorf("saved title %q, state %q, want the saved title and unchanged state", saved.Title, saved.Metadata[0].Values)
 	}
 }
@@ -220,7 +220,7 @@ func TestEmptyTagValuesAreNotSaved(t *testing.T) {
 	ish = editAt(t, ish, 2)
 	ish = update(t, ish, ctrlU, enter)
 
-	if got := strings.Join(ish.Metadata[0].Values, ","); got != "open" {
+	if got := strings.Join(Canonical(ish.Metadata[0].Values), ","); got != "open" {
 		t.Errorf("state = %q after removing every value, want it unchanged", got)
 	}
 

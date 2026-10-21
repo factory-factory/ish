@@ -100,7 +100,7 @@ func TestSaveIssue(t *testing.T) {
 
 	issue := readIssue(t, dir, "ABC")
 	issue.Title = "New title"
-	issue.Metadata[0].Values = []string{"closed"}
+	issue.Metadata[0].Values = models.Tokens("closed")
 	content := "Edited."
 	issue.Conversation[1].Content = &content
 
@@ -110,7 +110,7 @@ func TestSaveIssue(t *testing.T) {
 
 	saved := readIssue(t, dir, "ABC")
 
-	if saved.Title != "New title" || !slices.Equal(saved.Metadata[0].Values, []string{"closed"}) {
+	if saved.Title != "New title" || !slices.Equal(models.Canonical(saved.Metadata[0].Values), []string{"closed"}) {
 		t.Errorf("saved title, state = %q, %q, want %q, [closed]", saved.Title, saved.Metadata[0].Values, "New title")
 	}
 	if got := *saved.Conversation[1].Content; got != "Edited." {
@@ -210,5 +210,23 @@ func TestFormatNewIssue(t *testing.T) {
 	if saved.Title != "" || saved.Author != "alice@example.com" || len(saved.Metadata) != 0 ||
 		len(saved.Conversation) != 1 || *saved.Conversation[0].Content != "" {
 		t.Errorf("saved issue = %+v, want the empty new issue", saved)
+	}
+}
+
+func TestFormatIssueWritesCanonicalValues(t *testing.T) {
+	issue, err := ParseIssue(strings.NewReader(fullIssue))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A value shown as a user's name is written as their email.
+	issue.Metadata = append(issue.Metadata, models.Tag{
+		Key:    "watchers",
+		Values: []models.Token{{Display: "Bob", Canonical: "<bob@example.com>"}, {Canonical: "carol"}},
+	})
+
+	if got := FormatIssue(*issue); !strings.Contains(got, "- watchers: <bob@example.com>, carol\n") || strings.Contains(got, "Bob") {
+		t.Errorf("FormatIssue() =\n%s\nwant the watchers' canonical values", got)
 	}
 }

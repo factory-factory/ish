@@ -90,7 +90,10 @@ func highlightTodo(rendered string) (string, int) {
 			continue
 		}
 
+		// The selected item is highlighted as a whole, including any
+		// users' names in it.
 		text := escapePattern.ReplaceAllString(strings.Replace(line, todoMarker, "", 1), "")
+		text = strings.NewReplacer(mentionMarker, "", mentionEndMarker, "").Replace(text)
 		indent := len(text) - len(strings.TrimLeft(text, " "))
 		lines[i] = text[:indent] + renderLinks(strings.TrimSpace(text), styles.TodoSelected, todoLinkStyle, todoLinkStyle)
 

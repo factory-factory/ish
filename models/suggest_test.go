@@ -208,7 +208,7 @@ func TestValueSuggestions(t *testing.T) {
 	ish = typeText(t, ish, "ali")
 	ish = update(t, ish, enter)
 
-	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(tag.Values, []string{"alice"}) {
+	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(Canonical(tag.Values), []string{"alice"}) {
 		t.Errorf("after enter: editing, values = %v, %q, want the suggestion accepted and the tag saved", tag.editing, tag.Values)
 	}
 }
@@ -338,7 +338,7 @@ func TestEnterAcceptsReference(t *testing.T) {
 	ish = typeText(t, ish, "#BB")
 	ish = update(t, ish, enter)
 
-	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(tag.Values, []string{"#BBBBB-22222"}) {
+	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(Canonical(tag.Values), []string{"#BBBBB-22222"}) {
 		t.Errorf("editing, values = %v, %q, want #BBBBB-22222 saved", tag.editing, tag.Values)
 	}
 }

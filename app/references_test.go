@@ -37,7 +37,7 @@ func TestOpenedIssueSuggestsIssueIDs(t *testing.T) {
 	issue := m.issue.(models.Issue)
 	tag := issue.Metadata[len(issue.Metadata)-1]
 
-	if tag.Key != "related" || !slices.Equal(tag.Values, []string{"#BBB"}) {
+	if tag.Key != "related" || !slices.Equal(models.Canonical(tag.Values), []string{"#BBB"}) {
 		t.Errorf("tag %s: %q, want related: [#BBB]", tag.Key, tag.Values)
 	}
 }

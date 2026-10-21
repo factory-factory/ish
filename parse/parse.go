@@ -281,7 +281,7 @@ func matchMetadata(n ast.Node, b []byte) ([]models.Tag, error) {
 
 			result = append(result, models.Tag{
 				Key:    key[1],
-				Values: values,
+				Values: models.Tokens(values...),
 			})
 		}
 

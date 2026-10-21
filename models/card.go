@@ -36,6 +36,10 @@ type Card struct {
 
 	// issues reports which issues exist, to link references to them.
 	issues IssueLookup
+
+	// dir maps users' emails to their names, to show and type names in
+	// place of emails. See Issue.SetDirectory.
+	dir *Directory
 }
 
 type SelectMsg bool
@@ -81,8 +85,9 @@ func (c *Card) startEdit(width, height int, isDark bool) tea.Cmd {
 	c.editor.MaxContentHeight = math.MaxInt
 	c.editor.SetStyles(textarea.DefaultStyles(isDark))
 
+	// Users' emails are edited as their names.
 	if c.Content != nil {
-		c.editor.SetValue(*c.Content)
+		c.editor.SetValue(c.dir.showNames(*c.Content))
 	}
 
 	c.sizeEditor(width, height)
@@ -105,7 +110,7 @@ func (c *Card) sizeEditor(width, height int) {
 // commitEdit replaces the card's content with the edited markdown,
 // reporting whether it changed.
 func (c *Card) commitEdit() bool {
-	content := c.editor.Value()
+	content := c.dir.saveEmails(c.editor.Value())
 	c.editing = false
 
 	if c.Content != nil && *c.Content == content || c.Content == nil && content == "" {
@@ -130,7 +135,7 @@ func (c Card) renderByline() string {
 	}
 
 	return styles.BylineBlock.Render(
-		styles.BylineEmphasis.Render(c.Author) +
+		styles.BylineEmphasis.Render(c.dir.author(c.Author)) +
 			styles.Byline.Render(" commented on "+t.Format(DateTime)),
 	)
 }
@@ -202,6 +207,7 @@ func (c Card) renderContent() (string, int) {
 
 	content, todoRow := highlightTodo(content)
 	content, linkRow := styleLinks(content)
+	content = styleMentions(content)
 
 	return content, max(todoRow, linkRow)
 }

@@ -170,7 +170,9 @@ func (t *Tag) valueCandidates(typed string) []string {
 		}
 
 	default:
-		values = t.known[t.Key]
+		for _, v := range t.known[t.Key] {
+			values = append(values, t.dir.tokenFor(v).Text())
+		}
 	}
 
 	return values
