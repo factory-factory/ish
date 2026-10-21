@@ -1,13 +1,13 @@
 # Update the Issue list view to pull data from the metadata database
 
-[brendan@berg.industries 2026-10-11T22:34:12-07:00]
+[<brendan@berg.industries> 2026-10-11T22:34:12-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-11T22:34:12-07:00]
+[<brendan@berg.industries> 2026-10-11T22:34:12-07:00]
 
 Instead of reading issue files from disk when rendering the Issue list view, use the metadata database.
 
@@ -15,7 +15,7 @@ For now, select all issues when populating the table. Create a query that joins 
 
 ---
 
-[Claude 2026-10-11T22:49:44-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T22:49:44-07:00]
 
 I've reviewed this. The query itself is straightforward, but the list now depends on the database staying in step with the issue files. I need an answer to question 1 before implementing. For questions 2 and 3, I'll go with my recommendation unless you say otherwise.
 
@@ -44,6 +44,7 @@ I've reviewed this. The query itself is straightforward, but the list now depend
    ```
 
    The unique (`issueId`, `key`) constraint means each join matches at most one row. The JSON values are decoded in Go, which keeps their order, and joined with commas as the list shows them now. The opening date is rebuilt in the byline's own time zone from the UTC date and the offset, so the Opened column keeps showing the same day as the issue view.
+
 2. **List view:** the list uses these summaries instead of parsing every file, both at startup and when returning from an issue. The columns, their order and their formatting stay the same.
 3. **What doesn't change:** opening an issue still reads its markdown file, which is the source of truth, and saving still writes the file. With 1(a), the save also updates the database.
 4. **A side effect:** today one file that doesn't parse stops the list from opening at all. With the database, `ish init` skips and reports such files, and the list shows everything else.
@@ -55,7 +56,7 @@ I've reviewed this. The query itself is straightforward, but the list now depend
 
 ---
 
-[brendan@berg.industries 2026-10-11T22:58:42-07:00]
+[<brendan@berg.industries> 2026-10-11T22:58:42-07:00]
 
 To answer your questions:
 
@@ -65,7 +66,7 @@ To answer your questions:
 
 ---
 
-[Claude 2026-10-11T23:10:21-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T23:10:21-07:00]
 
 Done, following your answers, and moved to `in review`.
 

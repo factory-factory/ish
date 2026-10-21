@@ -1,13 +1,13 @@
 # Enable references to other issues
 
-[brendan@berg.industries 2026-10-12T09:19:47-07:00]
+[<brendan@berg.industries> 2026-10-12T09:19:47-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-12T09:19:47-07:00]
+[<brendan@berg.industries> 2026-10-12T09:19:47-07:00]
 
 It's helpful to be able to reference other issues when editing an issue. There are two ways to reference an issue: (1) as a metadata reference, and (2) as a hyperlink within comment text.
 
@@ -39,7 +39,7 @@ Navigating hyperlinks in comments should behave similar to selecting checkboxes 
 
 ---
 
-[Claude 2026-10-14T23:26:47-07:00]
+[Claude <noreply@anthropic.com> 2026-10-14T23:26:47-07:00]
 
 I've reviewed this and moved it to `in progress`. Below is my plan, then some questions. I'll start once you've answered them.
 
@@ -73,7 +73,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[brendan@berg.industries 2026-10-14T23:30:06-07:00]
+[<brendan@berg.industries> 2026-10-14T23:30:06-07:00]
 
 1. Yes, strip trailing punctuation
 2. IDs in code spans or code blocks should NOT be treated as hyperlinks
@@ -86,7 +86,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[Claude 2026-10-14T23:51:17-07:00]
+[Claude <noreply@anthropic.com> 2026-10-14T23:51:17-07:00]
 
 Done, following your answers, and moved to `in review`.
 

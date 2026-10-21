@@ -1,14 +1,14 @@
 # Update Issue list view to have filter field
 
-[brendan@berg.industries 2026-10-12T23:13:26-07:00]
+[<brendan@berg.industries> 2026-10-12T23:13:26-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.parent: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-12T23:13:26-07:00]
+[<brendan@berg.industries> 2026-10-12T23:13:26-07:00]
 
 Update the Issue list view to use filter expressions to select the issues to display in the table.
 
@@ -22,7 +22,7 @@ Update the Issue list view to use filter expressions to select the issues to dis
 
 ---
 
-[Claude 2026-10-12T23:33:19-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T23:33:19-07:00]
 
 I've implemented the filter field. Two points need your decision, so this stays `in progress` for now. The behaviour below follows my recommendations, so either answer is a small change. Nothing is committed yet.
 
@@ -70,7 +70,7 @@ I've implemented the filter field. Two points need your decision, so this stays 
 
 ---
 
-[brendan@berg.industries 2026-10-12T23:35:28-07:00]
+[<brendan@berg.industries> 2026-10-12T23:35:28-07:00]
 
 1. Good catch. Put off styling until we wrap this up and move on to #3CVJB-3HXW2.
 
@@ -78,7 +78,7 @@ I've implemented the filter field. Two points need your decision, so this stays 
 
 ---
 
-[Claude 2026-10-12T23:40:13-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T23:40:13-07:00]
 
 Done, following your answers, and moved to `in review`.
 

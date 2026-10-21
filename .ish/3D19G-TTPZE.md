@@ -1,20 +1,20 @@
 # Change autosuggest source when values start with # and @
 
-[brendan@berg.industries 2026-10-16T23:40:56-07:00]
+[<brendan@berg.industries> 2026-10-16T23:40:56-07:00]
 
-- assignees: brendan@berg.industries
 - state: closed
+- assignees: @Brendan Berg
 - relation.depends-on: #3D26C-1320A
 
 ---
 
-[brendan@berg.industries 2026-10-16T23:40:56-07:00]
+[<brendan@berg.industries> 2026-10-16T23:40:56-07:00]
 
 Instead of searching existing values for items starting with `#`, the search should be across all issue IDs. Similarly, when typing a value starting with `@`, the autocompletions should come from user display names.
 
 ---
 
-[Claude 2026-10-17T21:43:02-07:00]
+[Claude <noreply@anthropic.com> 2026-10-17T21:43:02-07:00]
 
 Done, and moved to `in review`. With #3D26C-1320A in place, I had no questions. The ticket doesn't settle a few details, so I chose them, as described below. Each is a small change if you'd like it different.
 

@@ -1,19 +1,19 @@
 # Add assignee column to Issue list view
 
-[brendan@berg.industries 2026-10-11T08:58:11-07:00]
+[<brendan@berg.industries> 2026-10-11T08:58:11-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-11T08:58:11-07:00]
+[<brendan@berg.industries> 2026-10-11T08:58:11-07:00]
 
 Add a column to the list view to show the assignee of each issue. The column should be to the right of the title.
 
 ---
 
-[Claude 2026-10-11T09:24:47-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T09:24:47-07:00]
 
 Implemented in the working tree; nothing is committed yet.
 
@@ -34,7 +34,7 @@ Questions:
 
 ---
 
-[brendan@berg.industries 2026-10-11T09:23:48-07:00]
+[<brendan@berg.industries> 2026-10-11T09:23:48-07:00]
 
 In response to the previous questions:
 
@@ -44,7 +44,7 @@ In response to the previous questions:
 
 ---
 
-[Claude 2026-10-11T09:33:40-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T09:33:40-07:00]
 
 Done, and moved to `in review`; nothing is committed yet.
 

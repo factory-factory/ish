@@ -1,13 +1,13 @@
 # Update Issue navigation to unify j/k/up/down/tab/shift-tab key behavior
 
-[brendan@berg.industries 2026-10-14T22:49:37-07:00]
+[<brendan@berg.industries> 2026-10-14T22:49:37-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-14T22:49:37-07:00]
+[<brendan@berg.industries> 2026-10-14T22:49:37-07:00]
 
 The different behaviors in the issue view for cycling through all fields with `tab` / `shift-tab` vs cycling through just comments with `j`/`k` and up and down arrows is confusing.
 
@@ -15,7 +15,7 @@ Update arrow key and j/k behavior to also cycle through all selectable UI elemen
 
 ---
 
-[Claude 2026-10-16T17:33:51-07:00]
+[Claude <noreply@anthropic.com> 2026-10-16T17:33:51-07:00]
 
 I've reviewed this and moved it to `in progress`. The keys behave differently in three ways besides which fields they visit. Each needs a single behaviour, so I'd like your choice before I start.
 
@@ -43,17 +43,17 @@ I've reviewed this and moved it to `in progress`. The keys behave differently in
 
 ---
 
-[brendan@berg.industries 2026-10-16T17:39:21-07:00]
+[<brendan@berg.industries> 2026-10-16T17:39:21-07:00]
 
 Yes, the behavior is even more confusing than I originally thought.
 
 - **`tab`/`shift-tab`** should keep their existing behavior cycling through all selectable fields, with one change: selecting a comment should scroll the comment into view such that the comment's byline is at the top of the viewport. Scrolling should still be pinned so the bottom of the final comment stops at the bottom of the screen when fully scrolled into view.
 - **`j`/`k`** should scroll the next or previous comment to the top of the vieport. (If the last comment is already fully in the viewport, `k` should just change the selection.)
-- **`up`/`down`** should *only* scroll the viewport one line at a time, without changing what's selected.
+- **`up`/`down`** should _only_ scroll the viewport one line at a time, without changing what's selected.
 
 ---
 
-[Claude 2026-10-16T22:36:31-07:00]
+[Claude <noreply@anthropic.com> 2026-10-16T22:36:31-07:00]
 
 Thanks, that's much clearer. Here's how I'm reading it, with two small points to confirm.
 
@@ -72,14 +72,14 @@ Thanks, that's much clearer. Here's how I'm reading it, with two small points to
 
 ---
 
-[brendan@berg.industries 2026-10-16T22:38:32-07:00]
+[<brendan@berg.industries> 2026-10-16T22:38:32-07:00]
 
 1. To clarify, I'm talking about cases where multiple comments are in the viewport that includes the final comment. If the penultimate comment is selected, but it and the final comment are both short enough that the final comment is fully in view, `k` should advance the selection to the final comment but since the bottom of the final comment is pinned to the bottom of the viewport, it can't be scrolled such that the byline is at the top of the viewport.
 2. Yes, that is correct.
 
 ---
 
-[Claude 2026-10-16T22:46:59-07:00]
+[Claude <noreply@anthropic.com> 2026-10-16T22:46:59-07:00]
 
 Done, following your answers, and moved to `in review`.
 

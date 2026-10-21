@@ -1,13 +1,13 @@
 # Implement 'ish init' to create the metadata database
 
-[brendan@berg.industries 2023-06-04T18:37:55-04:00]
+[<brendan@berg.industries> 2023-06-04T18:37:55-04:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2023-06-04T18:37:55-04:00]
+[<brendan@berg.industries> 2023-06-04T18:37:55-04:00]
 
 The issue database is a local metadata cache for all issues. It provides a mechanism for efficiently searching and filtering issues as well as for generating reports.
 
@@ -48,7 +48,7 @@ The comment table should have a unique key constraint on the `issueID, sortIndex
 
 ---
 
-[brendan@berg.industries 2026-10-11T21:42:24-07:00]
+[<brendan@berg.industries> 2026-10-11T21:42:24-07:00]
 
 To start out, create a subcommand of the utility so that running `ish init` looks for the `.ish` base directory and metadata store. If the directory doesn't exist, it should create it, and if the metadata store doesn't exist, it should create the SQLite database and install the empty schema.
 
@@ -56,7 +56,7 @@ In the case that there is already an `.ish` directory with issue markdown files,
 
 ---
 
-[Claude 2026-10-11T21:53:21-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T21:53:21-07:00]
 
 I've reviewed this and drafted a plan, below, but I need answers before implementing. Questions 1 and 2 block the work. For the rest, I'll go with my recommendation unless you say otherwise.
 
@@ -100,7 +100,7 @@ Not in this issue: the TUI still reads the markdown files directly. Using the da
 
 ---
 
-[brendan@berg.industries 2026-10-11T21:57:05-07:00]
+[<brendan@berg.industries> 2026-10-11T21:57:05-07:00]
 
 To clarify and unblock:
 
@@ -116,7 +116,7 @@ To clarify and unblock:
 
 ---
 
-[Claude 2026-10-11T22:28:53-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T22:28:53-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -140,6 +140,7 @@ Decisions within your answers:
 - **Values** are always a JSON array of strings, even for one value, such as `["open"]`, so every row has the same shape. Filtering works with SQLite's JSON functions, for example:
 
   `SELECT attribute.issueId FROM attribute, json_each(attribute.value) WHERE attribute.key = 'assignees' AND json_each.value = 'jhc'`
+
 - **Dates** are RFC 3339 in UTC, such as `2023-05-27T03:35:36Z`. `dateCreatedOffset` is the byline's offset in minutes east of UTC, such as `-240` for `-04:00`, which is exact and enough to rebuild the original time.
 - **UUIDs** are random version-4 UUIDs from `crypto/rand`, so there's no UUID dependency. They're new each time the database is rebuilt, since it's a cache.
 

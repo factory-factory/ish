@@ -1,14 +1,14 @@
 # Write ish file parser
 
-[brendan@berg.industries 2023-05-28 11:55:23 -0400]
+[<brendan@berg.industries> 2023-05-28 11:55:23 -0400]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - estimate: 8h
 
 ---
 
-[brendan@berg.industries 2023-05-28 11:55:23 -0400]
+[<brendan@berg.industries> 2023-05-28 11:55:23 -0400]
 
 Write a parser that scans the issues directory and extracts relevant metadata
 from **ish** files.

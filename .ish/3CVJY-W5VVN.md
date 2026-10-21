@@ -1,14 +1,14 @@
 # Filter expression follow-up: allow filtering on non-attribute fields
 
-[brendan@berg.industries 2026-10-12T22:18:19-07:00]
+[<brendan@berg.industries> 2026-10-12T22:18:19-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.parent: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-12T22:18:19-07:00]
+[<brendan@berg.industries> 2026-10-12T22:18:19-07:00]
 
 Currently attributes in filter expressions only match against the metadata keys in an issue. Update the expression parser and WHERE clause generator to also accept fields that are direct attributes of the issue like title and dateCreated.
 
@@ -18,7 +18,7 @@ This should be a straightforward addition to the WHERE clause, since the field n
 
 ---
 
-[Claude 2026-10-14T21:41:33-07:00]
+[Claude <noreply@anthropic.com> 2026-10-14T21:41:33-07:00]
 
 Done, and moved to `in review`.
 

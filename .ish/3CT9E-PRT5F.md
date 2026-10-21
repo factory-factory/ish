@@ -1,19 +1,19 @@
 # Update markdown rendering style to indent wrapped lines in lists
 
-[brendan@berg.industries 2026-10-12T00:10:24-07:00]
+[<brendan@berg.industries> 2026-10-12T00:10:24-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-12T00:10:24-07:00]
+[<brendan@berg.industries> 2026-10-12T00:10:24-07:00]
 
 Currently, when markdown is rendered in comments, the text in bulletted and numbered lists isn't indented when lines wrap. Use a custom style to align the start of a wrapped line with the start of the line above it.
 
 ---
 
-[Claude 2026-10-13T00:48:09-07:00]
+[Claude <noreply@anthropic.com> 2026-10-13T00:48:09-07:00]
 
 I've looked into this, and it can't be done with a glamour style. I need you to choose an approach before I change any code.
 
@@ -52,7 +52,7 @@ I recommend (a): open a glamour pull request, and use a patched copy here until 
 
 ---
 
-[Claude 2026-10-13T00:57:58-07:00]
+[Claude <noreply@anthropic.com> 2026-10-13T00:57:58-07:00]
 
 Done, and moved to `in review`. You chose option (a) in our conversation: patch glamour locally, without an upstream pull request, since others are already working on this in glamour.
 

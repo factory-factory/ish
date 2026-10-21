@@ -1,14 +1,14 @@
 # Allow adding and deleting metadata fields to an issue
 
-[brendan@berg.industries 2026-10-11T10:57:08-07:00]
+[<brendan@berg.industries> 2026-10-11T10:57:08-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - type: feature
 
 ---
 
-[brendan@berg.industries 2026-10-11T10:57:08-07:00]
+[<brendan@berg.industries> 2026-10-11T10:57:08-07:00]
 
 In the Issue view, there is currently no mechanism to add or delete metadata fields. A new keybinding should be added so that `m` creates a new Tag in the metadata array.
 
@@ -24,7 +24,7 @@ When a Tag is selected, pressing delete should highlight the entire Tag with red
 
 ---
 
-[Claude 2026-10-11T11:19:25-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T11:19:25-07:00]
 
 Done, and moved to `in review`.
 
@@ -52,13 +52,13 @@ Other details:
 
 ---
 
-[brendan@berg.industries 2026-10-11T11:22:32-07:00]
+[<brendan@berg.industries> 2026-10-11T11:22:32-07:00]
 
 I've tested the new behavior in a freshly built binary. It largely looks good. I'm curious about something I've noticed though: when a new tag is created, it looks like there's a `k` under the cursor when edting the key attribute. It appears to be a rendering issue, as the key reflects what the user types when saved.
 
 ---
 
-[Claude 2026-10-11T11:31:04-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T11:31:04-07:00]
 
 Good catch: it was a rendering issue, and it's fixed. Moved back to `in review`.
 

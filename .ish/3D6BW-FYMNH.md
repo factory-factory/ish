@@ -36,7 +36,7 @@ In metadata attributes and comment body text, the display name should be rendere
 
 ---
 
-[Claude 2026-10-20T17:29:20-07:00]
+[Claude <noreply@anthropic.com> 2026-10-20T17:29:20-07:00]
 
 I've reviewed this and moved it to `in progress`. Below is my plan, then some questions. The first question concerns the approach for comment text, so I'd like your view on it before I start.
 
@@ -88,7 +88,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[Claude 2026-10-20T18:22:15-07:00]
+[Claude <noreply@anthropic.com> 2026-10-20T18:22:15-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -152,7 +152,7 @@ Done, following your answers, and moved to `in review`.
 
 ---
 
-[brendan@berg.industries 2026-10-20T18:32:13-07:00]
+["Brendan Berg" <brendan@berg.industries> 2026-10-20T18:32:13-07:00]
 
 Please fix this issue:
 
@@ -160,7 +160,7 @@ Please fix this issue:
 
 ---
 
-[Claude 2026-10-20T18:48:20-07:00]
+[<noreply@anthropic.com> 2026-10-20T18:48:20-07:00]
 
 Fixed, and left in `in review`. Bylines now recognise a user's email with or without angle brackets, so `[<brendan@berg.industries> …]` and `[brendan@berg.industries …]` both show `@Brendan Berg`. As in metadata, an email in angle brackets with no user is shown as an ordinary email, without the brackets. Any other author, such as `Claude`, is shown as it is.
 

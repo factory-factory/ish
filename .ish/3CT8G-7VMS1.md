@@ -1,13 +1,13 @@
 # Detect changed files and re-index them on start-up
 
-[brendan@berg.industries 2026-10-11T23:40:06-07:00]
+[<brendan@berg.industries> 2026-10-11T23:40:06-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-11T23:40:06-07:00]
+[<brendan@berg.industries> 2026-10-11T23:40:06-07:00]
 
 From issue #3CT6E-ZZPJQ:
 
@@ -19,7 +19,7 @@ The `sha256` column is present to detect when issue markdown files diverge from 
 
 ---
 
-[Claude 2026-10-11T23:51:43-07:00]
+[Claude <noreply@anthropic.com> 2026-10-11T23:51:43-07:00]
 
 Done, and moved to `in review`.
 

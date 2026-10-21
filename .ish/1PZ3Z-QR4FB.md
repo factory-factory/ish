@@ -1,13 +1,13 @@
 # Specify workflow configuration file format
 
-[brendan@berg.industries 2023-06-04T18:23:24-04:00]
+[<brendan@berg.industries> 2023-06-04T18:23:24-04:00]
 
 - state: planning
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2023-06-04T18:23:24-04:00]
+[<brendan@berg.industries> 2023-06-04T18:23:24-04:00]
 
 The **ish** library should provide the ability to enforce rules
 when moving issues from one state to another.
