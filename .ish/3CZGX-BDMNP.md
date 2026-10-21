@@ -1,13 +1,13 @@
 # Improvements to custom filter UI
 
-[brendan@berg.industries 2026-10-15T17:29:07-07:00]
+[<brendan@berg.industries> 2026-10-15T17:29:07-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T17:29:07-07:00]
+[<brendan@berg.industries> 2026-10-15T17:29:07-07:00]
 
 The custom filter view that replaces the filter drop-down when the `Custom...` menu item is selected should be styled with a grey border when unfocused and blue when focused.
 
@@ -23,7 +23,7 @@ The width of the text area should be the same as the width of the drop-down.
 
 ---
 
-[Claude 2026-10-15T18:38:09-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T18:38:09-07:00]
 
 I've reviewed this and moved it to `in progress`. Some of it is already done, and the buttons need a few decisions before I start.
 
@@ -49,11 +49,11 @@ I've reviewed this and moved it to `in progress`. Some of it is already done, an
 
 ---
 
-[brendan@berg.industries 2026-10-15T18:47:54-07:00]
+[<brendan@berg.industries> 2026-10-15T18:47:54-07:00]
 
 ## Answers, hopefully
 
-1. It's ok to shrink the field so that the buttons can fit right-aligned with the terminal edge. The drop-down trigger shouldn't be narrowed to less than 60 characters even if  the custom filter field has to shrink below 60 characters wide to fit the buttons.
+1. It's ok to shrink the field so that the buttons can fit right-aligned with the terminal edge. The drop-down trigger shouldn't be narrowed to less than 60 characters even if the custom filter field has to shrink below 60 characters wide to fit the buttons.
 2. The buttons are meant to be single-line and should not have borders. The pipe characters were to indicate the extents of the button background color. (There should be two spaces before and after the button text.)
 3. The behavior of the save button will be handled in a follow-up.
 4. Yes, the proposed key navigation looks good.
@@ -61,7 +61,7 @@ I've reviewed this and moved it to `in progress`. Some of it is already done, an
 
 ---
 
-[Claude 2026-10-15T21:43:39-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T21:43:39-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -97,6 +97,6 @@ Done, following your answers, and moved to `in review`.
 
 ---
 
-[brendan@berg.industries 2026-10-15T22:16:48-07:00]
+[<brendan@berg.industries> 2026-10-15T22:16:48-07:00]
 
 I've changed some button styling and added a test to style the reset button differently than the save button when selected.

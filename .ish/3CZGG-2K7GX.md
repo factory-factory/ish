@@ -1,19 +1,19 @@
 # Add an ish badge in the upper left of the list view
 
-[brendan@berg.industries 2026-10-15T17:16:50-07:00]
+[<brendan@berg.industries> 2026-10-15T17:16:50-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T17:16:50-07:00]
+[<brendan@berg.industries> 2026-10-15T17:16:50-07:00]
 
 I'd like a small ish logo badge in the upper left corner of the list view.
 
 ```
 ╭     ╮
-  ish  
+  ish
 ╰     ╯
 ```
 
@@ -25,7 +25,7 @@ The code for the badge should go in a `Badge` model that gets added to the list 
 
 ---
 
-[Claude 2026-10-15T17:41:11-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T17:41:11-07:00]
 
 Done, and moved to `in review`. I had no questions.
 

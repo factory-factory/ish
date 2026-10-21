@@ -1,13 +1,13 @@
 # Allow users to create filter expressions to filter issues in the list view
 
-[brendan@berg.industries 2026-10-11T11:44:11-07:00]
+[<brendan@berg.industries> 2026-10-11T11:44:11-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-11T11:44:11-07:00]
+[<brendan@berg.industries> 2026-10-11T11:44:11-07:00]
 
 **This feature makes assumptions about the project architecture that are addressed in other issues [which ones?]. We will be assuming that the sqlite work has been completed before planning and implementing the work for this issue.**
 
@@ -33,7 +33,7 @@ Filter expressions should use ANSI terminal colors for readability. The attribut
 
 ---
 
-[Claude 2026-10-12T00:03:30-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T00:03:30-07:00]
 
 I've reviewed this issue against the database work. The issues it depends on are done: 1PZ4D-B0NEF (`ish init` and the database), 3CT6E-ZZPJQ (the list reads from the database) and 3CT8G-7VMS1 (re-indexing on startup).
 
@@ -83,7 +83,7 @@ I can't create issue files under `agents.md`'s rules, so if you agree with the s
 
 ---
 
-[Claude 2026-10-12T00:03:41-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T00:03:41-07:00]
 
 A correction to my previous comment: plan item 2 refers to "the JSON escaping fix above", but I left the explanation out. Here it is.
 

@@ -36,12 +36,16 @@ const gitignoreEntry = ".metadata.ish*"
 // schemaVersion is stored in the database's user_version, so ish can tell
 // which schema a database has, and rebuild one with an older schema.
 //
-// Version 2 stopped allowing colons in attribute keys.
-const schemaVersion = 2
+// Version 2 stopped allowing colons in attribute keys, version 3 added the
+// user table, and version 4 gave each name and email one user, with the date
+// they were last seen together.
+const schemaVersion = 4
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Attribute
-// values are JSON arrays of strings.
+// values are JSON arrays of strings. Users are the authors of the commits in
+// the git repository the issues are in, and of bylines with display names,
+// each with the name they were last seen with.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -73,6 +77,16 @@ CREATE TABLE comment (
 	content           TEXT NOT NULL,
 	UNIQUE (issueId, sortIndex)
 );
+
+CREATE TABLE user (
+	id          TEXT PRIMARY KEY,
+	name        TEXT NOT NULL,
+	email       TEXT NOT NULL,
+	dateCreated TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX userName ON user (name);
+CREATE UNIQUE INDEX userEmail ON user (email);
 `
 
 // keyPattern matches the characters an attribute key may contain.
@@ -95,6 +109,14 @@ type Result struct {
 
 	// Failed holds the issue files that couldn't be added to the database.
 	Failed []FileError
+
+	// Users is the number of commit authors added to the database, from
+	// the repository's whole history.
+	Users int
+
+	// UserConflicts holds the commit and byline authors that weren't added
+	// because another email has their name.
+	UserConflicts []UserConflict
 }
 
 // FileError is an error indexing an issue file.
@@ -113,7 +135,8 @@ func (e FileError) Unwrap() error {
 
 // Init sets up the base directory dir and its metadata database. It creates
 // dir if it doesn't exist, makes sure dir's .gitignore ignores the database,
-// and builds the database from the issue files in dir, replacing any
+// and builds the database from the issue files in dir, and the authors of
+// every commit in the git repository dir is in, if any, replacing any
 // database that's already there.
 //
 // Issue files that can't be indexed are skipped and listed in the result's
@@ -199,7 +222,7 @@ func build(dir, path string, result *Result) error {
 }
 
 // populate installs the schema in the empty database at path, and adds the
-// issue files in dir to it.
+// issue files in dir, and the authors of every commit, to it.
 func populate(path, dir string, result *Result) (err error) {
 	db, err := Open(path)
 	if err != nil {
@@ -216,7 +239,16 @@ func populate(path, dir string, result *Result) (err error) {
 		return err
 	}
 
-	return index(db, dir, result)
+	if err := index(db, dir, result); err != nil {
+		return err
+	}
+
+	var conflicts []UserConflict
+
+	result.Users, conflicts, err = addUsers(db, commitAuthors(dir, 0))
+	result.UserConflicts = append(result.UserConflicts, conflicts...)
+
+	return err
 }
 
 // Open opens the database at path with foreign keys enforced.
@@ -269,7 +301,10 @@ func index(db *sql.DB, dir string, result *Result) error {
 
 		id := strings.TrimSuffix(name, ".md")
 
-		if err := indexFile(tx, dir, name); err != nil {
+		conflicts, err := indexFile(tx, dir, name)
+		result.UserConflicts = append(result.UserConflicts, conflicts...)
+
+		if err != nil {
 			result.Failed = append(result.Failed, FileError{Path: filepath.Join(dir, name), Err: err})
 			continue
 		}
@@ -282,26 +317,26 @@ func index(db *sql.DB, dir string, result *Result) error {
 
 // indexFile adds the issue in the file name in dir to the database. If the
 // issue can't be added, the database is left as it was.
-func indexFile(tx *sql.Tx, dir, name string) (err error) {
+func indexFile(tx *sql.Tx, dir, name string) (conflicts []UserConflict, err error) {
 	source, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	issue, err := parse.ParseIssue(bytes.NewReader(source))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	issue.Id = strings.TrimSuffix(name, ".md")
 
 	if err := validate(issue); err != nil {
-		return err
+		return nil, err
 	}
 
 	// A savepoint undoes this issue's rows if any of them can't be added.
 	if _, err := tx.Exec("SAVEPOINT issue"); err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -313,7 +348,7 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 
 	created, offset, err := utcDate(issue.DateCreated)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sum := sha256.Sum256(source)
@@ -323,27 +358,27 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		issue.Id, name, issue.Title, issue.Author, created, offset, hex.EncodeToString(sum[:]),
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, tag := range issue.Metadata {
-		value, err := json.Marshal(tag.Values)
+		value, err := json.Marshal(models.Canonical(tag.Values))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if _, err := tx.Exec(
 			`INSERT INTO attribute (uuid, issueId, key, value) VALUES (?, ?, ?, ?)`,
 			newUUID(), issue.Id, tag.Key, string(value),
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	for i, card := range issue.Conversation {
 		created, offset, err := utcDate(card.DateCreated)
 		if err != nil {
-			return fmt.Errorf("comment %d: %w", i+1, err)
+			return nil, fmt.Errorf("comment %d: %w", i+1, err)
 		}
 
 		content := ""
@@ -356,11 +391,14 @@ func indexFile(tx *sql.Tx, dir, name string) (err error) {
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			newUUID(), issue.Id, i, card.Author, created, offset, content,
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	// Bylines with display names add their users.
+	_, conflicts, err = addUsers(tx, bylineUsers(issue))
+
+	return conflicts, err
 }
 
 // validate checks the rules the database has for an issue's attributes: each

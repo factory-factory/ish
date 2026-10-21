@@ -24,10 +24,10 @@ var issues = map[string][]string{
 // for filters on fields. dateCreated is stored in UTC, which for B and D is
 // a different day than in their own time zones.
 var headers = map[string]string{
-	"A": "# Fix the parser\n\n[alice 2026-10-12T10:00:00-07:00]\n", // 2026-10-12T17:00:00Z
-	"B": "# Filter by field\n\n[bob 2026-10-13T20:30:00-07:00]\n",  // 2026-10-14T03:30:00Z
-	"C": "# 42\n\n[alice 2026-09-30T23:00:00Z]\n",
-	"D": "# D\n\n[carol 2026-10-14T01:00:00+02:00]\n", // 2026-10-13T23:00:00Z
+	"A": "# Fix the parser\n\n[alice@example.com 2026-10-12T10:00:00-07:00]\n", // 2026-10-12T17:00:00Z
+	"B": "# Filter by field\n\n[bob@example.com 2026-10-13T20:30:00-07:00]\n",  // 2026-10-14T03:30:00Z
+	"C": "# 42\n\n[alice@example.com 2026-09-30T23:00:00Z]\n",
+	"D": "# D\n\n[carol@example.com 2026-10-14T01:00:00+02:00]\n", // 2026-10-13T23:00:00Z
 }
 
 // match returns the IDs of the issues that text matches, in order.
@@ -85,7 +85,7 @@ func indexedDir(t *testing.T) string {
 	for id, metadata := range issues {
 		source, ok := headers[id]
 		if !ok {
-			source = "# " + id + "\n\n[alice 2026-10-12T10:00:00-07:00]\n"
+			source = "# " + id + "\n\n[alice@example.com 2026-10-12T10:00:00-07:00]\n"
 		}
 
 		if len(metadata) > 0 {
@@ -182,10 +182,10 @@ func TestWhere(t *testing.T) {
 		{"{@title ~ /^Fi/}", "A B"},
 		{"{@title ~ '(?i)PARSER'}", "A"},
 		{"{@title < 'E'}", "C D"},
-		{"{@author = 'alice'}", "A C E"},
-		{"{@author != 'alice'}", "B D"},
-		{"{@author = 'alice'} and {state != 'closed'}", "A C E"},
-		{"not {@author = 'alice'} or {priority = 'high'}", "B C D"},
+		{"{@author = 'alice@example.com'}", "A C E"},
+		{"{@author != 'alice@example.com'}", "B D"},
+		{"{@author = 'alice@example.com'} and {state != 'closed'}", "A C E"},
+		{"not {@author = 'alice@example.com'} or {priority = 'high'}", "B C D"},
 
 		// A field compares numerically with a number, and != is the
 		// opposite of = even where the field isn't a number.

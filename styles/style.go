@@ -134,6 +134,11 @@ var ButtonSelected = lipgloss.NewStyle().
 	Background(lipgloss.Color("5")).
 	Bold(true)
 
+// Mention is a user's display name, shown in place of their email in
+// metadata and comments.
+var Mention = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("6"))
+
 // Suggestion is the rest of a suggested completion, after the cursor, as a
 // tag's key or values are typed.
 var Suggestion = lipgloss.NewStyle().

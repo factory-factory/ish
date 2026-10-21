@@ -131,7 +131,7 @@ func TestSaveIssueUpdatesDatabase(t *testing.T) {
 
 	// Edit the title and state, and add a comment.
 	issue.Title = "First, edited"
-	issue.Metadata[0].Values = []string{"closed"}
+	issue.Metadata[0].Values = models.Tokens("closed")
 	content := "Two"
 	issue.Conversation = append(issue.Conversation, models.Card{
 		Author: "carol@example.com", DateCreated: "2026-10-12T09:00:00-07:00", Content: &content,
@@ -195,8 +195,8 @@ func TestSaveIssueRejectsInvalidMetadata(t *testing.T) {
 		metadata []models.Tag
 		want     string
 	}{
-		{"duplicate key", []models.Tag{{Key: "state", Values: []string{"open"}}, {Key: "state", Values: []string{"closed"}}}, "more than once"},
-		{"key characters", []models.Tag{{Key: "due@date", Values: []string{"tomorrow"}}}, "may only contain"},
+		{"duplicate key", []models.Tag{{Key: "state", Values: models.Tokens("open")}, {Key: "state", Values: models.Tokens("closed")}}, "more than once"},
+		{"key characters", []models.Tag{{Key: "due@date", Values: models.Tokens("tomorrow")}}, "may only contain"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()

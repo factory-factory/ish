@@ -1,13 +1,13 @@
 # Implement auto-complete for attribute keys and values
 
-[brendan@berg.industries 2026-10-15T23:49:34-07:00]
+[<brendan@berg.industries> 2026-10-15T23:49:34-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T23:49:34-07:00]
+[<brendan@berg.industries> 2026-10-15T23:49:34-07:00]
 
 It would be helpful to be able to autocomplete key names and values when adding metadata attributes.
 
@@ -29,7 +29,7 @@ The keybindings for delete and return, etc. should be the same as in the key fie
 
 ---
 
-[Claude 2026-10-16T23:16:03-07:00]
+[Claude <noreply@anthropic.com> 2026-10-16T23:16:03-07:00]
 
 I've reviewed this and moved it to `in progress`. Below is my plan, then some questions. Several of them come from the keys added in #3CYE1-CVC45. I'll start once you've answered them.
 
@@ -54,7 +54,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[brendan@berg.industries 2026-10-16T23:18:31-07:00]
+[<brendan@berg.industries> 2026-10-16T23:18:31-07:00]
 
 Great call to use as much of the built-in bubbles text input behavior as possible.
 
@@ -70,7 +70,7 @@ Great call to use as much of the built-in bubbles text input behavior as possibl
 
 ---
 
-[Claude 2026-10-16T23:37:19-07:00]
+[Claude <noreply@anthropic.com> 2026-10-16T23:37:19-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -117,7 +117,7 @@ As you asked, the binding is gone, but the code isn't. `editKeyAgain`, the dimme
 
 ---
 
-[brendan@berg.industries 2026-10-16T23:49:06-07:00]
+[<brendan@berg.industries> 2026-10-16T23:49:06-07:00]
 
 I think we're almost there.
 
@@ -125,7 +125,7 @@ I think we're almost there.
 
 Let's change some behavior. Instead of cycling through matches with `tab`, pressing `tab` should accept the suggested match. If the cursor is in the key field pressing `tab` a second time should move to the value field. This also lets us revert the `shift+tab` behavior when editing the value field.
 
-Pressing `enter` in the key field should accept the match *and* move to the value field. Pressing `enter` in the value field should accept the match and save the attribute.
+Pressing `enter` in the key field should accept the match _and_ move to the value field. Pressing `enter` in the value field should accept the match and save the attribute.
 
 ## Backspace behavior
 
@@ -133,7 +133,7 @@ The current implementation shows suggestions while deleting text. Once the sugge
 
 ---
 
-[Claude 2026-10-17T00:06:31-07:00]
+[Claude <noreply@anthropic.com> 2026-10-17T00:06:31-07:00]
 
 Done, and left in `in review`.
 
@@ -165,6 +165,6 @@ Once a suggestion is dismissed, nothing more is suggested while deleting, even w
 
 ---
 
-[brendan@berg.industries 2026-10-17T20:53:27-07:00]
+[<brendan@berg.industries> 2026-10-17T20:53:27-07:00]
 
 I've re-enabled cycling through suggestsions (with `↑`/`↓` and `ctrl+p`/`ctrl+n`). Otherwise, everything looks good.

@@ -23,7 +23,7 @@ func FormatIssue(issue models.Issue) string {
 	}
 
 	for _, tag := range issue.Metadata {
-		fmt.Fprintf(&b, "- %s: %s\n", tag.Key, strings.Join(tag.Values, ", "))
+		fmt.Fprintf(&b, "- %s: %s\n", tag.Key, strings.Join(models.Canonical(tag.Values), ", "))
 	}
 
 	for _, card := range issue.Conversation {
@@ -104,7 +104,7 @@ func checkRoundTrip(issue models.Issue, source string) error {
 	for i, tag := range issue.Metadata {
 		got := parsed.Metadata[i]
 
-		if got.Key != tag.Key || !slices.Equal(got.Values, tag.Values) {
+		if got.Key != tag.Key || !slices.Equal(models.Canonical(got.Values), models.Canonical(tag.Values)) {
 			return fmt.Errorf("metadata %q can't be written as an ish file", tag.Key)
 		}
 	}

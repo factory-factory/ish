@@ -86,7 +86,7 @@ func TestAddTagKeyThenValue(t *testing.T) {
 		t.Errorf("editing, tag editing, selected, tagIndex = %v, %v, %v, %d, want false, false, true, 1",
 			ish.editing, tag.editing, tag.selected, ish.tagIndex())
 	}
-	if !slices.Equal(tag.Values, []string{"high", "urgent"}) || !ish.dirty {
+	if !slices.Equal(Canonical(tag.Values), []string{"high", "urgent"}) || !ish.dirty {
 		t.Errorf("values, dirty = %q, %v, want [high urgent], true", tag.Values, ish.dirty)
 	}
 	if view := plain(ish); !strings.Contains(view, "• priority: high, urgent") {
@@ -192,7 +192,7 @@ func TestNewTagIsSaved(t *testing.T) {
 	if len(s.saved) != 1 {
 		t.Fatalf("saved %d times, want 1", len(s.saved))
 	}
-	if tags := s.saved[0].Metadata; len(tags) != 2 || tags[1].Key != "priority" || !slices.Equal(tags[1].Values, []string{"high"}) {
+	if tags := s.saved[0].Metadata; len(tags) != 2 || tags[1].Key != "priority" || !slices.Equal(Canonical(tags[1].Values), []string{"high"}) {
 		t.Errorf("saved metadata = %v, want the new priority tag", tags)
 	}
 }
@@ -200,7 +200,7 @@ func TestNewTagIsSaved(t *testing.T) {
 func TestDeleteTag(t *testing.T) {
 	for _, key := range []tea.KeyPressMsg{backspace, deleteKey} {
 		ish := taggingIssue(t, nil)
-		ish.Metadata = append(ish.Metadata, Tag{Key: "priority", Values: []string{"high"}})
+		ish.Metadata = append(ish.Metadata, Tag{Key: "priority", Values: Tokens("high")})
 		ish.resize()
 		area := ish.viewport.Height()
 		ish.setCursor(2)
@@ -237,7 +237,7 @@ func TestDeleteTag(t *testing.T) {
 
 func TestDeleteLastTags(t *testing.T) {
 	ish := taggingIssue(t, nil)
-	ish.Metadata = append(ish.Metadata, Tag{Key: "priority", Values: []string{"high"}})
+	ish.Metadata = append(ish.Metadata, Tag{Key: "priority", Values: Tokens("high")})
 	ish.resize()
 
 	// Deleting the last tag selects the one before it.
@@ -298,7 +298,7 @@ func TestDeleteKeyElsewhere(t *testing.T) {
 	ish = editAt(t, ish, 2)
 	ish = update(t, ish, backspace, enter)
 
-	if len(ish.Metadata) != 1 || !slices.Equal(ish.Metadata[0].Values, []string{"ope"}) {
+	if len(ish.Metadata) != 1 || !slices.Equal(Canonical(ish.Metadata[0].Values), []string{"ope"}) {
 		t.Errorf("tags = %v, want state with one character deleted", ish.Metadata)
 	}
 }
@@ -377,7 +377,7 @@ func TestTabAndColonMoveToValues(t *testing.T) {
 		ish = typeText(t, ish, "a:b")
 		ish = update(t, ish, enter)
 
-		if got := ish.Metadata[1].Values; !slices.Equal(got, []string{"a:b"}) {
+		if got := Canonical(ish.Metadata[1].Values); !slices.Equal(got, []string{"a:b"}) {
 			t.Errorf("after %s: values = %q, want [a:b]", key, got)
 		}
 	}
@@ -421,7 +421,7 @@ func TestEditKeyAgain(t *testing.T) {
 
 	ish = update(t, ish, enter)
 
-	if tag := ish.Metadata[1]; tag.Key != "priority" || !slices.Equal(tag.Values, []string{"high"}) {
+	if tag := ish.Metadata[1]; tag.Key != "priority" || !slices.Equal(Canonical(tag.Values), []string{"high"}) {
 		t.Errorf("saved tag %q: %q, want priority: [high]", tag.Key, tag.Values)
 	}
 }

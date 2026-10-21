@@ -1,19 +1,19 @@
 # Update markdown rendering style to give code blocks a grey background
 
-[brendan@berg.industries 2026-10-12T10:20:45-07:00]
+[<brendan@berg.industries> 2026-10-12T10:20:45-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-12T10:20:45-07:00]
+[<brendan@berg.industries> 2026-10-12T10:20:45-07:00]
 
 When rendering markdown in comment cards, code blocks are difficult to distinguish from regular text. Update the glamour styles to give code blocks a grey background.
 
 ---
 
-[Claude 2026-10-13T01:05:10-07:00]
+[Claude <noreply@anthropic.com> 2026-10-13T01:05:10-07:00]
 
 I've tried this with glamour's styles alone. It works, but doesn't look good, so I'd like you to choose between two approaches before I change any code.
 
@@ -44,7 +44,7 @@ I recommend (b), since its whole point is making code blocks stand out from the 
 
 ---
 
-[brendan@berg.industries 2026-10-13T14:13:03-07:00]
+[<brendan@berg.industries> 2026-10-13T14:13:03-07:00]
 
 This is a test comment with a code block.
 
@@ -56,7 +56,7 @@ func stringPtr(s string) *string {
 
 ---
 
-[Claude 2026-10-13T14:46:10-07:00]
+[Claude <noreply@anthropic.com> 2026-10-13T14:46:10-07:00]
 
 Done, and moved to `in review`. In our conversation you suggested a third approach, applying the background after glamour has rendered the text, which turned out to be better than either of my options. It needs no change to glamour.
 

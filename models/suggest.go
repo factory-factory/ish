@@ -16,6 +16,14 @@ import (
 // Issue.SetMetadataValues.
 type MetadataValues map[string][]string
 
+// References holds what's suggested for a value that starts with # or @
+// instead of the values used with the tag's key: the IDs of every issue, and
+// the names of the repository's users. See Issue.SetReferences.
+type References struct {
+	IssueIDs  []string
+	UserNames []string
+}
+
 // minSuggestion is the number of characters of a key or value that must be
 // typed before completions are suggested.
 const minSuggestion = 3
@@ -123,7 +131,7 @@ func (t *Tag) refreshSuggestions() {
 			used[v] = true
 		}
 
-		for _, v := range t.known[t.Key] {
+		for _, v := range t.valueCandidates(typed) {
 			if !used[v] {
 				candidates = append(candidates, before+v)
 			}
@@ -135,6 +143,39 @@ func (t *Tag) refreshSuggestions() {
 	})
 
 	input.SetSuggestions(candidates)
+}
+
+// valueCandidates returns the values that can be suggested for typed, the
+// value being typed. A value starting with # is a reference to another
+// issue, so every other issue's ID is suggested. One starting with @ refers
+// to a user, so their names are suggested, except any with a comma, which
+// would be split into two values. Otherwise, the values used with the tag's
+// key are suggested.
+func (t *Tag) valueCandidates(typed string) []string {
+	var values []string
+
+	switch {
+	case strings.HasPrefix(typed, "#"):
+		for _, id := range t.refs.IssueIDs {
+			if id != t.issueID {
+				values = append(values, "#"+id)
+			}
+		}
+
+	case strings.HasPrefix(typed, "@"):
+		for _, name := range t.refs.UserNames {
+			if !strings.Contains(name, ",") {
+				values = append(values, "@"+name)
+			}
+		}
+
+	default:
+		for _, v := range t.known[t.Key] {
+			values = append(values, t.dir.tokenFor(v).Text())
+		}
+	}
+
+	return values
 }
 
 // suggesting reports whether a completion is shown after the cursor in the

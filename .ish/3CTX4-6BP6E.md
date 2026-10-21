@@ -1,14 +1,14 @@
 # Implement parser for filter expression language
 
-[brendan@berg.industries 2026-10-12T10:40:12-07:00]
+[<brendan@berg.industries> 2026-10-12T10:40:12-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.parent: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-12T10:40:12-07:00]
+[<brendan@berg.industries> 2026-10-12T10:40:12-07:00]
 
 Create a parser that converts freeform text into filter expressions. The parser output should be AST nodes representing the expression.
 
@@ -61,24 +61,26 @@ If an error is encountered, the parser should indicate the position in the strin
 
 ---
 
-[Claude 2026-10-12T22:34:11-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T22:34:11-07:00]
 
 I've implemented the parser to this specification, along with the SQL generation it needs. Three points need your decision, so this stays `in progress` until they're settled. The SQL semantics in question 1 are implemented as I recommended on #3CSJ4-PEZ1N, so they're easy to change if you decide differently. Nothing is committed yet.
 
 ## Questions
 
 1. **SQL semantics (from #3CSJ4-PEZ1N, questions 2 to 4, not yet answered).** `Where()` needs these rules. Currently:
-   - An attribute with several values matches `=`, `<`, `>`, `<=`, `>=` or `~` if *any* of its values does. `!=` is the exact opposite of `=`, so `{assignees != 'bob'}` excludes an issue assigned to bob and alice.
+   - An attribute with several values matches `=`, `<`, `>`, `<=`, `>=` or `~` if _any_ of its values does. `!=` is the exact opposite of `=`, so `{assignees != 'bob'}` excludes an issue assigned to bob and alice.
    - An issue without the attribute matches only `!=`, so the default `{state != 'closed'}` keeps issues with no state. `{key = null}` matches issues without the attribute, and `{key != null}` those with it.
    - A number compares numerically, and only with values that are numbers. `{estimate > 3}` matches `5` but not `8h`, and `{estimate = 5.0}` matches `5`. A quoted `'5'` compares as text.
    - `true` and `false` match the text `true` and `false`. Strings compare as case-sensitive text. Regular expressions are Go's syntax, so `(?i)` ignores case.
 
    Do these match what you intend?
+
 2. **Backslashes in regular expressions.** The spec says values are JSON scalars, so strings use JSON escapes. A regular expression must then double its backslashes: `{state ~ '^in\\s'}` for `^in\s`. Worse, `\b` is a JSON escape for backspace, so `{title ~ '\bfoo'}` silently searches for a backspace rather than a word boundary. Options:
    - (a) Keep strict JSON escaping, as now.
    - (b) For `~` only, treat the string literally, except that `\'` or `\"` escapes the enclosing quote. `'\bfoo\s'` then reaches the regular expression unchanged.
 
    I recommend (b), since regular expressions are where backslashes come up.
+
 3. **Colons in names.** This issue disallows colons in attribute names, but the metadata key rule from #1PZ4D-B0NEF (in `store`, and the database's `CHECK`) allows them. A key with a colon could be stored but never filtered on. No current issue uses one. Should I remove colons from the key rule, so keys and filter names match exactly? I recommend yes. `ish init` would then reject keys with colons, like other disallowed characters.
 
 ## Decisions I made
@@ -102,15 +104,15 @@ I've implemented the parser to this specification, along with the SQL generation
 
 ---
 
-[brendan@berg.industries 2026-10-12T22:38:06-07:00]
+[<brendan@berg.industries> 2026-10-12T22:38:06-07:00]
 
 All good catches. Hopefully this clarifies things:
 
 1. **SQL Semantics**
-    - The comparison operator behavior of having operators other than `!=` match *any* values and `!=` match *all* values makes sense.
-    - The behavior you described for matching expressions when the attribute it refers to does not exist on the issue makes sense. So does the behavior for testing whether the attribute is set by using `{key = null}` or `{key != null}`.
-    - Numeric comparisons as described make sense. There's no expectation that `8h` would compare numerically.
-    - Matching `true` and `false` against strings seems to be the right approach, since we have no way of putting non-string values in the database.
+   - The comparison operator behavior of having operators other than `!=` match _any_ values and `!=` match _all_ values makes sense.
+   - The behavior you described for matching expressions when the attribute it refers to does not exist on the issue makes sense. So does the behavior for testing whether the attribute is set by using `{key = null}` or `{key != null}`.
+   - Numeric comparisons as described make sense. There's no expectation that `8h` would compare numerically.
+   - Matching `true` and `false` against strings seems to be the right approach, since we have no way of putting non-string values in the database.
 
 2. **Regular Expressions** Let's add another type that can go in the value part of the expression that behaves similar to JavaScripts regular expression literals. For now, a string enclosed in `/` forward slashes should be treated literally for regular expression search. Syntactically, a regexp literal can only follow the `~` operator.
 
@@ -118,7 +120,7 @@ All good catches. Hopefully this clarifies things:
 
 ---
 
-[Claude 2026-10-12T23:07:54-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T23:07:54-07:00]
 
 Done, following your answers, and moved to `in review`.
 

@@ -233,24 +233,34 @@ func matchTitle(n ast.Node, b []byte) (*string, error) {
 	}
 }
 
+// bylinePattern matches a byline: an author and a timestamp in brackets.
+var bylinePattern = regexp.MustCompile(`\[(.*)\]`)
+
+// matchByline reads a byline: a mailbox, as in alice@example.com or
+// "Alice" <alice@example.com>, then a timestamp, in brackets. The author is
+// kept as it's written, so the byline is written back unchanged.
 func matchByline(n ast.Node, b []byte) (*Byline, error) {
 	errStr := "Expected a line in the form [<author> <timestamp>]"
-	//elt := n.FirstChild().NextSibling()
-	exp := regexp.MustCompile(`\[([^ ]*) ([^]]*)\]`)
-	switch n.(type) {
-	case *ast.Paragraph:
-		matches := exp.FindStringSubmatch(string(n.Text(b)))
 
-		if len(matches) != 3 {
-			return nil, errors.New(errStr)
-		}
-
-		value := &Byline{&matches[1], &matches[2]}
-		return value, nil
-	default:
+	if _, ok := n.(*ast.Paragraph); !ok {
 		return nil, errors.New(errStr)
 	}
 
+	matches := bylinePattern.FindStringSubmatch(string(n.Text(b)))
+	if matches == nil {
+		return nil, errors.New(errStr)
+	}
+
+	_, author, date, err := models.SplitMailbox(matches[1])
+	if err != nil {
+		return nil, err
+	}
+
+	if date == "" {
+		return nil, errors.New(errStr)
+	}
+
+	return &Byline{&author, &date}, nil
 }
 
 func matchMetadata(n ast.Node, b []byte) ([]models.Tag, error) {
@@ -281,7 +291,7 @@ func matchMetadata(n ast.Node, b []byte) ([]models.Tag, error) {
 
 			result = append(result, models.Tag{
 				Key:    key[1],
-				Values: values,
+				Values: models.Tokens(values...),
 			})
 		}
 

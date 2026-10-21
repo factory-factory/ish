@@ -1,19 +1,19 @@
 # Draw more attention to the filter drop-down when it is in focus
 
-[brendan@berg.industries 2026-10-15T23:39:56-07:00]
+[<brendan@berg.industries> 2026-10-15T23:39:56-07:00]
 
-- state: in review
-- assignees: brendan@berg.industries
+- state: closed
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T23:39:56-07:00]
+[<brendan@berg.industries> 2026-10-15T23:39:56-07:00]
 
 The text (and the disclosure triangle) in the filter drop-down menu should be bold when in focus.
 
 ---
 
-[Claude 2026-10-15T23:42:59-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T23:42:59-07:00]
 
 Done, and moved to `in review`. I had no questions.
 

@@ -3,6 +3,8 @@
 package app
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,6 +56,10 @@ type Model struct {
 
 	// user is who's running ish, for the "Issues assigned to me" filter.
 	user string
+
+	// people maps the repository's users' emails to their names, which
+	// are shown in place of the emails.
+	people *models.Directory
 
 	width  int
 	height int
@@ -119,6 +125,7 @@ func New(dir string) (Model, error) {
 		help:   help.New(),
 		filter: filterField{text: DefaultFilter, node: node, menu: newFilterMenu()},
 		user:   CurrentUser(dir),
+		people: loadPeople(dir),
 	}
 
 	if m.unfiltered, err = anyIssues(dir, issues); err != nil {
@@ -128,7 +135,7 @@ func New(dir string) (Model, error) {
 	// Columns must be set before rows, which are rendered as they're added.
 	m.table = table.New(
 		table.WithColumns(m.columns(0)),
-		table.WithRows(rows(issues)),
+		table.WithRows(rows(issues, m.people)),
 		table.WithStyles(tableStyles(true)),
 		table.WithFocused(true),
 	)
@@ -327,17 +334,40 @@ func anyIssues(dir string, listed []store.Summary) (bool, error) {
 }
 
 // rows returns a table row for each issue.
-func rows(issues []store.Summary) []table.Row {
+func rows(issues []store.Summary, people *models.Directory) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.ID, issue.Title, assigneesText(issue), opened(issue, now()), stateText(issue)}
+		r[i] = table.Row{issue.ID, issue.Title, assigneesText(issue, people), opened(issue, now()), stateText(issue)}
 	}
 	return r
 }
 
-// assigneesText formats an issue's assignees for the list.
-func assigneesText(issue store.Summary) string {
-	return strings.Join(issue.Assignees, ", ")
+// assigneesText formats an issue's assignees for the list, with users'
+// names in place of their emails.
+func assigneesText(issue store.Summary, people *models.Directory) string {
+	shown := make([]string, len(issue.Assignees))
+
+	for i, a := range issue.Assignees {
+		shown[i] = people.Show(a)
+	}
+
+	return strings.Join(shown, ", ")
+}
+
+// loadPeople returns the users in the metadata database in dir, or none if
+// they can't be read.
+func loadPeople(dir string) *models.Directory {
+	users, err := store.Users(dir)
+	if err != nil {
+		return models.NewDirectory(nil)
+	}
+
+	people := make([]models.User, len(users))
+	for i, u := range users {
+		people[i] = models.User{Name: u.Name, Email: u.Email}
+	}
+
+	return models.NewDirectory(people)
 }
 
 // stateText formats an issue's state for the list.
@@ -392,7 +422,8 @@ func (m *Model) reload() {
 
 	// Columns must be set before rows, which are rendered as they're added.
 	m.table.SetColumns(m.columns(0))
-	m.table.SetRows(rows(issues))
+	m.people = loadPeople(m.dir)
+	m.table.SetRows(rows(issues, m.people))
 	m.table.SetCursor(min(cursor, len(issues)-1))
 
 	m.resize()
@@ -446,7 +477,7 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m.show(models.NewIssue(id, CurrentUser(m.dir), now()))
+	return m.show(models.NewIssue(id, CurrentAuthor(m.dir), now()))
 }
 
 // show switches to the view of issue, which is saved to the list's directory
@@ -455,17 +486,32 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
-	issue.SetAuthor(CurrentUser(m.dir))
+	issue.SetAuthor(CurrentAuthor(m.dir))
 
 	// Without the IDs of the other issues, references aren't linked, and
-	// without their metadata, nothing is suggested as tags are edited.
+	// without their metadata and the repository's users, nothing is
+	// suggested as tags are edited.
+	var refs models.References
+
 	if ids, err := store.IssueIDs(m.dir); err == nil {
 		issue.SetIssueLookup(func(id string) bool { return ids[id] })
+
+		refs.IssueIDs = slices.Sorted(maps.Keys(ids))
 	}
 
 	if values, err := store.MetadataValues(m.dir); err == nil {
 		issue.SetMetadataValues(values)
 	}
+
+	if users, err := store.Users(m.dir); err == nil {
+		refs.UserNames = userNames(users)
+	}
+
+	issue.SetReferences(refs)
+
+	// Users' emails are shown, and their names typed, as their names.
+	m.people = loadPeople(m.dir)
+	issue.SetDirectory(m.people)
 
 	m.issue = issue
 	m.openId = issue.Id
@@ -479,6 +525,20 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(m.issue.Init(), cmd)
+}
+
+// userNames returns the distinct names of users, in order. A user with
+// several emails has one name.
+func userNames(users []store.User) []string {
+	var names []string
+
+	for _, user := range users {
+		if user.Name != "" && !slices.Contains(names, user.Name) {
+			names = append(names, user.Name)
+		}
+	}
+
+	return names
 }
 
 // saveIssue writes an issue's changes to its file in the list's directory,
@@ -529,7 +589,7 @@ func (m Model) columns(width int) []table.Column {
 	for _, issue := range m.issues {
 		id = max(id, lipgloss.Width(issue.ID))
 		title = max(title, lipgloss.Width(issue.Title))
-		assignee = max(assignee, lipgloss.Width(assigneesText(issue)))
+		assignee = max(assignee, lipgloss.Width(assigneesText(issue, m.people)))
 		date = max(date, lipgloss.Width(opened(issue, today)))
 		state = max(state, lipgloss.Width(stateText(issue)))
 	}

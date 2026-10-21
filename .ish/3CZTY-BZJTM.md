@@ -1,13 +1,13 @@
 # Dim the selected row when the issue list is not in focus
 
-[brendan@berg.industries 2026-10-15T22:50:57-07:00]
+[<brendan@berg.industries> 2026-10-15T22:50:57-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T22:50:57-07:00]
+[<brendan@berg.industries> 2026-10-15T22:50:57-07:00]
 
 When navigating up to the filter menu by pressing the up arrow from the first issue, the selected issue currently remains highlighted with a blue background.
 
@@ -16,7 +16,7 @@ When navigating up to the filter menu by pressing the up arrow from the first is
 
 ---
 
-[Claude 2026-10-15T22:57:15-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T22:57:15-07:00]
 
 Done, and moved to `in review`. I had no questions.
 

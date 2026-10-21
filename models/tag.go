@@ -13,7 +13,7 @@ import (
 
 type Tag struct {
 	Key    string
-	Values []string
+	Values []Token
 
 	selected bool
 
@@ -41,6 +41,16 @@ type Tag struct {
 	known     MetadataValues
 	takenKeys map[string]bool
 	dismissed bool
+
+	// refs holds the issue IDs and user names suggested for values
+	// starting with # and @, leaving out issueID, the ID of the tag's own
+	// issue.
+	refs    References
+	issueID string
+
+	// dir maps users' emails to their names, to show and type names in
+	// place of emails. See Issue.SetDirectory.
+	dir *Directory
 
 	// deleting reports whether the tag is highlighted, waiting for the user
 	// to confirm that it should be deleted.
@@ -136,7 +146,7 @@ func (t *Tag) startEdit(width int, isDark bool) tea.Cmd {
 	t.input.Prompt = ""
 	t.input.SetStyles(tagInputStyles(isDark))
 	useSuggestions(&t.input)
-	t.input.SetValue(strings.Join(t.Values, ", "))
+	t.input.SetValue(strings.Join(texts(t.Values), ", "))
 
 	if t.draft != "" {
 		t.input.SetValue(t.draft)
@@ -220,15 +230,40 @@ func (t *Tag) sizeEditor(width int) {
 // whether they changed. A tag must have a value, so if every value was
 // removed the values are left unchanged.
 func (t *Tag) commitEdit() bool {
-	values := splitValues(t.input.Value())
+	values := t.tokens(splitValues(t.input.Value()))
 	t.editing = false
 
-	if len(values) == 0 || slices.Equal(values, t.Values) {
+	if len(values) == 0 || slices.Equal(Canonical(values), Canonical(t.Values)) {
 		return false
 	}
 
 	t.Values = values
 	return true
+}
+
+// tokens returns the tokens for values as they're typed. A user's display
+// name after mentionPrefix is saved as their email in angle brackets, unless
+// several users have the name. A user's email in angle brackets is shown as
+// their name.
+func (t Tag) tokens(values []string) []Token {
+	tokens := make([]Token, len(values))
+
+	for i, v := range values {
+		tokens[i] = t.dir.tokenFor(t.dir.resolve(v))
+	}
+
+	return tokens
+}
+
+// texts returns the text of each token, as it's shown and edited.
+func texts(tokens []Token) []string {
+	values := make([]string, len(tokens))
+
+	for i, t := range tokens {
+		values[i] = t.Text()
+	}
+
+	return values
 }
 
 // cancelEdit stops editing, leaving the values unchanged.
@@ -271,7 +306,7 @@ func (t Tag) View() tea.View {
 
 	if t.deleting {
 		return tea.NewView(styles.TagDeleting.Render(
-			"• " + t.Key + ": " + strings.Join(t.Values, ", "),
+			"• " + t.Key + ": " + strings.Join(texts(t.Values), ", "),
 		))
 	}
 
@@ -281,16 +316,27 @@ func (t Tag) View() tea.View {
 
 	vals := make([]string, len(t.Values))
 
-	for i, s := range t.Values {
-		vals[i] = t.renderValue(i, s)
+	for i, v := range t.Values {
+		vals[i] = t.renderValue(i, v)
 	}
 
 	return tea.NewView(t.label() + strings.Join(vals, ", "))
 }
 
-// renderValue renders the value at index i, s, with any links in it, or in
-// the color of its state.
-func (t Tag) renderValue(i int, s string) string {
+// renderValue renders the value at index i, v: a user's display name, or its
+// text with any links in it, or in the color of its state. An email in angle
+// brackets without a user's name is shown as an ordinary email.
+func (t Tag) renderValue(i int, v Token) string {
+	if v.Display != "" {
+		return styles.Mention.Render(v.Text())
+	}
+
+	s := v.Canonical
+
+	if email, ok := bracketedEmail(s); ok {
+		return styles.Value.Render(email)
+	}
+
 	if refs := findReferences(s, t.issues); len(refs) > 0 {
 		return t.renderLinkedValue(i, refs)
 	}
@@ -320,7 +366,7 @@ func (t Tag) links() []tagLink {
 	var links []tagLink
 
 	for i, v := range t.Values {
-		for _, ref := range findReferences(v, t.issues) {
+		for _, ref := range findReferences(v.Canonical, t.issues) {
 			links = append(links, tagLink{value: i, ref: ref})
 		}
 	}
@@ -374,7 +420,7 @@ func (t Tag) renderLinkedValue(i int, refs []reference) string {
 		selected = &links[t.link].ref
 	}
 
-	marked := t.Values[i]
+	marked := t.Values[i].Canonical
 
 	for i := len(refs) - 1; i >= 0; i-- {
 		marker := linkMarker

@@ -1,19 +1,19 @@
 # Add horizontal separator between saved filters an the "Custom..." menu item
 
-[brendan@berg.industries 2026-10-15T22:47:45-07:00]
+[<brendan@berg.industries> 2026-10-15T22:47:45-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T22:47:45-07:00]
+[<brendan@berg.industries> 2026-10-15T22:47:45-07:00]
 
 Add a non-selectable horizontal rule between the filter names and the "Custom..." menu item in the filter drop-down menu.
 
 ---
 
-[Claude 2026-10-15T23:00:48-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T23:00:48-07:00]
 
 Done, and moved to `in review`. I had no questions.
 
@@ -33,13 +33,13 @@ Done, and moved to `in review`. I had no questions.
 
 ---
 
-[brendan@berg.industries 2026-10-15T23:02:44-07:00]
+[<brendan@berg.industries> 2026-10-15T23:02:44-07:00]
 
 This looks good, but can the separator be the same border color used elsewhere in the UI? (Grey 11).
 
 ---
 
-[Claude 2026-10-15T23:04:58-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T23:04:58-07:00]
 
 Done, and left in `in review`. The rule is now grey (11), the border colour of unselected fields, rather than the panel's blue border colour.
 

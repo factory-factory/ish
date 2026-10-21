@@ -20,6 +20,7 @@ func menuModel(t *testing.T) Model {
 		"BBB": issueWithMetadata("Shared", "- state: open", "- assignees: bob, alice@example.com"),
 		"CCC": issueWithMetadata("Mine, closed", "- state: closed", "- assignees: alice@example.com"),
 		"DDD": issueWithMetadata("Bob's", "- state: open", "- assignees: bob"),
+		"EEE": issueWithMetadata("Mine, bracketed", "- state: open", "- assignees: <alice@example.com>"),
 	})
 }
 
@@ -78,12 +79,13 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	if m.filter.menu.Open() || m.filter.preset != presetMine {
 		t.Fatalf("menu open, preset = %v, %d, want the menu closed on %d", m.filter.menu.Open(), m.filter.preset, presetMine)
 	}
-	if m.filter.text != `{assignees = "alice@example.com"} and {state != 'closed'}` {
+	if m.filter.text != `({assignees = "alice@example.com"} or {assignees = "<alice@example.com>"}) and {state != 'closed'}` {
 		t.Errorf("filter = %q, want alice's unclosed issues", m.filter.text)
 	}
 
-	// Issues assigned to alice, alone or with others, that aren't closed.
-	if got := ids(m); got != "AAA BBB" {
+	// Issues assigned to alice, alone or with others, that aren't closed,
+	// whether her email is in angle brackets or not.
+	if got := ids(m); got != "AAA BBB EEE" {
 		t.Errorf("listed %q, want the unclosed issues assigned to alice", got)
 	}
 	if view := plainView(m); !strings.Contains(view, "│ Issues assigned to me") {
@@ -93,13 +95,13 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	// Choosing the first filter again applies it.
 	m = choose(t, m, presetUnclosed)
 
-	if got := ids(m); got != "AAA BBB DDD" {
+	if got := ids(m); got != "AAA BBB DDD EEE" {
 		t.Errorf("listed %q, want the unclosed issues", got)
 	}
 }
 
 func TestPresetFilterQuotesUser(t *testing.T) {
-	for _, user := range []string{"alice@example.com", `o'brien`, `say "hi"`, `back\slash`} {
+	for _, user := range []string{"alice@example.com", `o'brien`, `say "hi"`, `back\slash`, `a<b>`} {
 		text := presetFilter(presetMine, user)
 		node, err := filter.Parse(text)
 
@@ -114,8 +116,19 @@ func TestPresetFilterQuotesUser(t *testing.T) {
 			continue
 		}
 
-		if got := and.LeftExpression.(*filter.AttributeExpression).Value.Data; got != user {
+		// The assignee is the user's email, or the email in angle brackets,
+		// as it's written.
+		or, ok := and.LeftExpression.(*filter.OrExpression)
+		if !ok {
+			t.Errorf("presetFilter(%q) = %q, want either form of the email", user, text)
+			continue
+		}
+
+		if got := or.LeftExpression.(*filter.AttributeExpression).Value.Data; got != user {
 			t.Errorf("presetFilter(%q) compares with %q", user, got)
+		}
+		if got := or.RightExpression.(*filter.AttributeExpression).Value.Data; got != "<"+user+">" {
+			t.Errorf("presetFilter(%q) compares with %q, want it in angle brackets", user, got)
 		}
 		if got := and.RightExpression.String(); got != DefaultFilter {
 			t.Errorf("presetFilter(%q) also requires %q, want %q", user, got, DefaultFilter)
@@ -135,7 +148,7 @@ func TestChooseCustomFilter(t *testing.T) {
 	if !m.filter.custom || !m.filter.editing {
 		t.Fatalf("custom, editing = %v, %v, want to edit a custom filter", m.filter.custom, m.filter.editing)
 	}
-	if got := m.filter.input.Value(); got != `{assignees = "alice@example.com"} and {state != 'closed'}` {
+	if got := m.filter.input.Value(); got != `({assignees = "alice@example.com"} or {assignees = "<alice@example.com>"}) and {state != 'closed'}` {
 		t.Errorf("custom filter starts as %q, want the applied filter", got)
 	}
 	if view := plainView(m); strings.Contains(view, "▼") || !strings.Contains(view, "┏") {
@@ -168,7 +181,7 @@ func TestChooseCustomFilter(t *testing.T) {
 		t.Errorf("custom, menu selection, focused = %v, %d, %v, want the menu back on %d",
 			m.filter.custom, m.filter.menu.SelectedIndex(), m.filter.menu.Focused(), presetMine)
 	}
-	if got := ids(m); got != "AAA BBB" {
+	if got := ids(m); got != "AAA BBB EEE" {
 		t.Errorf("listed %q, want alice's unclosed issues again", got)
 	}
 }

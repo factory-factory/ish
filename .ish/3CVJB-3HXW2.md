@@ -1,14 +1,14 @@
 # Implement custom syntax highlighting for rendering filter expressions
 
-[brendan@berg.industries 2026-10-12T21:59:07-07:00]
+[<brendan@berg.industries> 2026-10-12T21:59:07-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.parent: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-12T21:59:07-07:00]
+[<brendan@berg.industries> 2026-10-12T21:59:07-07:00]
 
 Implement custom syntax highlighting for filter expressions in the `ish` TUI.
 
@@ -25,7 +25,7 @@ The syntax highlighting should be part of the bubbletea `Render` method on the A
 
 ---
 
-[Claude 2026-10-12T23:48:39-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T23:48:39-07:00]
 
 Done, and moved to `in review`.
 
@@ -64,6 +64,6 @@ The issue's list predates regular expression literals (`/^in /`) from #3CTX4-6BP
 
 ---
 
-[Claude 2026-10-12T23:48:46-07:00]
+[Claude <noreply@anthropic.com> 2026-10-12T23:48:46-07:00]
 
-A correction to my previous comment: the filter field from #3CVMN-Q41P7 is in the issue *list*, not the issue view. That's where the highlighted filter appears.
+A correction to my previous comment: the filter field from #3CVMN-Q41P7 is in the issue _list_, not the issue view. That's where the highlighted filter appears.

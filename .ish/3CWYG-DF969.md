@@ -1,14 +1,14 @@
 # Implement the filter drop-down selector
 
-[brendan@berg.industries 2026-10-13T21:32:20-07:00]
+[<brendan@berg.industries> 2026-10-13T21:32:20-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.parent: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-13T21:32:20-07:00]
+[<brendan@berg.industries> 2026-10-13T21:32:20-07:00]
 
 Update the Issue list view to have a drop-down menu for selecting active filters. The top row should be layed out with a label followed by the drop down menu.
 
@@ -30,7 +30,7 @@ This feature should use the `bubble-dropdown` module (which has been added to th
 
 ---
 
-[Claude 2026-10-13T22:36:29-07:00]
+[Claude <noreply@anthropic.com> 2026-10-13T22:36:29-07:00]
 
 The filter menu is implemented and its tests pass, but adding `bubble-dropdown` brought in a start-up problem that needs your decision before this can be finished. This stays `in progress`, and nothing is committed yet.
 
@@ -91,14 +91,14 @@ I recommend (b): it's small, it keeps the dropdown you chose, and it removes the
 
 ---
 
-[brendan@berg.industries 2026-10-13T22:39:08-07:00]
+[<brendan@berg.industries> 2026-10-13T22:39:08-07:00]
 
 1. I think the best way to resolve the start-up issue is to vendor and patch bubble-dropdown.
 2. The query for "Issues assigned to me" should include `... and {state != 'closed'}`.
 
 ---
 
-[Claude 2026-10-14T08:52:33-07:00]
+[Claude <noreply@anthropic.com> 2026-10-14T08:52:33-07:00]
 
 Done, following your answers, and moved to `in review`.
 

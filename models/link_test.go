@@ -152,7 +152,7 @@ func linkIssue(t *testing.T, s *saver) Issue {
 
 	ish := newTestIssue("No links here", linkContent)
 	ish.Metadata = append(ish.Metadata,
-		Tag{Key: "relation.blocked-by", Values: []string{"#CCCCC-33333", "#AAAAA-11111", "see #BBBBB-22222"}},
+		Tag{Key: "relation.blocked-by", Values: Tokens("#CCCCC-33333", "#AAAAA-11111", "see #BBBBB-22222")},
 	)
 	ish.SetClosable(true)
 	ish.SetIssueLookup(knownIssues)
@@ -295,7 +295,7 @@ func TestTagWithoutLinks(t *testing.T) {
 
 func TestNoLinksWithoutLookup(t *testing.T) {
 	ish := newTestIssue("See #AAAAA-11111")
-	ish.Metadata = append(ish.Metadata, Tag{Key: "relation.parent", Values: []string{"#AAAAA-11111"}})
+	ish.Metadata = append(ish.Metadata, Tag{Key: "relation.parent", Values: Tokens("#AAAAA-11111")})
 	ish = resize(t, ish, 20)
 
 	if strings.Contains(ish.View().Content, styles.Link.Render("#AAAAA-11111")) {

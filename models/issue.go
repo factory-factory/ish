@@ -87,6 +87,47 @@ type Issue struct {
 	// known holds the metadata keys and values used in the issues, to
 	// suggest as tags are edited. See SetMetadataValues.
 	known MetadataValues
+
+	// refs holds the issue IDs and user names suggested for values starting
+	// with # and @. See SetReferences.
+	refs References
+
+	// dir maps users' emails to their names. See SetDirectory.
+	dir *Directory
+}
+
+// SetDirectory sets the users whose names are shown in place of their
+// emails: in bylines, in metadata values and comments where the email is in
+// angle brackets, and in the issue list. Their names can be typed in place
+// of their emails, after an @, and are saved as the emails.
+func (ish *Issue) SetDirectory(dir *Directory) {
+	ish.dir = dir
+
+	for i := range ish.Metadata {
+		tag := &ish.Metadata[i]
+		tag.dir = dir
+
+		for j, v := range tag.Values {
+			tag.Values[j] = dir.tokenFor(v.Canonical)
+		}
+	}
+
+	for i := range ish.Conversation {
+		ish.Conversation[i].dir = dir
+	}
+
+	ish.syncViewport()
+}
+
+// SetReferences sets the issue IDs and user names that are suggested as
+// completions for values starting with # and @ while tags are edited.
+func (ish *Issue) SetReferences(refs References) {
+	ish.refs = refs
+
+	for i := range ish.Metadata {
+		ish.Metadata[i].refs = refs
+		ish.Metadata[i].issueID = ish.Id
+	}
 }
 
 // SetMetadataValues sets the metadata keys, and the values used with each,
@@ -125,7 +166,14 @@ func (ish *Issue) addTag() tea.Cmd {
 		taken[tag.Key] = true
 	}
 
-	ish.Metadata = append(ish.Metadata, Tag{issues: ish.issues, known: ish.known, takenKeys: taken})
+	ish.Metadata = append(ish.Metadata, Tag{
+		dir:       ish.dir,
+		issues:    ish.issues,
+		known:     ish.known,
+		takenKeys: taken,
+		refs:      ish.refs,
+		issueID:   ish.Id,
+	})
 	ish.setCursor(1 + len(ish.Metadata))
 
 	cmd := ish.Metadata[ish.tagIndex()].startKeyEdit(ish.headerWidth(), !ish.light)
@@ -293,6 +341,7 @@ func (ish *Issue) addComment() tea.Cmd {
 		DateCreated: now().Format(time.RFC3339),
 		Content:     &content,
 		issues:      ish.issues,
+		dir:         ish.dir,
 	})
 
 	ish.syncViewport()
@@ -546,11 +595,11 @@ func InitialModel() Issue {
 		Metadata: []Tag{
 			{
 				Key:    "state",
-				Values: []string{"in progress"},
+				Values: Tokens("in progress"),
 			},
 			{
 				Key:    "assignees",
-				Values: []string{"brendanberg", "jhc"},
+				Values: Tokens("brendanberg", "jhc"),
 			},
 		},
 		// A map which indicates which choices are selected. We're using
@@ -1118,7 +1167,7 @@ func (ish Issue) renderHeader() string {
 		c = append(c, ish.getTitleStyle().Render(fmt.Sprintf("[%s] %s", ish.Id, ish.Title)))
 	}
 	c = append(c, styles.BylineBlock.Copy().MarginBottom(1).Render(
-		styles.BylineEmphasis.Render(ish.Author)+
+		styles.BylineEmphasis.Render(ish.dir.author(ish.Author))+
 			styles.Byline.Render(" opened this issue on "+t.Format(DateTime)),
 	))
 
@@ -1254,7 +1303,7 @@ func (ish Issue) tagValues(keys ...string) string {
 
 	for _, tag := range ish.Metadata {
 		if slices.Contains(keys, tag.Key) {
-			values = append(values, tag.Values...)
+			values = append(values, Canonical(tag.Values)...)
 		}
 	}
 
@@ -1271,7 +1320,7 @@ func (ish Issue) Print() {
 		for _, elt := range ish.Metadata {
 			fmt.Printf("  Key('%s'):", elt.Key)
 			for _, val := range elt.Values {
-				fmt.Printf(" Value('%s')", val)
+				fmt.Printf(" Value('%s')", val.Canonical)
 			}
 			fmt.Print("\n")
 		}

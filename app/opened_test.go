@@ -20,7 +20,7 @@ func stubNow(t *testing.T, at time.Time) {
 // issueOpened returns the source of an issue with the given title, opened at
 // date.
 func issueOpened(title, date string) string {
-	return "# " + title + "\n\n[author " + date + "]\n\n- assignees: alice\n- state: open\n"
+	return "# " + title + "\n\n[author@example.com " + date + "]\n\n- assignees: alice\n- state: open\n"
 }
 
 var today = time.Date(2026, 10, 11, 9, 0, 0, 0, time.FixedZone("", -7*60*60))

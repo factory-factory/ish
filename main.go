@@ -105,9 +105,15 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "Indexed %d %s\n", len(result.Indexed), noun)
 
+	if result.Users > 0 {
+		fmt.Fprintf(stdout, "Indexed %d %s from the git history\n", result.Users, plural(result.Users, "user"))
+	}
+
 	for _, failure := range result.Failed {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
+
+	reportConflicts(stderr, result.UserConflicts)
 
 	if len(result.Failed) > 0 {
 		return 1
@@ -120,7 +126,8 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 // reports whether there's a database to use. If the database doesn't exist
 // yet, or has an older schema, it's built with runInit. Otherwise, it's
 // brought up to date with any issue files that changed, were added, or were
-// removed since it was last updated. Issue files that can't be indexed are reported, but don't stop ish,
+// removed since it was last updated, and the authors of the repository's
+// most recent commits are added to it. Issue files that can't be indexed are reported, but don't stop ish,
 // since the database holds every other issue.
 func ensureDatabase(dir string, stdout, stderr io.Writer) bool {
 	exists, err := store.Exists(dir)
@@ -184,10 +191,30 @@ func syncDatabase(dir string, stdout, stderr io.Writer) bool {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
 
+	reportConflicts(stderr, result.UserConflicts)
+
+	// The authors of recent commits are added quietly, other than conflicts.
+	// The database can be used without them, so a problem is only reported.
+	_, conflicts, err := store.IndexUsers(dir)
+
+	if err != nil {
+		fmt.Fprintf(stderr, "Couldn't index the git history's users: %v\n", err)
+	}
+
+	reportConflicts(stderr, conflicts)
+
 	return true
 }
 
 // plural returns noun, made plural if n isn't 1.
+// reportConflicts reports the users who weren't added to the metadata
+// database because another email has their name.
+func reportConflicts(stderr io.Writer, conflicts []store.UserConflict) {
+	for _, c := range conflicts {
+		fmt.Fprintf(stderr, "Skipped user %v\n", c)
+	}
+}
+
 func plural(n int, noun string) string {
 	if n == 1 {
 		return noun

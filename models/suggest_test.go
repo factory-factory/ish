@@ -208,7 +208,7 @@ func TestValueSuggestions(t *testing.T) {
 	ish = typeText(t, ish, "ali")
 	ish = update(t, ish, enter)
 
-	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(tag.Values, []string{"alice"}) {
+	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(Canonical(tag.Values), []string{"alice"}) {
 		t.Errorf("after enter: editing, values = %v, %q, want the suggestion accepted and the tag saved", tag.editing, tag.Values)
 	}
 }
@@ -248,5 +248,108 @@ func TestNoSuggestionsWithoutMetadataValues(t *testing.T) {
 func TestSuggestionStyle(t *testing.T) {
 	if got := tagInputStyles(true).Focused.Suggestion.GetForeground(); got != styles.Suggestion.GetForeground() {
 		t.Errorf("suggestion color = %v, want %v", got, styles.Suggestion.GetForeground())
+	}
+}
+
+// referencingIssue returns an issue that suggests knownValues, issue IDs,
+// including its own, and user names.
+func referencingIssue(t *testing.T) Issue {
+	t.Helper()
+
+	ish := suggestingIssue(t)
+	ish.SetReferences(References{
+		IssueIDs:  []string{"00000", "AAAAA-11111", "BBBBB-22222", "CCCCC-33333"},
+		UserNames: []string{"Brendan Berg", "Carol, Jr.", "brenda"},
+	})
+
+	return ish
+}
+
+// valueSuggestion adds a tag with key and types text into its values, and
+// returns what's suggested.
+func valueSuggestion(t *testing.T, ish Issue, key, text string) string {
+	t.Helper()
+
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, key)
+	ish = update(t, ish, colon)
+	ish = typeText(t, ish, text)
+
+	return suggestion(ish)
+}
+
+func TestIssueIDSuggestions(t *testing.T) {
+	for _, tt := range []struct {
+		key, text, want string
+	}{
+		// Every issue's ID is suggested, not only the values used with
+		// the key.
+		{"relation.parent", "#AA", "#AAAAA-11111"},
+		{"relation.parent", "#cc", "#CCCCC-33333"},
+		{"related", "#BB", "#BBBBB-22222"},
+
+		// Not the issue's own ID, or one already in the tag.
+		{"relation.parent", "#00", ""},
+		{"relation.parent", "#AAAAA-11111, #AA", ""},
+		{"relation.parent", "#AAAAA-11111, #BB", "#AAAAA-11111, #BBBBB-22222"},
+
+		// Below the threshold, counting the #, nothing is suggested.
+		{"relation.parent", "#A", ""},
+	} {
+		if got := valueSuggestion(t, referencingIssue(t), tt.key, tt.text); got != tt.want {
+			t.Errorf("%s: %q suggests %q, want %q", tt.key, tt.text, got, tt.want)
+		}
+	}
+
+	// Values used with the key that aren't issue IDs aren't suggested.
+	ish := referencingIssue(t)
+	ish.SetMetadataValues(MetadataValues{"relation.parent": {"#ZZZZZ-99999"}})
+
+	if got := valueSuggestion(t, ish, "relation.parent", "#ZZ"); got != "" {
+		t.Errorf("#ZZ suggests %q, want none, as it isn't an issue", got)
+	}
+}
+
+func TestUserNameSuggestions(t *testing.T) {
+	for _, tt := range []struct {
+		text, want string
+	}{
+		// User names are suggested, regardless of case, in order.
+		{"@Bre", "@brenda"},
+		{"@bren", "@brenda"},
+		{"@Brend", "@brenda"},
+		{"@Brendan", "@Brendan Berg"},
+		{"alice, @Brendan", "alice, @Brendan Berg"},
+
+		// Not a name with a comma, which would split into two values.
+		{"@Car", ""},
+	} {
+		if got := valueSuggestion(t, referencingIssue(t), "assignees", tt.text); got != tt.want {
+			t.Errorf("%q suggests %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestEnterAcceptsReference(t *testing.T) {
+	ish := referencingIssue(t)
+	ish = update(t, ish, mKey)
+	ish = typeText(t, ish, "relation.parent")
+	ish = update(t, ish, colon)
+	ish = typeText(t, ish, "#BB")
+	ish = update(t, ish, enter)
+
+	if tag := ish.Metadata[1]; tag.editing || !slices.Equal(Canonical(tag.Values), []string{"#BBBBB-22222"}) {
+		t.Errorf("editing, values = %v, %q, want #BBBBB-22222 saved", tag.editing, tag.Values)
+	}
+}
+
+func TestExistingTagsGetReferences(t *testing.T) {
+	ish := referencingIssue(t)
+	ish.setCursor(2)
+	ish = update(t, ish, enter, ctrlU)
+	ish = typeText(t, ish, "@Brendan")
+
+	if got := suggestion(ish); got != "@Brendan Berg" {
+		t.Errorf("suggestion = %q, want @Brendan Berg", got)
 	}
 }

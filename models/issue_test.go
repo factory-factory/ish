@@ -18,7 +18,7 @@ func newTestIssue(contents ...string) Issue {
 		Author:      "author",
 		Title:       "Title",
 		Metadata: []Tag{
-			{Key: "state", Values: []string{"open"}},
+			{Key: "state", Values: Tokens("open")},
 		},
 	}
 
@@ -385,8 +385,8 @@ func TestState(t *testing.T) {
 	}
 
 	ish.Metadata = []Tag{
-		{Key: "assignees", Values: []string{"alice"}},
-		{Key: "state", Values: []string{"in progress", "blocked"}},
+		{Key: "assignees", Values: Tokens("alice")},
+		{Key: "state", Values: Tokens("in progress", "blocked")},
 	}
 	if got := ish.State(); got != "in progress, blocked" {
 		t.Errorf("State() = %q, want %q", got, "in progress, blocked")
@@ -470,14 +470,14 @@ func TestAssignees(t *testing.T) {
 		metadata []Tag
 		want     string
 	}{
-		{"assignees", []Tag{{Key: "assignees", Values: []string{"alice", "bob"}}}, "alice, bob"},
+		{"assignees", []Tag{{Key: "assignees", Values: Tokens("alice", "bob")}}, "alice, bob"},
 		{"among other tags", []Tag{
-			{Key: "state", Values: []string{"open"}},
-			{Key: "assignees", Values: []string{"bob"}},
+			{Key: "state", Values: Tokens("open")},
+			{Key: "assignees", Values: Tokens("bob")},
 		}, "bob"},
 		// The key is standardized on assignees.
-		{"singular key", []Tag{{Key: "assignee", Values: []string{"alice"}}}, ""},
-		{"none", []Tag{{Key: "state", Values: []string{"open"}}}, ""},
+		{"singular key", []Tag{{Key: "assignee", Values: Tokens("alice")}}, ""},
+		{"none", []Tag{{Key: "state", Values: Tokens("open")}}, ""},
 		{"no metadata", nil, ""},
 	}
 

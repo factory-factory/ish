@@ -1,13 +1,13 @@
 # Improvements to list view filter drop-down UI
 
-[brendan@berg.industries 2026-10-15T00:58:04-07:00]
+[<brendan@berg.industries> 2026-10-15T00:58:04-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-15T00:58:04-07:00]
+[<brendan@berg.industries> 2026-10-15T00:58:04-07:00]
 
 The `bubble-dropdown` element is not really performing the way I'd like it to. The focused state is not visually distinct enough from unfocused.
 
@@ -31,7 +31,7 @@ The drop-down menu overlay can remain as currently implemented.
 
 ---
 
-[Claude 2026-10-15T17:48:27-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T17:48:27-07:00]
 
 I've reviewed this and moved it to `in progress`. Below is my plan, then some questions. I'll start once you've answered them.
 
@@ -56,7 +56,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[brendan@berg.industries 2026-10-15T17:57:22-07:00]
+[<brendan@berg.industries> 2026-10-15T17:57:22-07:00]
 
 ## Responding to questions from the previous comment:
 
@@ -68,7 +68,7 @@ I've reviewed this and moved it to `in progress`. Below is my plan, then some qu
 
 ---
 
-[Claude 2026-10-15T18:11:31-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T18:11:31-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -102,13 +102,13 @@ In an 80-column terminal, the 60-column minimum doesn't quite fit. The heading n
 
 ---
 
-[brendan@berg.industries 2026-10-15T18:23:25-07:00]
+[<brendan@berg.industries> 2026-10-15T18:23:25-07:00]
 
 I'd like to tweak some of the colors. Let's use a different grey (11) for the unfocused border, and for unfocused text, instead of the current grey, use plain white (7).
 
 ---
 
-[Claude 2026-10-15T18:26:20-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T18:26:20-07:00]
 
 Done, and left in `in review`.
 

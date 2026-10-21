@@ -85,16 +85,18 @@ func (c Card) markItems() string {
 		return ""
 	}
 
+	// An insertion puts text at offset, replacing the remove bytes there.
 	type insertion struct {
 		offset int
 		text   string
+		remove int
 	}
 
 	var insertions []insertion
 	selected, selecting := c.selectedItem()
 
 	if selecting && selected.todo >= 0 {
-		insertions = append(insertions, insertion{selected.offset, todoMarker})
+		insertions = append(insertions, insertion{selected.offset, todoMarker, 0})
 	}
 
 	for _, it := range c.items() {
@@ -108,9 +110,14 @@ func (c Card) markItems() string {
 		}
 
 		insertions = append(insertions,
-			insertion{it.link.start, marker},
-			insertion{it.link.end, linkEndMarker},
+			insertion{it.link.start, marker, 0},
+			insertion{it.link.end, linkEndMarker, 0},
 		)
+	}
+
+	// Users' emails are shown as their names.
+	for _, m := range c.dir.mentions(*c.Content) {
+		insertions = append(insertions, insertion{m.start, mentionMarker + mentionPrefix + m.name + mentionEndMarker, m.end - m.start})
 	}
 
 	// Insert from the end, so earlier offsets stay valid. At the same
@@ -120,7 +127,7 @@ func (c Card) markItems() string {
 
 	for i := len(insertions) - 1; i >= 0; i-- {
 		in := insertions[i]
-		content = content[:in.offset] + in.text + content[in.offset:]
+		content = content[:in.offset] + in.text + content[in.offset+in.remove:]
 	}
 
 	return content

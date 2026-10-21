@@ -1,13 +1,13 @@
 # What is ish?
 
-[brendan@berg.industries 2023-05-26T23:35:36-0400]
+[<brendan@berg.industries> 2023-05-26T23:35:36-0400]
 
 - state: in progress
-- assignees: brendanberg, jhc
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2023-05-27T13:41:50-0400]
+[<brendan@berg.industries> 2023-05-27T13:41:50-0400]
 
 **ish** is a file format convention and a set of utilities for distributed, file-based issue tracking.
 
@@ -17,7 +17,7 @@ while the command line app provides a terminal UI to interact with issues.
 
 ---
 
-[brendan@berg.industries 2023-05-27T23:37:18-0400]
+[<brendan@berg.industries> 2023-05-27T23:37:18-0400]
 
 The **ish** command line tools rely on go modules from [charmbracelet](https://github.com/charmbracelet):
 

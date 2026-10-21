@@ -1,14 +1,14 @@
 # Filter expression follow-up: more intuitive date comparisons
 
-[brendan@berg.industries 2026-10-14T22:10:13-07:00]
+[<brendan@berg.industries> 2026-10-14T22:10:13-07:00]
 
 - state: open
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 - relation.previous: #3CSJ4-PEZ1N
 
 ---
 
-[brendan@berg.industries 2026-10-14T22:10:13-07:00]
+[<brendan@berg.industries> 2026-10-14T22:10:13-07:00]
 
 Date comparisons in filter expressions currently do lexicographical comparisons of RFC 3339 strings in UTC. Ideally, date comparisons should do local time conversions and allow an equality comparison with '2026-10-14' for example to match every issue opened the same day in the local timezone.
 
@@ -20,6 +20,6 @@ There are a couple ways of handling the comparisons. One is to update the filter
 
 ---
 
-[brendan@berg.industries 2026-10-14T23:49:09-07:00]
+[<brendan@berg.industries> 2026-10-14T23:49:09-07:00]
 
 See also #3CVJY-W5VVN

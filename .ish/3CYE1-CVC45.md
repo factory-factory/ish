@@ -1,13 +1,13 @@
 # Update metadata UI to accept the key field and advance to the value field on tab and colon
 
-[brendan@berg.industries 2026-10-14T22:53:31-07:00]
+[<brendan@berg.industries> 2026-10-14T22:53:31-07:00]
 
 - state: closed
-- assignees: brendan@berg.industries
+- assignees: <brendan@berg.industries>
 
 ---
 
-[brendan@berg.industries 2026-10-14T22:53:31-07:00]
+[<brendan@berg.industries> 2026-10-14T22:53:31-07:00]
 
 Since colons are not allowed in attribute keys, typing colon should save the contents of the key field and advance the cursor to the value field. Additionally, the tab key should advance to the key field.
 
@@ -15,7 +15,7 @@ While editing the value field, it should also be possible to shift-tab to switch
 
 ---
 
-[Claude 2026-10-15T00:57:38-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T00:57:38-07:00]
 
 I've reviewed this and moved it to `in progress`. I have a plan, but a few points need your answers before I start.
 
@@ -32,29 +32,29 @@ I've reviewed this and moved it to `in progress`. I have a plan, but a few point
 
 ## Questions
 
-1. **"The tab key should advance to the key field":** I've read this as advancing to the *value* field. Is that right?
+1. **"The tab key should advance to the key field":** I've read this as advancing to the _value_ field. Is that right?
 2. **`shift+tab` on existing tags:** should it also work while editing the values of an existing tag? That would let you rename keys, which isn't possible today. Or should it only work on new tags, whose key hasn't been saved yet? I'd suggest new tags only, unless you want renaming. Renaming would also need a rule for a key that's already used by another tag.
 3. **An empty key:** enter on an empty key removes the new tag. Should `tab` and `:` on an empty key do the same, or do nothing and leave you in the key field? I'd suggest doing nothing, since `esc` already cancels.
 4. **Pasting `key: value`:** pasted text, such as `relation.parent: #3CSJ4-PEZ1N`, arrives in one piece. Should a colon in pasted text split it between the key and the value? Or should the paste be typed into the key, with the colon dropped, as other characters that can't be in a key are? I'd suggest splitting it, but it's an extra, so I'm happy to leave it out.
 
 ---
 
-[Claude 2026-10-15T00:57:53-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T00:57:53-07:00]
 
 A correction to question 4: the key field drops only spaces. It doesn't drop other characters that can't be in a key; those are typed, and the key is rejected when the issue is saved. So the second option would be "type the paste into the key, with the colon dropped".
 
 ---
 
-[brendan@berg.industries 2026-10-15T01:09:46-07:00]
+[<brendan@berg.industries> 2026-10-15T01:09:46-07:00]
 
-1. Yes, that's my bad. I meant the *value* field. I've updated the original comment.
+1. Yes, that's my bad. I meant the _value_ field. I've updated the original comment.
 2. `shift+tab` should only work on new tags.
 3. `tab` and `:` on an empty key should do nothing.
 4. Let's split pasted text on `:`. Since a space is likely to follow a colon, whitespace should be stripped from the value portion of the pasted text.
 
 ---
 
-[Claude 2026-10-15T01:16:16-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T01:16:16-07:00]
 
 Done, following your answers, and moved to `in review`.
 
@@ -84,13 +84,13 @@ Done, following your answers, and moved to `in review`.
 
 ---
 
-[brendan@berg.industries 2026-10-15T09:17:40-07:00]
+[<brendan@berg.industries> 2026-10-15T09:17:40-07:00]
 
 While playing with the UI, I noticed that the value field disappears when `shift+tab` is pressed to return to the key field. I'd like to dim the existing value text when going back to edit the key.
 
 ---
 
-[Claude 2026-10-15T09:22:13-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T09:22:13-07:00]
 
 Done, and left in `in review`.
 
@@ -112,13 +112,13 @@ Done, and left in `in review`.
 
 ---
 
-[brendan@berg.industries 2026-10-15T10:01:34-07:00]
+[<brendan@berg.industries> 2026-10-15T10:01:34-07:00]
 
 This is a minor tweak, but is it possible to get rid of the space between the key and the colon when navigating back with `shift+tab`? The cursor should be on the colon if possible.
 
 ---
 
-[Claude 2026-10-15T10:04:53-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T10:04:53-07:00]
 
 Done, and left in `in review`.
 
@@ -133,12 +133,12 @@ Done, and left in `in review`.
 
 ---
 
-[brendan@berg.industries 2026-10-15T10:06:09-07:00]
+[<brendan@berg.industries> 2026-10-15T10:06:09-07:00]
 
 Please make the dimmed color for values the same as the default color used for keys when not edititng them.
 
 ---
 
-[Claude 2026-10-15T10:07:20-07:00]
+[Claude <noreply@anthropic.com> 2026-10-15T10:07:20-07:00]
 
 Done, and left in `in review`. After `shift+tab`, the values after the key are now drawn in bright yellow (11), the colour of keys that aren't being edited, instead of grey. The colour is taken from the key style, so they'll stay the same if it changes. A test checks that they match.
