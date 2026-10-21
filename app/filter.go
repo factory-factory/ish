@@ -120,7 +120,7 @@ func (k selectedFilterKeys) ShortHelp() []key.Binding {
 		press = partKeys.Save
 	}
 
-	return []key.Binding{press, partKeys.Move, filterKeys.Table, keys.New, keys.Quit}
+	return []key.Binding{press, partKeys.Move, focusKeys.Next, filterKeys.Table, keys.New, keys.Quit}
 }
 
 func (k selectedFilterKeys) FullHelp() [][]key.Binding {
@@ -132,7 +132,7 @@ func (k selectedFilterKeys) FullHelp() [][]key.Binding {
 type editingFilterKeys struct{}
 
 func (editingFilterKeys) ShortHelp() []key.Binding {
-	return []key.Binding{filterKeys.Apply, filterKeys.Cancel}
+	return []key.Binding{filterKeys.Apply, focusKeys.Apply, filterKeys.Cancel}
 }
 
 func (k editingFilterKeys) FullHelp() [][]key.Binding {
@@ -187,6 +187,17 @@ func (m *Model) editFilter() tea.Cmd {
 // updateFilter handles a key press while the filter is being edited.
 func (m *Model) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
+	// Moving the focus applies the filter first. A filter that can't be
+	// applied keeps the focus, with its error shown.
+	case focusDelta(msg) != 0:
+		m.applyFilter()
+
+		if !m.filter.editing {
+			m.moveFocus(focusDelta(msg))
+		}
+
+		return nil
+
 	case key.Matches(msg, filterKeys.Apply):
 		m.applyFilter()
 		return nil
