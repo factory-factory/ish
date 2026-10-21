@@ -3,7 +3,7 @@
 [<brendan@berg.industries> 2026-10-16T23:40:56-07:00]
 
 - state: closed
-- assignees: @Brendan Berg
+- assignees: <brendan@berg.industries>
 - relation.depends-on: #3D26C-1320A
 
 ---

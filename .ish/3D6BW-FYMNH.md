@@ -2,7 +2,7 @@
 
 [<brendan@berg.industries> 2026-10-20T14:16:58-07:00]
 
-- state: in review
+- state: closed
 - assignees: <brendan@berg.industries>
 
 ---
@@ -175,3 +175,11 @@ Your sample files with bracketed bylines already parse, and they write back unch
 
 - **New comments:** these still write the author's email without angle brackets, from git's `user.email`. Should new bylines use the bracketed form, to match the files you've updated?
 - **The Go toolchain:** Homebrew upgraded Go to 1.27.3 today, but my shell's `GOROOT` still pointed to the old 1.27.0 toolchain, so builds failed with "version go1.27.0 does not match go tool version go1.27.3". I ran the tests with `GOROOT` unset rather than change your environment. You may want to remove the `GOROOT` setting from your shell profile.
+
+---
+
+["Brendan Berg" <brendan@berg.industries> 2026-10-21T11:39:11-07:00]
+
+## Update
+
+- New issues (and comments) now put both `user.name` and `user.email` in the byline. There is a known issue around the behavior to use if no `user.email` has been set.
