@@ -40,6 +40,14 @@ func match(t *testing.T, dir, text string) string {
 		t.Fatalf("Parse(%q) error = %v", text, err)
 	}
 
+	return matchNode(t, dir, text, node)
+}
+
+// matchNode returns the IDs of the issues node matches, in order. text names
+// it in failures.
+func matchNode(t *testing.T, dir, text string, node filter.Node) string {
+	t.Helper()
+
 	clause, args := node.Where()
 
 	db, err := store.Open(filepath.Join(dir, store.DatabaseName))
@@ -267,4 +275,81 @@ func mustWhere(t *testing.T, text string) (string, []any) {
 	}
 
 	return node.Where()
+}
+
+// resolvedMatch resolves text's lookups from vals, then returns the IDs of
+// the issues it matches.
+func resolvedMatch(t *testing.T, dir, text string, vals map[string]any) string {
+	t.Helper()
+
+	node, err := filter.Parse(text)
+	if err != nil {
+		t.Fatalf("Parse(%q) error = %v", text, err)
+	}
+
+	resolved, err := filter.Resolve(node, func(path string) (any, bool) {
+		v, ok := vals[path]
+		return v, ok
+	})
+	if err != nil {
+		t.Fatalf("Resolve(%q) error = %v", text, err)
+	}
+
+	return matchNode(t, dir, text, resolved)
+}
+
+func TestWhereLookups(t *testing.T) {
+	dir := indexedDir(t)
+	vals := map[string]any{
+		".user.email": "alice@example.com",
+		".state":      "open",
+		".states":     []any{"open", "closed"},
+		".none":       []any{},
+		".estimate":   int64(5),
+		".pattern":    "^in ",
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{state = .state}", "A"},
+		{"{@author = .user.email}", "A C E"},
+		{"{estimate = .estimate}", "A"},
+		{"{state ~ .pattern}", "C"},
+
+		// An array matches if any value does, and != if none does.
+		{"{state = .states}", "A B"},
+		{"{state != .states}", "C D E"},
+		{"{state = .none}", ""},
+		{"{state != .none}", "A B C D E"},
+
+		// A missing value is UNKNOWN: it matches nothing, whatever the
+		// operator, and not of it is UNKNOWN too, but or returns the other
+		// side's matches.
+		{"{state = .missing}", ""},
+		{"{state != .missing}", ""},
+		{"not {state = .missing}", ""},
+		{"{state = .missing} and {state = 'open'}", ""},
+		{"{state = .missing} or {state = 'open'}", "A"},
+		{"{state = 'closed'} or not {state = .missing}", "B"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, vals); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestLookupValuesAreParameters(t *testing.T) {
+	node, _ := filter.Parse("{state = .x}")
+	resolved, err := filter.Resolve(node, func(string) (any, bool) { return "x' OR 1=1 --", true })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clause, args := resolved.Where()
+
+	if strings.Contains(clause, "OR 1=1") || len(args) != 2 || args[1] != "x' OR 1=1 --" {
+		t.Errorf("Where() = %q, %v, want the value as a parameter", clause, args)
+	}
 }

@@ -349,6 +349,9 @@ func (p *parser) parseValue() (Value, error) {
 	case r == '/':
 		return p.parseRegexp()
 
+	case r == '.':
+		return p.parseLookup()
+
 	case r == '-' || (r >= '0' && r <= '9'):
 		match := numberPattern.FindString(string(p.input[p.pos:]))
 
@@ -375,7 +378,40 @@ func (p *parser) parseValue() (Value, error) {
 		}
 	}
 
-	return Value{}, p.errorHere("expected a value: a quoted string, a number, a /regular expression/, true, false, or null")
+	return Value{}, p.errorHere("expected a value: a quoted string, a number, a /regular expression/, a .lookup, true, false, or null")
+}
+
+// lookupChar reports whether r may appear in a key of an object lookup:
+// letters, digits, _, and -.
+func lookupChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-'
+}
+
+// parseLookup parses an object lookup: keys after dots, as in .user.email.
+func (p *parser) parseLookup() (Value, error) {
+	start := p.pos
+
+	for !p.done() && p.peek() == '.' {
+		p.pos++
+		keyStart := p.pos
+
+		for !p.done() && lookupChar(p.peek()) {
+			p.pos++
+		}
+
+		if p.pos == keyStart {
+			return Value{}, p.errorAt(keyStart-1, keyStart, "expected a key after the dot: letters, digits, _, and -")
+		}
+	}
+
+	// A lookup ends where its last key does.
+	if !p.done() && !unicode.IsSpace(p.peek()) && p.peek() != '}' {
+		return Value{}, p.errorAt(p.pos, p.pos+1, "keys may only contain letters, digits, _, and -")
+	}
+
+	raw := string(p.input[start:p.pos])
+
+	return Value{Raw: raw, Data: Lookup(raw)}, nil
 }
 
 // escapes maps the characters after a backslash in a string to what they
@@ -494,6 +530,10 @@ func (p *parser) parseRegexp() (Value, error) {
 // from start to end in the input.
 func checkOperand(op Operator, value Value, start, end int) error {
 	switch data := value.Data.(type) {
+	// A lookup's value is checked once it's looked up. See Resolve.
+	case Lookup:
+		return nil
+
 	case string:
 		if op == Match {
 			if _, err := regexp.Compile(data); err != nil {

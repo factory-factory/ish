@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"modernc.org/sqlite"
@@ -102,6 +103,17 @@ WHERE attribute.issueId = issue.id AND attribute.key = ? AND `
 //     with values that are numbers, such as "5", and don't match other
 //     values. true and false match the text "true" and "false".
 func (e *AttributeExpression) Where() (string, []any) {
+	switch data := e.Value.Data.(type) {
+	// A lookup that wasn't resolved, or found nothing, can't be compared, so
+	// the expression is UNKNOWN, as SQL's NULL is: it matches nothing on its
+	// own, but doesn't stop an or from matching. See Resolve.
+	case Lookup, unknown:
+		return "NULL", nil
+
+	case valueList:
+		return e.listWhere(data)
+	}
+
 	if column, ok := fields[e.Attribute]; ok {
 		return e.fieldWhere(column)
 	}
@@ -125,6 +137,41 @@ func (e *AttributeExpression) Where() (string, []any) {
 	condition, arg := e.compare("attributeValue.value")
 
 	return anyValue + condition + ")", []any{e.Attribute, arg}
+}
+
+// listWhere returns an SQL condition comparing with each of values, a
+// looked-up array: true if the comparison holds for any of them, or for !=,
+// if = holds for none of them. Each comparison is either true or false, so
+// != is always the opposite of =.
+func (e *AttributeExpression) listWhere(values valueList) (string, []any) {
+	op := e.Operator
+	if op == NotEqual {
+		op = Equal
+	}
+
+	clauses := make([]string, len(values))
+	var args []any
+
+	for i, v := range values {
+		one := *e
+		one.Operator = op
+		one.Value = Value{Data: v}
+
+		clause, a := one.Where()
+		clauses[i] = "coalesce((" + clause + "), 0)"
+		args = append(args, a...)
+	}
+
+	matches := "0"
+	if len(clauses) > 0 {
+		matches = "(" + strings.Join(clauses, " OR ") + ")"
+	}
+
+	if e.Operator == NotEqual {
+		return "NOT " + matches, args
+	}
+
+	return matches, args
 }
 
 // fieldWhere returns an SQL condition for an expression that compares the

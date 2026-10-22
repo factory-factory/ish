@@ -416,7 +416,17 @@ func opened(issue store.Summary, now time.Time) string {
 // stays at the same position in the list. If the issues fail to load, the
 // list is left as it was and the error is shown.
 func (m *Model) reload() {
-	issues, err := store.ListIssues(m.dir, m.filter.node)
+	// The filter's lookups are resolved from the state as it is now. If
+	// they can't be, the error is shown under the filter, and the list is
+	// left as it was.
+	node, err := resolveFilter(m.filter.node, m.State())
+	if err != nil {
+		m.filter.err = err
+		m.resize()
+		return
+	}
+
+	issues, err := store.ListIssues(m.dir, node)
 
 	if err == nil {
 		m.unfiltered, err = anyIssues(m.dir, issues)

@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/filter"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/styles"
 	dropdown "github.com/madicen/bubble-dropdown/v2"
 )
@@ -57,6 +58,17 @@ const (
 
 // filterArrow marks the filter menu's trigger as a menu.
 const filterArrow = "▼"
+
+// resolveFilter returns node with its object lookups replaced by their values
+// from one snapshot of the application state, so every lookup in a query
+// sees the same state. See filter.Resolve.
+func resolveFilter(node filter.Node, st *state.State) (filter.Node, error) {
+	if node == nil {
+		return nil, nil
+	}
+
+	return filter.Resolve(node, st.Snapshot().Lookup)
+}
 
 // filterIndent returns the width of the heading before the filter label: the
 // badge, and the space after it, less the label's own padding.
@@ -246,6 +258,14 @@ func (m *Model) applyFilter() {
 		var err error
 
 		if node, err = filter.Parse(text); err != nil {
+			m.filter.err = err
+			m.resize()
+			return
+		}
+
+		// A looked-up value that can't be compared is shown like a syntax
+		// error, and the filter isn't applied.
+		if _, err = resolveFilter(node, m.State()); err != nil {
 			m.filter.err = err
 			m.resize()
 			return

@@ -173,6 +173,9 @@ var FilterBoolean = FilterValue.
 var FilterNull = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("11"))
 
+var FilterLookup = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("6"))
+
 var FilterParenthesis = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("3"))
 
