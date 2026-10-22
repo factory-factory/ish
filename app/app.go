@@ -17,6 +17,7 @@ import (
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/styles"
 	dropdown "github.com/madicen/bubble-dropdown/v2"
@@ -60,6 +61,10 @@ type Model struct {
 	// people maps the repository's users' emails to their names, which
 	// are shown in place of the emails.
 	people *models.Directory
+
+	// state is the application state, such as the configuration, for
+	// filters to read. See SetState.
+	state *state.State
 
 	width  int
 	height int
@@ -183,6 +188,22 @@ func tableStyles(focused bool) table.Styles {
 	}
 
 	return s
+}
+
+// SetState sets the application state, such as the configuration, that ish
+// reads while it runs.
+func (m *Model) SetState(st *state.State) {
+	m.state = st
+}
+
+// State returns the application state, or one with an empty configuration
+// if none was set.
+func (m Model) State() *state.State {
+	if m.state == nil {
+		return state.New(nil)
+	}
+
+	return m.state
 }
 
 func (m Model) Init() tea.Cmd {

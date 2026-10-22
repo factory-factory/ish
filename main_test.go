@@ -264,3 +264,31 @@ func TestUsersFromGitHistory(t *testing.T) {
 		t.Errorf("Users() = %q, want %q", got, want)
 	}
 }
+
+func TestLoadState(t *testing.T) {
+	home, dir := t.TempDir(), t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(home, ".ish"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".ish", "config.toml"), []byte("[user]\nemail = \"alice@example.com\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := loadState(home, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := st.Snapshot().LookupString(".user.email"); got != "alice@example.com" {
+		t.Errorf("email = %q, want the per-user file's", got)
+	}
+
+	// A configuration that can't be read is an error.
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("not toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadState(home, dir); err == nil {
+		t.Error("loadState() with a bad file error = nil, want an error")
+	}
+}

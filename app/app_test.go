@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 )
 
@@ -699,5 +701,19 @@ func TestLongAssigneesAreTruncated(t *testing.T) {
 	}
 	if padding := 2 * len(columns); total+padding != m.table.Width() {
 		t.Errorf("columns fill %d of the table's %d columns", total+padding, m.table.Width())
+	}
+}
+
+func TestState(t *testing.T) {
+	m := newTestModel(t, nil)
+
+	if _, ok := m.State().Snapshot().Lookup(".user"); ok {
+		t.Error("a model without state has a configuration value")
+	}
+
+	m.SetState(state.New(config.Config{"user": map[string]any{"email": "alice@example.com"}}))
+
+	if got, _ := m.State().Snapshot().LookupString(".user.email"); got != "alice@example.com" {
+		t.Errorf("email = %q, want the state's", got)
 	}
 }
