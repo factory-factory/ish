@@ -44,10 +44,12 @@ func with(style lipgloss.Style) func(string) string {
 }
 
 // renderValue colors a value by its kind: strings, numbers, and regular
-// expressions are green, true and false are bold green, and null is bright
-// yellow.
+// expressions are green, true and false are bold green, null is bright
+// yellow, and object lookups are aqua.
 func renderValue(v Value) string {
 	switch v.Data.(type) {
+	case Lookup:
+		return styles.FilterLookup.Render(v.String())
 	case nil:
 		return styles.FilterNull.Render(v.String())
 	case bool:

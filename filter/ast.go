@@ -58,10 +58,17 @@ type Value struct {
 	// or /^in /, so it can be printed back exactly.
 	Raw string
 
-	// Data is the value: nil for null, a bool, a json.Number, a string, or a
-	// Regexp.
+	// Data is the value: nil for null, a bool, a json.Number, a string, a
+	// Regexp, or a Lookup. Once a lookup is resolved, it's the value looked
+	// up, a list of values for an array, or unknown if nothing was found.
+	// See Resolve.
 	Data any
 }
+
+// Lookup is an object lookup, such as .user.email: a value from the
+// application's state, found by its dotted path when a filter is applied.
+// See Resolve.
+type Lookup string
 
 // Regexp is the pattern of a regular expression literal, such as /^in\s/,
 // which can only be used with the ~ operator. Unlike a string, its text is
@@ -165,6 +172,10 @@ func (v Value) String() string {
 
 	if pattern, ok := v.Data.(Regexp); ok {
 		return "/" + strings.ReplaceAll(string(pattern), "/", `\/`) + "/"
+	}
+
+	if lookup, ok := v.Data.(Lookup); ok {
+		return string(lookup)
 	}
 
 	data, err := json.Marshal(v.Data)

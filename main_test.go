@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/factory-factory/ish/config"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 )
 
@@ -262,5 +264,59 @@ func TestUsersFromGitHistory(t *testing.T) {
 
 	if want := []string{"Alice alice@example.com", "Bob bob@example.com", "Carol carol@example.com"}; !slices.Equal(got, want) {
 		t.Errorf("Users() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadState(t *testing.T) {
+	home, dir := t.TempDir(), t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(home, ".ish"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".ish", "config.toml"), []byte("[user]\nemail = \"alice@example.com\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := loadState(home, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := st.Snapshot().LookupString(".user.email"); got != "alice@example.com" {
+		t.Errorf("email = %q, want the per-user file's", got)
+	}
+
+	// A configuration that can't be read is an error.
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("not toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadState(home, dir); err == nil {
+		t.Error("loadState() with a bad file error = nil, want an error")
+	}
+}
+
+func TestCheckUser(t *testing.T) {
+	for _, tt := range []struct {
+		user    map[string]any
+		message string
+	}{
+		{map[string]any{"name": "Alice", "email": "alice@example.com"}, ""},
+		{map[string]any{"name": "Alice"}, "user.email isn't configured. Set it in"},
+		{map[string]any{"email": "alice@example.com", "name": "  "}, "user.name isn't configured"},
+		{nil, "user.name and user.email aren't configured. Set them in"},
+	} {
+		cfg := config.Config{}
+		if tt.user != nil {
+			cfg["user"] = tt.user
+		}
+
+		err := checkUser(state.New(cfg))
+
+		switch {
+		case tt.message == "" && err != nil:
+			t.Errorf("checkUser(%v) error = %v, want none", tt.user, err)
+		case tt.message != "" && (err == nil || !strings.Contains(err.Error(), tt.message)):
+			t.Errorf("checkUser(%v) error = %v, want one containing %q", tt.user, err, tt.message)
+		}
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/styles"
 	dropdown "github.com/madicen/bubble-dropdown/v2"
@@ -54,12 +55,13 @@ type Model struct {
 	// light reports whether the terminal has a light background.
 	light bool
 
-	// user is who's running ish, for the "Issues assigned to me" filter.
-	user string
-
 	// people maps the repository's users' emails to their names, which
 	// are shown in place of the emails.
 	people *models.Directory
+
+	// state is the application state, such as the configuration, for
+	// filters to read. See SetState.
+	state *state.State
 
 	width  int
 	height int
@@ -124,7 +126,6 @@ func New(dir string) (Model, error) {
 		issues: issues,
 		help:   help.New(),
 		filter: filterField{text: DefaultFilter, node: node, menu: newFilterMenu()},
-		user:   CurrentUser(dir),
 		people: loadPeople(dir),
 	}
 
@@ -183,6 +184,28 @@ func tableStyles(focused bool) table.Styles {
 	}
 
 	return s
+}
+
+// SetState sets the application state, such as the configuration, that ish
+// reads while it runs. An issue that's already open, as one opened with Open
+// is, takes its author for new comments from it.
+func (m *Model) SetState(st *state.State) {
+	m.state = st
+
+	if issue, ok := m.issue.(models.Issue); ok {
+		issue.SetAuthor(m.author())
+		m.issue = issue
+	}
+}
+
+// State returns the application state, or one with an empty configuration
+// if none was set.
+func (m Model) State() *state.State {
+	if m.state == nil {
+		return state.New(nil)
+	}
+
+	return m.state
 }
 
 func (m Model) Init() tea.Cmd {
@@ -395,7 +418,17 @@ func opened(issue store.Summary, now time.Time) string {
 // stays at the same position in the list. If the issues fail to load, the
 // list is left as it was and the error is shown.
 func (m *Model) reload() {
-	issues, err := store.ListIssues(m.dir, m.filter.node)
+	// The filter's lookups are resolved from the state as it is now. If
+	// they can't be, the error is shown under the filter, and the list is
+	// left as it was.
+	node, err := resolveFilter(m.filter.node, m.State())
+	if err != nil {
+		m.filter.err = err
+		m.resize()
+		return
+	}
+
+	issues, err := store.ListIssues(m.dir, node)
 
 	if err == nil {
 		m.unfiltered, err = anyIssues(m.dir, issues)
@@ -481,7 +514,7 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m.show(models.NewIssue(id, CurrentAuthor(m.dir), now()))
+	return m.show(models.NewIssue(id, m.author(), now()))
 }
 
 // show switches to the view of issue, which is saved to the list's directory
@@ -490,7 +523,7 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
-	issue.SetAuthor(CurrentAuthor(m.dir))
+	issue.SetAuthor(m.author())
 
 	// Without the IDs of the other issues, references aren't linked, and
 	// without their metadata and the repository's users, nothing is

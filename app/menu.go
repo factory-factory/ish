@@ -1,9 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"strings"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	dropdown "github.com/madicen/bubble-dropdown/v2"
@@ -13,15 +10,25 @@ import (
 // menu with the custom filter field.
 const (
 	presetUnclosed = iota
-	presetMine
+	presetAssignedToMe
+	presetCreatedByMe
 	presetCustom
 )
 
 // presetLabels are the filter menu's items, indexed by preset.
 var presetLabels = []string{
-	presetUnclosed: "All unclosed issues",
-	presetMine:     "Issues assigned to me",
-	presetCustom:   "Custom...",
+	presetUnclosed:     "All unclosed issues",
+	presetAssignedToMe: "Assigned to me",
+	presetCreatedByMe:  "Created by me",
+	presetCustom:       "Custom...",
+}
+
+// presetFilters are the filter menu's filters, indexed by preset. The
+// custom filter has none.
+var presetFilters = []string{
+	presetUnclosed:     DefaultFilter,
+	presetAssignedToMe: "{assignees = .user.email} and " + DefaultFilter,
+	presetCreatedByMe:  "{@author = .user.email} and " + DefaultFilter,
 }
 
 // menuAccent is the color of the filter menu's border and highlighted item,
@@ -33,28 +40,10 @@ const menuAccent = "4"
 const separatorColor = "11"
 
 // presetFilter returns the filter expression for a preset, other than the
-// custom one, for the user who's running ish. Neither lists closed issues.
-// The database stores assignees' emails without angle brackets, whether or
-// not the issue files have them.
-func presetFilter(preset int, user string) string {
-	if preset == presetMine {
-		return "{assignees = " + quote(user) + "} and " + DefaultFilter
-	}
-
-	return DefaultFilter
-}
-
-// quote returns s as a JSON string, which is a valid filter string, with any
-// quotes escaped. Angle brackets are kept as they are, rather than escaped
-// for HTML.
-func quote(s string) string {
-	var b strings.Builder
-
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(s)
-
-	return strings.TrimSuffix(b.String(), "\n")
+// custom one. None lists closed issues. Those for the user who's running ish
+// look up their email from the application state.
+func presetFilter(preset int) string {
+	return presetFilters[preset]
 }
 
 // newFilterMenu returns the filter menu, with the default filter selected,
@@ -133,7 +122,7 @@ func (m *Model) chooseFilter(preset int) tea.Cmd {
 	}
 
 	m.filter.preset = preset
-	m.applyFilterText(presetFilter(preset, m.user))
+	m.applyFilterText(presetFilter(preset))
 
 	return nil
 }
@@ -155,6 +144,6 @@ func (m *Model) leaveCustomFilter() {
 	m.filter.part = partField
 	m.filter.err = nil
 	m.filter.menu.SetSelectedIndex(m.filter.preset)
-	m.applyFilterText(presetFilter(m.filter.preset, m.user))
+	m.applyFilterText(presetFilter(m.filter.preset))
 	m.selectFilter()
 }

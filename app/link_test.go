@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/models"
+	"github.com/factory-factory/ish/state"
 )
 
 // linkedSources are issues where AAA is blocked by BBB.
@@ -171,5 +173,25 @@ func TestOpenMissingIssue(t *testing.T) {
 
 	if _, err := Open(list.dir, "ZZZ"); err == nil {
 		t.Error("Open() of a missing issue error = nil, want an error")
+	}
+}
+
+func TestOpenTakesAuthorFromState(t *testing.T) {
+	list := newTestModel(t, linkedSources)
+
+	m, err := Open(list.dir, "AAA")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The state is set after the issue is open, as main does.
+	m.SetState(state.New(config.Config{"user": map[string]any{"name": "Alice", "email": "alice@example.com"}}))
+	m = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30}, tea.KeyPressMsg{Code: 'c', Text: "c"})
+
+	issue := m.issue.(models.Issue)
+	last := issue.Conversation[len(issue.Conversation)-1]
+
+	if last.Author != `"Alice" <alice@example.com>` {
+		t.Errorf("new comment's author = %q, want Alice from the state", last.Author)
 	}
 }

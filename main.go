@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/factory-factory/ish/app"
+	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,12 +26,22 @@ var (
 		SilenceUsage:     false,
 		TraverseChildren: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			st, err := loadState(config.UserHome(), parse.IssuesDir)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Couldn't read the configuration: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := checkUser(st); err != nil {
+				fmt.Fprintf(os.Stderr, "Couldn't start ish: %v\n", err)
+				os.Exit(1)
+			}
+
 			if !ensureDatabase(parse.IssuesDir, cmd.OutOrStdout(), cmd.ErrOrStderr()) {
 				os.Exit(1)
 			}
 
 			var model app.Model
-			var err error
 
 			if len(args) == 1 {
 				model, err = app.Open(parse.IssuesDir, issueIdFromPath(args[0]))
@@ -41,6 +53,8 @@ var (
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
+
+			model.SetState(st)
 
 			p := tea.NewProgram(model)
 			if _, err := p.Run(); err != nil {
@@ -207,6 +221,44 @@ func syncDatabase(dir string, stdout, stderr io.Writer) bool {
 }
 
 // plural returns noun, made plural if n isn't 1.
+// loadState loads the configuration, from the per-user file in home and the
+// project's file in dir, into the application state.
+func loadState(home, dir string) (*state.State, error) {
+	cfg, err := config.Load(home, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	return state.New(cfg), nil
+}
+
+// checkUser returns an error if the configuration doesn't have the name and
+// email of the user running ish, which bylines need.
+func checkUser(st *state.State) error {
+	snap := st.Snapshot()
+
+	var missing []string
+
+	for _, key := range []string{"user.name", "user.email"} {
+		if value, _ := snap.LookupString("." + key); strings.TrimSpace(value) == "" {
+			missing = append(missing, key)
+		}
+	}
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	verb, pronoun := "isn't", "it"
+	if len(missing) > 1 {
+		verb, pronoun = "aren't", "them"
+	}
+
+	return fmt.Errorf("%s %s configured. Set %s in ~/.ish/config.toml or .ish/config.toml, as in\n\n"+
+		"[user]\nname = \"Your Name\"\nemail = \"you@example.com\"\n\nor with git config",
+		strings.Join(missing, " and "), verb, pronoun)
+}
+
 // reportConflicts reports the users who weren't added to the metadata
 // database because another email has their name.
 func reportConflicts(stderr io.Writer, conflicts []store.UserConflict) {

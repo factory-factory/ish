@@ -10,8 +10,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
+	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
 )
 
@@ -20,21 +22,27 @@ var (
 	created = time.Date(2026, 10, 10, 23, 7, 0, 0, time.FixedZone("", -4*60*60))
 )
 
-// stubUser replaces the clock and the lookups of the current user for the
-// duration of a test.
-func stubUser(t *testing.T, email string, emailErr error, name string, nameErr error) {
+// testUser is the user that newTestModel puts in the application state, as
+// the configuration would. See stubUser.
+var testUser map[string]any
+
+// stubUser replaces the clock, and sets the name and email of the user
+// running ish in models made by newTestModel, for the duration of a test.
+// Without a name, bylines have just the email.
+func stubUser(t *testing.T, email, name string) {
 	t.Helper()
 
-	oldNow, oldEmail, oldGitName, oldName := now, gitUserEmail, gitUserName, currentUserName
+	oldNow, oldUser := now, testUser
 
-	// Without git's user.name, bylines have just the email.
 	now = func() time.Time { return created }
-	gitUserEmail = func(string) (string, error) { return email, emailErr }
-	gitUserName = func(string) (string, error) { return "", errors.New("no user.name") }
-	currentUserName = func() (string, error) { return name, nameErr }
+
+	testUser = map[string]any{"email": email}
+	if name != "" {
+		testUser["name"] = name
+	}
 
 	t.Cleanup(func() {
-		now, gitUserEmail, gitUserName, currentUserName = oldNow, oldEmail, oldGitName, oldName
+		now, testUser = oldNow, oldUser
 	})
 }
 
@@ -53,7 +61,7 @@ func openNew(t *testing.T, m Model) (Model, models.Issue) {
 }
 
 func TestNewKeyOpensEmptyIssue(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
 
 	m, issue := openNew(t, m)
@@ -85,7 +93,7 @@ func TestNewKeyOpensEmptyIssue(t *testing.T) {
 }
 
 func TestNewIssueWithoutEditsIsDiscarded(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
 
 	// The first esc cancels naming the issue, and the second closes it.
@@ -105,7 +113,7 @@ func TestNewIssueWithoutEditsIsDiscarded(t *testing.T) {
 }
 
 func TestEditedNewIssueIsSavedAndSelected(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{
 		"AAA": issueSource("First", "open"),
 		"ZZZ": issueSource("Last", "open"),
@@ -135,7 +143,7 @@ func TestEditedNewIssueIsSavedAndSelected(t *testing.T) {
 }
 
 func TestNewIssueFromEmptyList(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, nil)
 
 	// Leave the title blank and write a comment instead.
@@ -150,35 +158,8 @@ func TestNewIssueFromEmptyList(t *testing.T) {
 	}
 }
 
-func TestCurrentUser(t *testing.T) {
-	tests := []struct {
-		name     string
-		email    string
-		emailErr error
-		user     string
-		userErr  error
-		want     string
-	}{
-		{"git email", "alice@example.com", nil, "alice", nil, "alice@example.com"},
-		{"git fails", "", errors.New("no git"), "alice", nil, "alice"},
-		{"git email unset", "", nil, "alice", nil, "alice"},
-		{"everything fails", "", errors.New("no git"), "", errors.New("no user"), "unknown"},
-		{"spaces removed", "Alice Smith", nil, "alice", nil, "AliceSmith"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stubUser(t, tt.email, tt.emailErr, tt.user, tt.userErr)
-
-			if got := CurrentUser(t.TempDir()); got != tt.want {
-				t.Errorf("CurrentUser() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestNewIssueOpensNamingTitle(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
 
 	next, cmd := m.Update(newKey)
@@ -217,7 +198,7 @@ func TestExistingIssueDoesNotOpenEditing(t *testing.T) {
 }
 
 func TestCommentInOpenedIssueIsSaved(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
 
 	// Open the issue, add a comment, and go back.
@@ -244,7 +225,7 @@ func TestCommentInOpenedIssueIsSaved(t *testing.T) {
 }
 
 func TestMetadataEditsAreSaved(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
 
 	// Open the issue, add a priority field, and go back.
@@ -285,35 +266,31 @@ func TestMetadataEditsAreSaved(t *testing.T) {
 	}
 }
 
-func TestCurrentAuthor(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+func TestAuthor(t *testing.T) {
+	m := newTestModel(t, nil)
 
-	// With git's user.name, the author is a quoted name and the email in
-	// angle brackets, as a byline has it.
+	// The author is the user's quoted name and their email in angle
+	// brackets, as a byline has it, from the application state.
 	for name, want := range map[string]string{
 		"Alice Liddell": `"Alice Liddell" <alice@example.com>`,
 		`Say "hi"`:      `"Say \"hi\"" <alice@example.com>`,
-		"  ":            "alice@example.com",
 		"":              "alice@example.com",
 	} {
-		gitUserName = func(string) (string, error) { return name, nil }
-
-		if got := CurrentAuthor(t.TempDir()); got != want {
-			t.Errorf("CurrentAuthor() with user.name %q = %q, want %q", name, got, want)
+		user := map[string]any{"email": "alice@example.com"}
+		if name != "" {
+			user["name"] = name
 		}
-	}
 
-	// Without git's user.email, it's the current user.
-	stubUser(t, "", errors.New("no git"), "alice", nil)
+		m.SetState(state.New(config.Config{"user": user}))
 
-	if got := CurrentAuthor(t.TempDir()); got != "alice" {
-		t.Errorf("CurrentAuthor() without an email = %q, want alice", got)
+		if got := m.author(); got != want {
+			t.Errorf("author() with user.name %q = %q, want %q", name, got, want)
+		}
 	}
 }
 
 func TestNewIssueBylineHasName(t *testing.T) {
-	stubUser(t, "alice@example.com", nil, "alice", nil)
-	gitUserName = func(string) (string, error) { return "Alice Liddell", nil }
+	stubUser(t, "alice@example.com", "Alice Liddell")
 
 	m := newTestModel(t, nil)
 	m, issue := openNew(t, m)

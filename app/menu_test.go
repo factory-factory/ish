@@ -13,7 +13,7 @@ import (
 // others, some of them closed.
 func menuModel(t *testing.T) Model {
 	t.Helper()
-	stubUser(t, "alice@example.com", nil, "alice", nil)
+	stubUser(t, "alice@example.com", "")
 
 	return newTestModel(t, map[string]string{
 		"AAA": issueWithMetadata("Mine", "- state: open", "- assignees: alice@example.com"),
@@ -74,12 +74,12 @@ func TestFilterMenuOptions(t *testing.T) {
 }
 
 func TestChooseIssuesAssignedToMe(t *testing.T) {
-	m := choose(t, menuModel(t), presetMine)
+	m := choose(t, menuModel(t), presetAssignedToMe)
 
-	if m.filter.menu.Open() || m.filter.preset != presetMine {
-		t.Fatalf("menu open, preset = %v, %d, want the menu closed on %d", m.filter.menu.Open(), m.filter.preset, presetMine)
+	if m.filter.menu.Open() || m.filter.preset != presetAssignedToMe {
+		t.Fatalf("menu open, preset = %v, %d, want the menu closed on %d", m.filter.menu.Open(), m.filter.preset, presetAssignedToMe)
 	}
-	if m.filter.text != `{assignees = "alice@example.com"} and {state != 'closed'}` {
+	if m.filter.text != `{assignees = .user.email} and {state != 'closed'}` {
 		t.Errorf("filter = %q, want alice's unclosed issues", m.filter.text)
 	}
 
@@ -88,7 +88,7 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	if got := ids(m); got != "AAA BBB EEE" {
 		t.Errorf("listed %q, want the unclosed issues assigned to alice", got)
 	}
-	if view := plainView(m); !strings.Contains(view, "│ Issues assigned to me") {
+	if view := plainView(m); !strings.Contains(view, "│ Assigned to me") {
 		t.Errorf("View() = %q, want the menu showing the chosen filter", view)
 	}
 
@@ -100,44 +100,51 @@ func TestChooseIssuesAssignedToMe(t *testing.T) {
 	}
 }
 
-func TestPresetFilterQuotesUser(t *testing.T) {
-	for _, user := range []string{"alice@example.com", `o'brien`, `say "hi"`, `back\slash`, `a<b>`} {
-		text := presetFilter(presetMine, user)
-		node, err := filter.Parse(text)
+func TestPresetFilters(t *testing.T) {
+	for _, tt := range []struct {
+		preset int
+		want   string
+	}{
+		{presetUnclosed, DefaultFilter},
+		// The user's email is looked up from the application state.
+		{presetAssignedToMe, "{assignees = .user.email} and " + DefaultFilter},
+		{presetCreatedByMe, "{@author = .user.email} and " + DefaultFilter},
+	} {
+		text := presetFilter(tt.preset)
 
-		if err != nil {
-			t.Errorf("presetFilter(%q) = %q, which doesn't parse: %v", user, text, err)
-			continue
+		if text != tt.want {
+			t.Errorf("presetFilter(%s) = %q, want %q", presetLabels[tt.preset], text, tt.want)
 		}
-
-		and, ok := node.(*filter.AndExpression)
-		if !ok {
-			t.Errorf("presetFilter(%q) = %q, want an and expression", user, text)
-			continue
-		}
-
-		if got := and.LeftExpression.(*filter.AttributeExpression).Value.Data; got != user {
-			t.Errorf("presetFilter(%q) compares with %q", user, got)
-		}
-		if got := and.RightExpression.String(); got != DefaultFilter {
-			t.Errorf("presetFilter(%q) also requires %q, want %q", user, got, DefaultFilter)
+		if _, err := filter.Parse(text); err != nil {
+			t.Errorf("presetFilter(%s) = %q, which doesn't parse: %v", presetLabels[tt.preset], text, err)
 		}
 	}
+}
 
-	if got := presetFilter(presetUnclosed, "alice"); got != DefaultFilter {
-		t.Errorf("presetFilter(unclosed) = %q, want %q", got, DefaultFilter)
+func TestChooseCreatedByMe(t *testing.T) {
+	stubUser(t, "alice@example.com", "")
+
+	m := newTestModel(t, map[string]string{
+		"AAA": "# Hers\n\n[alice@example.com 2023-05-26T23:35:36-0400]\n\n- state: open\n",
+		"BBB": "# Hers, closed\n\n[\"Alice\" <alice@example.com> 2023-05-26T23:35:36-0400]\n\n- state: closed\n",
+		"CCC": "# Bob's\n\n[bob@example.com 2023-05-26T23:35:36-0400]\n\n- state: open\n",
+	})
+	m = choose(t, m, presetCreatedByMe)
+
+	if got := ids(m); got != "AAA" {
+		t.Errorf("listed %q, want alice's unclosed issue", got)
 	}
 }
 
 func TestChooseCustomFilter(t *testing.T) {
-	m := choose(t, menuModel(t), presetMine)
+	m := choose(t, menuModel(t), presetAssignedToMe)
 	m = choose(t, m, presetCustom)
 
 	// The custom field replaces the menu, editing the applied filter.
 	if !m.filter.custom || !m.filter.editing {
 		t.Fatalf("custom, editing = %v, %v, want to edit a custom filter", m.filter.custom, m.filter.editing)
 	}
-	if got := m.filter.input.Value(); got != `{assignees = "alice@example.com"} and {state != 'closed'}` {
+	if got := m.filter.input.Value(); got != `{assignees = .user.email} and {state != 'closed'}` {
 		t.Errorf("custom filter starts as %q, want the applied filter", got)
 	}
 	if view := plainView(m); strings.Contains(view, "▼") || !strings.Contains(view, "┏") {
@@ -166,9 +173,9 @@ func TestChooseCustomFilter(t *testing.T) {
 
 	m = update(t, m, enter)
 
-	if m.filter.custom || m.filter.menu.SelectedIndex() != presetMine || !m.filter.menu.Focused() {
+	if m.filter.custom || m.filter.menu.SelectedIndex() != presetAssignedToMe || !m.filter.menu.Focused() {
 		t.Errorf("custom, menu selection, focused = %v, %d, %v, want the menu back on %d",
-			m.filter.custom, m.filter.menu.SelectedIndex(), m.filter.menu.Focused(), presetMine)
+			m.filter.custom, m.filter.menu.SelectedIndex(), m.filter.menu.Focused(), presetAssignedToMe)
 	}
 	if got := ids(m); got != "AAA BBB EEE" {
 		t.Errorf("listed %q, want alice's unclosed issues again", got)
@@ -228,7 +235,7 @@ func TestMenuSeparatesCustomFilter(t *testing.T) {
 	m := openMenu(t, menuModel(t))
 	view := plainView(m)
 
-	mine := strings.Index(view, presetLabels[presetMine])
+	mine := strings.Index(view, presetLabels[presetCreatedByMe])
 	custom := strings.Index(view, presetLabels[presetCustom])
 
 	if mine < 0 || custom < 0 {
