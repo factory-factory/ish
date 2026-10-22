@@ -48,6 +48,10 @@ func newTestModel(t *testing.T, sources map[string]string) Model {
 		t.Fatal(err)
 	}
 
+	if testUser != nil {
+		m.SetState(state.New(config.Config{"user": testUser}))
+	}
+
 	return update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
 }
 

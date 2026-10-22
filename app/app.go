@@ -55,9 +55,6 @@ type Model struct {
 	// light reports whether the terminal has a light background.
 	light bool
 
-	// user is who's running ish, for the "Issues assigned to me" filter.
-	user string
-
 	// people maps the repository's users' emails to their names, which
 	// are shown in place of the emails.
 	people *models.Directory
@@ -129,7 +126,6 @@ func New(dir string) (Model, error) {
 		issues: issues,
 		help:   help.New(),
 		filter: filterField{text: DefaultFilter, node: node, menu: newFilterMenu()},
-		user:   CurrentUser(dir),
 		people: loadPeople(dir),
 	}
 
@@ -191,9 +187,15 @@ func tableStyles(focused bool) table.Styles {
 }
 
 // SetState sets the application state, such as the configuration, that ish
-// reads while it runs.
+// reads while it runs. An issue that's already open, as one opened with Open
+// is, takes its author for new comments from it.
 func (m *Model) SetState(st *state.State) {
 	m.state = st
+
+	if issue, ok := m.issue.(models.Issue); ok {
+		issue.SetAuthor(m.author())
+		m.issue = issue
+	}
 }
 
 // State returns the application state, or one with an empty configuration
@@ -512,7 +514,7 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m.show(models.NewIssue(id, CurrentAuthor(m.dir), now()))
+	return m.show(models.NewIssue(id, m.author(), now()))
 }
 
 // show switches to the view of issue, which is saved to the list's directory
@@ -521,7 +523,7 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
-	issue.SetAuthor(CurrentAuthor(m.dir))
+	issue.SetAuthor(m.author())
 
 	// Without the IDs of the other issues, references aren't linked, and
 	// without their metadata and the repository's users, nothing is

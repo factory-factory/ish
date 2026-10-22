@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,10 +31,23 @@ func Defaults() Config {
 	return Config{}
 }
 
+// gitConfig returns git's setting for key, such as user.email, in the
+// repository dir is in. Tests replace it.
+var gitConfig = func(dir, key string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "config", key).Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+// userKeys are the settings for the user running ish, which are read from git
+// if neither configuration file sets them.
+var userKeys = []string{"name", "email"}
+
 // Load returns the configuration: the defaults, then the per-user file
 // ~/.ish/config.toml in home, then the project's file in dir, each applied on
 // top of the ones before. A file that doesn't exist is skipped. An empty home
-// skips the per-user file.
+// skips the per-user file. Then user.name and user.email, if neither file
+// sets them, are read from git's settings for the repository dir is in. This
+// is the only time git is asked for them.
 func Load(home, dir string) (Config, error) {
 	cfg := Defaults()
 
@@ -52,7 +66,41 @@ func Load(home, dir string) (Config, error) {
 		cfg = merge(cfg, file)
 	}
 
-	return cfg, nil
+	return withGitUser(cfg, dir), nil
+}
+
+// withGitUser returns cfg with the user's name and email from git, for
+// whichever of them cfg doesn't set. A user that isn't a table is left as it
+// is.
+func withGitUser(cfg Config, dir string) Config {
+	user, ok := cfg["user"].(map[string]any)
+
+	if _, set := cfg["user"]; set && !ok {
+		return cfg
+	}
+
+	var found map[string]any
+
+	for _, key := range userKeys {
+		if _, set := user[key]; set {
+			continue
+		}
+
+		if value, err := gitConfig(dir, "user."+key); err == nil && value != "" {
+			if found == nil {
+				found = map[string]any{}
+			}
+
+			found[key] = value
+		}
+	}
+
+	if found == nil {
+		return cfg
+	}
+
+	// git's values are the lowest layer, under the files' settings.
+	return merge(Config{"user": found}, cfg)
 }
 
 // readFile reads the configuration file at path, or returns an empty

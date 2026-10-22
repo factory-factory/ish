@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -148,5 +149,106 @@ func TestLookupReturnsCopy(t *testing.T) {
 	}
 	if _, ok := cfg.Lookup(".user.name"); ok {
 		t.Error("a key added to a looked-up copy is in the configuration")
+	}
+}
+
+// TestMain keeps the tests from reading git's settings on the machine
+// they're run on. Tests of git's settings replace gitConfig themselves.
+func TestMain(m *testing.M) {
+	gitConfig = func(dir, key string) (string, error) {
+		return "", errors.New("no git settings in tests")
+	}
+
+	os.Exit(m.Run())
+}
+
+// stubGit makes gitConfig return settings, and records the keys it's asked
+// for.
+func stubGit(t *testing.T, settings map[string]string) *[]string {
+	t.Helper()
+
+	var asked []string
+	original := gitConfig
+
+	gitConfig = func(dir, key string) (string, error) {
+		asked = append(asked, key)
+
+		if v, ok := settings[key]; ok {
+			return v, nil
+		}
+
+		return "", errors.New("not set")
+	}
+
+	t.Cleanup(func() { gitConfig = original })
+
+	return &asked
+}
+
+func TestLoadFillsUserFromGit(t *testing.T) {
+	git := map[string]string{"user.name": "Git Name", "user.email": "git@example.com"}
+
+	for _, tt := range []struct {
+		name    string
+		user    string
+		project string
+		want    map[string]any
+		asked   string
+	}{
+		{
+			"neither file sets them", "", "",
+			map[string]any{"name": "Git Name", "email": "git@example.com"}, "user.name user.email",
+		},
+		{
+			"the user's file sets the email", "[user]\nemail = \"me@example.com\"\n", "",
+			map[string]any{"name": "Git Name", "email": "me@example.com"}, "user.name",
+		},
+		{
+			"the files set both", "[user]\nname = \"Me\"\n", "[user]\nemail = \"me@work.example\"\n",
+			map[string]any{"name": "Me", "email": "me@work.example"}, "",
+		},
+	} {
+		asked := stubGit(t, git)
+		home, dir := t.TempDir(), t.TempDir()
+
+		if tt.user != "" {
+			writeConfig(t, filepath.Join(home, ".ish", FileName), tt.user)
+		}
+		if tt.project != "" {
+			writeConfig(t, filepath.Join(dir, FileName), tt.project)
+		}
+
+		cfg, err := Load(home, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(cfg["user"], tt.want) {
+			t.Errorf("%s: user = %#v, want %#v", tt.name, cfg["user"], tt.want)
+		}
+
+		// git is only asked for what the files don't set.
+		if got := strings.Join(*asked, " "); got != tt.asked {
+			t.Errorf("%s: asked git for %q, want %q", tt.name, got, tt.asked)
+		}
+	}
+}
+
+func TestLoadWithoutGitUser(t *testing.T) {
+	stubGit(t, nil)
+
+	cfg, err := Load(t.TempDir(), t.TempDir())
+
+	if err != nil || len(cfg) != 0 {
+		t.Errorf("Load() = %v, %v, want no user without git's settings", cfg, err)
+	}
+
+	// A user that isn't a table is left alone.
+	stubGit(t, map[string]string{"user.email": "git@example.com"})
+	dir := t.TempDir()
+	writeConfig(t, filepath.Join(dir, FileName), `user = "me"`)
+
+	if cfg, err := Load("", dir); err != nil || cfg["user"] != "me" {
+		t.Errorf("Load() = %v, %v, want user left as the file has it", cfg, err)
 	}
 }
