@@ -43,7 +43,21 @@ var numberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[
 //	attribute  = "{" ( name | field ) operator value "}"
 //	field      = "@title" | "@author" | "@dateCreated"
 //	operator   = "=" | "!=" | "<" | ">" | "<=" | ">=" | "~"
-//	value      = "null" | "true" | "false" | number | string | regexp
+//	value      = "null" | "true" | "false" | number | string | regexp | lookup
+//	           | "(" comparison ")"
+//	lookup     = "." key { "." key }
+//
+// Expressions, in parentheses, compute a value:
+//
+//	comparison = sum [ ( "=" | "!=" | "<" | "<=" | ">" | ">=" ) sum ]
+//	sum        = product { ( "+" | "-" ) product }
+//	product    = power { ( "*" | "/" | "%" ) power }
+//	power      = chain [ "**" power ]
+//	chain      = unary { ":" name [ "(" comparison { "," comparison } ")" ] }
+//	unary      = ( "-" | "!" ) unary | operand
+//	operand    = "null" | "true" | "false" | number | string | lookup | list
+//	           | "(" comparison ")"
+//	list       = "[" [ comparison { "," comparison } ] "]"
 //
 // Names use letters, digits, and - _ . / , and refer to metadata
 // attributes. Fields, which start with @, refer to the issue's title, the
@@ -352,6 +366,9 @@ func (p *parser) parseValue() (Value, error) {
 	case r == '.':
 		return p.parseLookup()
 
+	case r == '(':
+		return p.parseExpression()
+
 	case r == '-' || (r >= '0' && r <= '9'):
 		match := numberPattern.FindString(string(p.input[p.pos:]))
 
@@ -404,8 +421,9 @@ func (p *parser) parseLookup() (Value, error) {
 		}
 	}
 
-	// A lookup ends where its last key does.
-	if !p.done() && !unicode.IsSpace(p.peek()) && p.peek() != '}' {
+	// A lookup ends where its last key does, before space, the end of the
+	// attribute expression, or punctuation in an expression.
+	if !p.done() && !unicode.IsSpace(p.peek()) && !strings.ContainsRune("}),]:+*/%<>=!", p.peek()) {
 		return Value{}, p.errorAt(p.pos, p.pos+1, "keys may only contain letters, digits, _, and -")
 	}
 
@@ -530,8 +548,9 @@ func (p *parser) parseRegexp() (Value, error) {
 // from start to end in the input.
 func checkOperand(op Operator, value Value, start, end int) error {
 	switch data := value.Data.(type) {
-	// A lookup's value is checked once it's looked up. See Resolve.
-	case Lookup:
+	// A lookup's or an expression's value is checked once it's known. See
+	// Resolve.
+	case Lookup, *Expression:
 		return nil
 
 	case string:

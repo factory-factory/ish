@@ -42,6 +42,18 @@ func (e *TypeError) Error() string {
 func Resolve(node Node, lookup LookupFunc) (Node, error) {
 	switch n := node.(type) {
 	case *AttributeExpression:
+		if expr, ok := n.Value.Data.(*Expression); ok {
+			data, err := resolveExpression(n.Operator, expr, lookup)
+			if err != nil {
+				return nil, err
+			}
+
+			resolved := *n
+			resolved.Value = Value{Data: data}
+
+			return &resolved, nil
+		}
+
 		path, ok := n.Value.Data.(Lookup)
 		if !ok {
 			return n, nil
@@ -97,6 +109,39 @@ func resolveBoth(left, right Node, lookup LookupFunc) (Node, Node, error) {
 	}
 
 	return l, r, nil
+}
+
+// resolveExpression returns the data for an expression compared with op: the
+// expression with its lookups resolved, or unknown if its value is null, as
+// it is when it uses a lookup that found nothing. The expression is evaluated
+// here, to report errors such as a function applied to a value of the wrong
+// type, and its value is checked as a literal is.
+func resolveExpression(op Operator, expr *Expression, lookup LookupFunc) (any, error) {
+	root, err := expr.Root.resolve(lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := &Expression{Root: root}
+
+	v, err := resolved.Eval(nil)
+	if err != nil {
+		return nil, &ExprError{Expression: expr.format(plain), Err: err}
+	}
+
+	if v == nil {
+		return unknown{}, nil
+	}
+
+	if op == NotEqual {
+		op = Equal
+	}
+
+	if _, err := compareWith(op, "", v); err != nil {
+		return nil, &ExprError{Expression: expr.format(plain), Err: err}
+	}
+
+	return resolved, nil
 }
 
 // resolveValue returns the data for the value at path, compared with op.

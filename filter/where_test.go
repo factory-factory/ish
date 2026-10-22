@@ -353,3 +353,53 @@ func TestLookupValuesAreParameters(t *testing.T) {
 		t.Errorf("Where() = %q, %v, want the value as a parameter", clause, args)
 	}
 }
+
+func TestWhereExpressions(t *testing.T) {
+	dir := indexedDir(t)
+	vals := map[string]any{
+		".user.email": "ALICE@EXAMPLE.COM",
+		".states":     []any{"open", "closed", "open"},
+		".two":        int64(2),
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{estimate = (2 + 3)}", "A"},
+		{"{estimate > (.two * 1)}", "A C"},
+		{"{estimate = (10 / 4)}", "C"},
+		{"{state = ('OPEN' :lower)}", "A"},
+		{"{state ~ ('^IN ' :lower)}", "C"},
+		{"{@author = (.user.email :lower)}", "A C E"},
+		{"{done = (1 < 2)}", "A"},
+
+		// A list matches if any value does, and != if none does.
+		{"{state = (.states :distinct)}", "A B"},
+		{"{state != (.states :distinct)}", "C D E"},
+		{"{state = ([] :distinct)}", ""},
+
+		// A null value is UNKNOWN, like a missing lookup.
+		{"{state = (.missing :lower)}", ""},
+		{"{state != (1 / 0)}", ""},
+		{"{state = (.missing :lower)} or {state = 'closed'}", "B"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, vals); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestExpressionValuesAreParameters(t *testing.T) {
+	node, _ := filter.Parse(`{state = ("x' OR 1=1 --" :lower)}`)
+	resolved, err := filter.Resolve(node, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clause, args := resolved.Where()
+
+	if strings.Contains(clause, "OR 1=1") || !strings.Contains(clause, "ish_lower(?)") {
+		t.Errorf("Where() = %q, %v, want the value as a parameter of an SQL function", clause, args)
+	}
+}

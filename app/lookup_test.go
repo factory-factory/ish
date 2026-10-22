@@ -77,3 +77,20 @@ func TestFilterLookupsReadCurrentState(t *testing.T) {
 		t.Errorf("listed %q after the state changed, want alice's issues", got)
 	}
 }
+
+func TestFilterWithExpression(t *testing.T) {
+	m := menuModel(t)
+	m = applyFilter(t, m, "{assignees = ('ALICE@EXAMPLE.COM' :lower)} and {state != 'closed'}")
+
+	if m.filter.err != nil || ids(m) != "AAA BBB EEE" {
+		t.Errorf("err, listed = %v, %q, want alice's unclosed issues", m.filter.err, ids(m))
+	}
+
+	// An expression that can't be evaluated is shown as an error, and the
+	// filter isn't applied.
+	m = applyFilter(t, m, "{assignees = ('a' + 1)}")
+
+	if !m.filter.editing || m.filter.err == nil || !strings.Contains(m.filter.err.Error(), "+ needs two numbers") {
+		t.Errorf("editing, err = %v, %v, want the expression's error", m.filter.editing, m.filter.err)
+	}
+}

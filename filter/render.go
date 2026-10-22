@@ -12,19 +12,26 @@ type printer struct {
 	operator  func(string) string
 	paren     func(string) string
 	keyword   func(string) string
+	function  func(string) string
 	value     func(Value) string
 }
 
 func unstyled(s string) string { return s }
 
-// plain formats an expression as plain text, for String.
-var plain = printer{
-	brace:     unstyled,
-	attribute: unstyled,
-	operator:  unstyled,
-	paren:     unstyled,
-	keyword:   unstyled,
-	value:     Value.String,
+// plain formats an expression as plain text, for String. It's set up in
+// init, since Value.String uses it to print expressions.
+var plain printer
+
+func init() {
+	plain = printer{
+		brace:     unstyled,
+		attribute: unstyled,
+		operator:  unstyled,
+		paren:     unstyled,
+		keyword:   unstyled,
+		function:  unstyled,
+		value:     Value.String,
+	}
 }
 
 // highlight formats an expression with each kind of token colored, for
@@ -35,6 +42,7 @@ var highlight = printer{
 	operator:  with(styles.FilterOperator),
 	paren:     with(styles.FilterParenthesis),
 	keyword:   with(styles.FilterKeyword),
+	function:  with(styles.FilterLookup),
 	value:     renderValue,
 }
 
