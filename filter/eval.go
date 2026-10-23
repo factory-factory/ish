@@ -3,11 +3,13 @@ package filter
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Expression values are nil for null, a string, a float64, a bool, or a
@@ -285,9 +287,93 @@ var functions = map[string]function{
 	"max":      {0, 0, extreme(1)},
 	"min":      {0, 0, extreme(-1)},
 
-	// :user is resolved before a query is made, from the user directory;
-	// see CallExpr.resolve. Unresolved, it finds no one.
-	userFunction: {0, 0, func([]any) (any, error) { return nil, nil }},
+	// :user and :fromnow are resolved before a query is made, from the user
+	// directory and the clock; see CallExpr.resolve. Unresolved, they're
+	// null.
+	userFunction:    {0, 0, func([]any) (any, error) { return nil, nil }},
+	fromNowFunction: {0, 0, func([]any) (any, error) { return nil, nil }},
+}
+
+// fromNowFunction gives the moment an offset from now, such as -3h.
+const fromNowFunction = "fromnow"
+
+// offsetPart matches a part of a :fromnow offset: an optional sign, a whole
+// number, and a unit, longest first so mo isn't read as m.
+var offsetPart = regexp.MustCompile(`^([+-]?)([0-9]+)(min|mo|hr|yr|m|h|d|w|y)$`)
+
+// fromNow returns the moment offset from now, as an RFC 3339 string in UTC
+// with whole seconds. The offset is one or more parts separated by spaces,
+// each a whole number and a unit: m or min, h or hr, d, w, mo, or y or yr.
+// A part's sign applies to the parts after it until another sign, so -1d 6h
+// is a day and six hours ago. Years, months, days, and weeks are counted on
+// the calendar in now's time zone, so a day is the same time on the next
+// day, and a month later than the 31st is clamped to the end of its month.
+// Hours and minutes are exact.
+func fromNow(offset string, now time.Time) (string, error) {
+	fields := strings.Fields(offset)
+	if len(fields) == 0 {
+		return "", errors.New("needs an offset such as -3h or +1mo 2d")
+	}
+
+	var years, months, days int
+	var exact time.Duration
+
+	sign := 1
+
+	for _, field := range fields {
+		m := offsetPart.FindStringSubmatch(field)
+		if m == nil {
+			return "", fmt.Errorf("can't read %q; an offset is a whole number and a unit: m or min, h or hr, d, w, mo, or y or yr, as in -3h or +1mo 2d", field)
+		}
+
+		switch m[1] {
+		case "-":
+			sign = -1
+		case "+":
+			sign = 1
+		}
+
+		n, err := strconv.Atoi(m[2])
+		if err != nil {
+			return "", fmt.Errorf("can't read the number in %q", field)
+		}
+
+		n *= sign
+
+		switch m[3] {
+		case "m", "min":
+			exact += time.Duration(n) * time.Minute
+		case "h", "hr":
+			exact += time.Duration(n) * time.Hour
+		case "d":
+			days += n
+		case "w":
+			days += 7 * n
+		case "mo":
+			months += n
+		case "y", "yr":
+			years += n
+		}
+	}
+
+	t := addMonths(now, 12*years+months).AddDate(0, 0, days).Add(exact)
+
+	return t.UTC().Truncate(time.Second).Format(time.RFC3339), nil
+}
+
+// addMonths returns t moved by months calendar months, keeping the time of
+// day, and clamping the day to the end of the month it lands in, so January
+// 31 plus a month is February 28 or 29.
+func addMonths(t time.Time, months int) time.Time {
+	if months == 0 {
+		return t
+	}
+
+	year, month, day := t.Date()
+	first := time.Date(year, month+time.Month(months), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	last := first.AddDate(0, 1, -1).Day()
+
+	return first.AddDate(0, 0, min(day, last)-1)
 }
 
 // userFunction looks up users' emails by their display names.

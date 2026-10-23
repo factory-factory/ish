@@ -292,13 +292,30 @@ func (e *CallExpr) eval(env Env) (any, error) {
 		args[i] = v
 	}
 
-	if e.Name == userFunction {
+	switch e.Name {
+	case userFunction:
 		v, err := lookUpUsers(args[0], env.Users)
 		if err != nil {
 			return nil, fmt.Errorf(":%s %w", userFunction, err)
 		}
 
 		return v, nil
+
+	case fromNowFunction:
+		switch offset := args[0].(type) {
+		case nil:
+			return nil, nil
+
+		case string:
+			v, err := fromNow(offset, env.now())
+			if err != nil {
+				return nil, fmt.Errorf(":%s %w", fromNowFunction, err)
+			}
+
+			return v, nil
+		}
+
+		return nil, fmt.Errorf(":%s needs an offset that's a string, not %s", fromNowFunction, typeName(args[0]))
 	}
 
 	return applyFunction(e.Name, args)
@@ -426,8 +443,10 @@ func (e *CallExpr) resolve(env Env) (Expr, error) {
 	resolved := &CallExpr{Name: e.Name, Args: args}
 
 	// :user looks names up in the user directory, which the SQL functions
-	// can't read, so it's replaced by the emails it finds.
-	if e.Name == userFunction {
+	// can't read, so it's replaced by the emails it finds. :fromnow is
+	// replaced by its moment, so every comparison in a query uses the same
+	// one.
+	if e.Name == userFunction || e.Name == fromNowFunction {
 		v, err := resolved.eval(env)
 		if err != nil {
 			return nil, err

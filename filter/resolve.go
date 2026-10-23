@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // LookupFunc returns the value at an object lookup's path, such as
@@ -49,6 +50,20 @@ func Resolve(node Node, lookup LookupFunc) (Node, error) {
 type Env struct {
 	Lookup LookupFunc
 	Users  []User
+
+	// Now is the moment :fromnow counts from, in the time zone it counts
+	// calendar days in. If it's zero, it's the current time, in the local
+	// time zone.
+	Now time.Time
+}
+
+// now returns the moment :fromnow counts from.
+func (env Env) now() time.Time {
+	if env.Now.IsZero() {
+		return time.Now()
+	}
+
+	return env.Now
 }
 
 // User is a user in the directory: their display name and email.
@@ -57,8 +72,14 @@ type User struct {
 	Email string
 }
 
-// ResolveEnv is Resolve with the user directory too. See Resolve.
+// ResolveEnv is Resolve with the user directory and the clock too. See
+// Resolve. The clock is read once, so every :fromnow in a query counts from
+// the same moment.
 func ResolveEnv(node Node, env Env) (Node, error) {
+	if env.Now.IsZero() {
+		env.Now = time.Now()
+	}
+
 	return resolveEnv(node, env)
 }
 

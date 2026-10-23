@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/store"
@@ -457,6 +458,39 @@ func TestWhereUser(t *testing.T) {
 		}
 
 		resolved, err := filter.ResolveEnv(node, filter.Env{Users: users})
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestWhereFromNow(t *testing.T) {
+	dir := indexedDir(t)
+
+	// The issues were created between 2026-09-30T23:00:00Z (C) and
+	// 2026-10-14T03:30:00Z (B).
+	env := filter.Env{Now: time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{@dateCreated > ('-1d' :fromnow)}", "B D"},
+		{"{@dateCreated > ('-12h' :fromnow)}", "B"},
+		{"{@dateCreated > ('-2d' :fromnow)}", "A B D E"},
+		{"{@dateCreated < ('-1w' :fromnow)}", "C"},
+		{"{@dateCreated > ('-1mo' :fromnow)}", "A B C D E"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, env)
 		if err != nil {
 			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
 		}
