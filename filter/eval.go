@@ -233,6 +233,30 @@ func compareFloat(x, y float64) int {
 	return 0
 }
 
+// interpolate joins the parts of an interpolated string: text, and the values
+// of inserted expressions, converted to strings. Strings are inserted as they
+// are, numbers as they're written in JSON, and booleans as true or false.
+// null is inserted as nothing, and a list is an error.
+func interpolate(values []any) (any, error) {
+	var b strings.Builder
+
+	for _, v := range values {
+		switch v := v.(type) {
+		case nil:
+		case string:
+			b.WriteString(v)
+		case float64:
+			b.WriteString(formatNumber(v))
+		case bool:
+			b.WriteString(strconv.FormatBool(v))
+		default:
+			return nil, fmt.Errorf("can't insert %s in a string; use :join to make a list a string", typeName(v))
+		}
+	}
+
+	return b.String(), nil
+}
+
 // function is a function in a filter expression: the number of arguments it
 // takes after the value it's applied to, and its implementation, which is
 // given the value first, then the arguments. Every function gives null for

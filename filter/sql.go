@@ -29,7 +29,11 @@ const (
 	// unaryFunction and binaryFunction apply the operator in their first
 	// argument, and each function in an expression is functionPrefix
 	// followed by its name.
-	listFunction   = "ish_list"
+	listFunction = "ish_list"
+
+	// interpolateFunction joins the parts of an interpolated string.
+	interpolateFunction = "ish_interpolate"
+
 	unaryFunction  = "ish_unary"
 	binaryFunction = "ish_binary"
 	functionPrefix = "ish_"
@@ -77,6 +81,7 @@ func init() {
 	}
 
 	register(listFunction, -1, func(args []any) (any, error) { return args, nil })
+	register(interpolateFunction, -1, interpolate)
 	register(unaryFunction, 2, func(args []any) (any, error) { return evalUnary(args[0].(string), args[1]) })
 	register(binaryFunction, 3, func(args []any) (any, error) { return evalBinary(args[0].(string), args[1], args[2]) })
 

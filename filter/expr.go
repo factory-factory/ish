@@ -76,10 +76,102 @@ type GroupExpr struct {
 	X Expr
 }
 
+// InterpExpr is a string with expressions inserted in it, as in
+// 'issue \(.id)', quoted by Quote. Its value is its parts' text, with each
+// expression's value converted to a string.
+type InterpExpr struct {
+	Quote rune
+	Parts []InterpPart
+}
+
+// InterpPart is a part of an interpolated string: text, as it's written in
+// Raw and as it reads in Text, or, if X isn't nil, an inserted expression.
+type InterpPart struct {
+	Raw  string
+	Text string
+	X    Expr
+}
+
 // Formatting.
 
 func (e *Expression) format(p printer) string {
+	// An interpolated string is written as a string, without parentheses.
+	if _, ok := e.Root.(*InterpExpr); ok {
+		return e.Root.format(p)
+	}
+
 	return p.paren("(") + e.Root.format(p) + p.paren(")")
+}
+
+func (e *InterpExpr) format(p printer) string {
+	text := func(s string) string { return p.value(Value{Raw: s, Data: s}) }
+	quote := string(e.Quote)
+
+	s := text(quote)
+
+	for _, part := range e.Parts {
+		if part.X == nil {
+			s += text(part.Raw)
+			continue
+		}
+
+		s += p.paren(`\(`) + part.X.format(p) + p.paren(")")
+	}
+
+	return s + text(quote)
+}
+
+func (e *InterpExpr) eval(lookup LookupFunc) (any, error) {
+	values := make([]any, len(e.Parts))
+
+	for i, part := range e.Parts {
+		if part.X == nil {
+			values[i] = part.Text
+			continue
+		}
+
+		v, err := part.X.eval(lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		values[i] = v
+	}
+
+	return interpolate(values)
+}
+
+// sql passes the text as parameters, between the inserted expressions.
+func (e *InterpExpr) sql() (string, []any) {
+	exprs := make([]Expr, len(e.Parts))
+
+	for i, part := range e.Parts {
+		exprs[i] = part.X
+		if part.X == nil {
+			exprs[i] = &LiteralExpr{Value: Value{Data: part.Text}}
+		}
+	}
+
+	return call(interpolateFunction, nil, exprs)
+}
+
+func (e *InterpExpr) resolve(lookup LookupFunc) (Expr, error) {
+	resolved := &InterpExpr{Quote: e.Quote, Parts: make([]InterpPart, len(e.Parts))}
+
+	for i, part := range e.Parts {
+		resolved.Parts[i] = part
+
+		if part.X != nil {
+			x, err := part.X.resolve(lookup)
+			if err != nil {
+				return nil, err
+			}
+
+			resolved.Parts[i].X = x
+		}
+	}
+
+	return resolved, nil
 }
 
 func (e *LiteralExpr) format(p printer) string { return p.value(e.Value) }
@@ -652,6 +744,10 @@ func (p *parser) parseOperand() (Expr, error) {
 		v, err := p.parseString()
 		if err != nil {
 			return nil, err
+		}
+
+		if expr, ok := v.Data.(*Expression); ok {
+			return expr.Root, nil
 		}
 
 		return &LiteralExpr{Value: v}, nil

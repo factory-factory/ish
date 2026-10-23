@@ -403,3 +403,31 @@ func TestExpressionValuesAreParameters(t *testing.T) {
 		t.Errorf("Where() = %q, %v, want the value as a parameter of an SQL function", clause, args)
 	}
 }
+
+func TestWhereInterpolation(t *testing.T) {
+	dir := indexedDir(t)
+	vals := map[string]any{
+		".state":  "open",
+		".prefix": "in",
+		".user":   "alice",
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{`{state = '\(.state)'}`, "A"},
+		{`{@author = '\(.user)@example.com'}`, "A C E"},
+		// Inserted values are pattern characters with ~.
+		{`{state ~ '^\(.prefix) '}`, "C"},
+		{`{state ~ '^\('[oc]')'}`, "A B"},
+		// null is inserted as nothing.
+		{`{state = 'open\(.missing)'}`, "A"},
+		// A string in an expression.
+		{`{state = ('\(.state)' :upper :lower)}`, "A"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, vals); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
