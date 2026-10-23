@@ -356,7 +356,7 @@ func (e *BinaryExpr) sql() (string, []any) {
 }
 
 func (e *CallExpr) sql() (string, []any) {
-	return call(functionPrefix+e.Name, nil, e.Args)
+	return call(sqlFunctionName(e.Name), nil, e.Args)
 }
 
 func (e *GroupExpr) sql() (string, []any) { return e.X.sql() }
@@ -687,8 +687,11 @@ func (p *parser) parseChain() (Expr, error) {
 		start := p.pos
 		p.pos++
 
+		// A name is letters and digits, with dots between its parts, as in
+		// :base64.encode.
 		nameStart := p.pos
-		for !p.done() && (unicode.IsLetter(p.peek()) || unicode.IsDigit(p.peek())) {
+		for !p.done() && (unicode.IsLetter(p.peek()) || unicode.IsDigit(p.peek()) ||
+			p.peek() == '.' && p.pos > nameStart && p.pos+1 < len(p.input) && unicode.IsLetter(p.input[p.pos+1])) {
 			p.pos++
 		}
 

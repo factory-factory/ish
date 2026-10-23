@@ -500,3 +500,21 @@ func TestWhereFromNow(t *testing.T) {
 		}
 	}
 }
+
+func TestWhereEncodingFunctions(t *testing.T) {
+	dir := indexedDir(t)
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{state = ('b3Blbg==' :base64.decode)}", "A"},
+		{`{state = ('["open", "closed"]' :json.decode)}`, "A B"},
+		{"{state = ('not json' :json.decode)} or {state = 'closed'}", "B"},
+		{"{state = ('open' :base64.encode :base64.decode)}", "A"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, nil); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}

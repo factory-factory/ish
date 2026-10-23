@@ -86,7 +86,7 @@ func init() {
 	register(binaryFunction, 3, func(args []any) (any, error) { return evalBinary(args[0].(string), args[1], args[2]) })
 
 	for name := range functions {
-		register(functionPrefix+name, -1, func(args []any) (any, error) { return applyFunction(name, args) })
+		register(sqlFunctionName(name), -1, func(args []any) (any, error) { return applyFunction(name, args) })
 	}
 
 	if err := sqlite.RegisterDeterministicScalarFunction(compareFunction, 3, sqlCompare); err != nil {

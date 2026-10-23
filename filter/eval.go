@@ -2,14 +2,22 @@ package filter
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Expression values are nil for null, a string, a float64, a bool, or a
@@ -266,32 +274,147 @@ func interpolate(values []any) (any, error) {
 type function struct {
 	minArgs, maxArgs int
 	apply            func(args []any) (any, error)
+
+	// acceptsNull reports whether the function is given a null value,
+	// rather than giving null for it.
+	acceptsNull bool
 }
 
 // functions are the functions filter expressions can apply, by name.
 var functions = map[string]function{
-	"lower":    {0, 0, strFunc(strings.ToLower)},
-	"upper":    {0, 0, strFunc(strings.ToUpper)},
-	"join":     {1, 1, join},
-	"split":    {0, 1, split},
-	"replace":  {2, 2, replace},
-	"trim":     {0, 1, trim},
-	"count":    {0, 0, count},
-	"distinct": {0, 0, distinct},
-	"includes": {1, 1, includes},
-	"indexof":  {1, 1, indexOf},
-	"abs":      {0, 0, numFunc(math.Abs)},
-	"ceil":     {0, 0, numFunc(math.Ceil)},
-	"floor":    {0, 0, numFunc(math.Floor)},
-	"round":    {0, 1, round},
-	"max":      {0, 0, extreme(1)},
-	"min":      {0, 0, extreme(-1)},
+	"lower":    {0, 0, strFunc(strings.ToLower), false},
+	"upper":    {0, 0, strFunc(strings.ToUpper), false},
+	"join":     {1, 1, join, false},
+	"split":    {0, 1, split, false},
+	"replace":  {2, 2, replace, false},
+	"trim":     {0, 1, trim, false},
+	"count":    {0, 0, count, false},
+	"distinct": {0, 0, distinct, false},
+	"includes": {1, 1, includes, false},
+	"indexof":  {1, 1, indexOf, false},
+	"abs":      {0, 0, numFunc(math.Abs), false},
+	"ceil":     {0, 0, numFunc(math.Ceil), false},
+	"floor":    {0, 0, numFunc(math.Floor), false},
+	"round":    {0, 1, round, false},
+	"max":      {0, 0, extreme(1), false},
+	"min":      {0, 0, extreme(-1), false},
+
+	"base64.encode": {0, 0, base64Encode, false},
+	"base64.decode": {0, 0, base64Decode, false},
+	"json.encode":   {0, 0, jsonEncode, true},
+	"json.decode":   {0, 0, jsonDecode, false},
+	"hash.sha256":   {0, 0, hashFunc(sha256.New), false},
+	"hash.sha512":   {0, 0, hashFunc(sha512.New), false},
+	"hash.md5":      {0, 0, hashFunc(md5.New), false},
 
 	// :user and :fromnow are resolved before a query is made, from the user
 	// directory and the clock; see CallExpr.resolve. Unresolved, they're
 	// null.
-	userFunction:    {0, 0, func([]any) (any, error) { return nil, nil }},
-	fromNowFunction: {0, 0, func([]any) (any, error) { return nil, nil }},
+	userFunction:    {0, 0, func([]any) (any, error) { return nil, nil }, false},
+	fromNowFunction: {0, 0, func([]any) (any, error) { return nil, nil }, false},
+}
+
+// sqlFunctionName returns the name of the SQL function that evaluates the
+// named expression function. SQL names can't contain dots, so they're
+// underscores, as in ish_base64_encode.
+func sqlFunctionName(name string) string {
+	return functionPrefix + strings.ReplaceAll(name, ".", "_")
+}
+
+// base64Encode encodes a string's UTF-8 bytes as Base64, with the standard
+// alphabet and = padding (RFC 4648, section 4).
+func base64Encode(args []any) (any, error) {
+	s, err := argString(args, 0, "a value")
+	if err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.EncodeToString([]byte(s)), nil
+}
+
+// base64Decode decodes Base64, in the standard or URL-safe alphabet with =
+// padding, to a string. Text that isn't Base64, or that decodes to bytes that
+// aren't UTF-8, gives null.
+func base64Decode(args []any) (any, error) {
+	s, err := argString(args, 0, "a value")
+	if err != nil {
+		return nil, err
+	}
+
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding} {
+		if b, err := enc.DecodeString(s); err == nil {
+			if !utf8.Valid(b) {
+				return nil, nil
+			}
+
+			return string(b), nil
+		}
+	}
+
+	return nil, nil
+}
+
+// jsonEncode encodes a value as compact JSON text: a string, a number, a
+// boolean, a list, or null, which is the text null.
+func jsonEncode(args []any) (any, error) {
+	return encodeValue(args[0]), nil
+}
+
+// jsonDecode decodes JSON text to the string, number, boolean, list, or null
+// it represents. Text that isn't JSON, or that has an object in it, which
+// filter expressions have no type for, gives null.
+func jsonDecode(args []any) (any, error) {
+	s, err := argString(args, 0, "a value")
+	if err != nil {
+		return nil, err
+	}
+
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+
+	var v any
+	if err := dec.Decode(&v); err != nil || dec.More() || hasObject(v) {
+		return nil, nil
+	}
+
+	// Anything after the value, other than space, isn't JSON.
+	if rest, _ := io.ReadAll(dec.Buffered()); strings.TrimSpace(string(rest)) != "" {
+		return nil, nil
+	}
+
+	return fromJSON(v), nil
+}
+
+// hasObject reports whether a decoded JSON value is or contains an object.
+func hasObject(v any) bool {
+	switch v := v.(type) {
+	case map[string]any:
+		return true
+	case []any:
+		for _, e := range v {
+			if hasObject(e) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// hashFunc returns a function giving the lowercase hexadecimal digest of a
+// string's UTF-8 bytes.
+func hashFunc(newHash func() hash.Hash) func([]any) (any, error) {
+	return func(args []any) (any, error) {
+		s, err := argString(args, 0, "a value")
+		if err != nil {
+			return nil, err
+		}
+
+		h := newHash()
+		h.Write([]byte(s))
+
+		return hex.EncodeToString(h.Sum(nil)), nil
+	}
 }
 
 // fromNowFunction gives the moment an offset from now, such as -3h.
@@ -450,7 +573,7 @@ func applyFunction(name string, args []any) (any, error) {
 		return nil, fmt.Errorf(":%s takes %s", name, arity(f))
 	}
 
-	if args[0] == nil {
+	if args[0] == nil && !f.acceptsNull {
 		return nil, nil
 	}
 
