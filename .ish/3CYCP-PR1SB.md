@@ -5,6 +5,7 @@
 - state: open
 - assignees: <brendan@berg.industries>
 - relation.previous: #3CSJ4-PEZ1N
+- relation.depends-on: #3CZWN-EBVEH
 
 ---
 
@@ -23,3 +24,13 @@ There are a couple ways of handling the comparisons. One is to update the filter
 [<brendan@berg.industries> 2026-10-14T23:49:09-07:00]
 
 See also #3CVJY-W5VVN
+
+---
+
+["Brendan Berg" <brendan@berg.industries> 2026-10-21T12:46:45-07:00]
+
+Current thinking on match syntax / semantics:
+
+- **Issues created on a specific day:** `{@dateCreated = ('2026-10-01' :date)}`
+- **Issues created on or after a specific date:** `{@dateCreated >= ('2026-10-01' :date)}`
+- **Issues created in the past week:** `{@dateCreated > ('-7d' :fromnow)}`
