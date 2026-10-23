@@ -518,3 +518,89 @@ func TestWhereEncodingFunctions(t *testing.T) {
 		}
 	}
 }
+
+// commentsDir returns a directory of indexed issues with comments, for
+// filters on comment fields.
+func commentsDir(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	sources := map[string]string{
+		// A description and two comments.
+		"X": "# X\n\n[alice@example.com 2026-10-01T09:00:00Z]\n" +
+			"\n---\n\n[alice@example.com 2026-10-01T09:00:00Z]\n\nFix the parser.\n" +
+			"\n---\n\n[bob@example.com 2026-10-05T09:00:00Z]\n\nLGTM, but see TODO.\n" +
+			"\n---\n\n[\"Carol\" <carol@example.com> 2026-10-09T09:00:00Z]\n\n42\n",
+		// A description only.
+		"Y": "# Y\n\n[bob@example.com 2026-10-02T09:00:00Z]\n" +
+			"\n---\n\n[bob@example.com 2026-10-02T09:00:00Z]\n\nAdd a feature.\n",
+		// No description or comments.
+		"Z": "# Z\n\n[carol@example.com 2026-10-03T09:00:00Z]\n",
+	}
+
+	for id, source := range sources {
+		if err := os.WriteFile(filepath.Join(dir, id+".md"), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if result, err := store.Init(dir); err != nil || len(result.Failed) > 0 {
+		t.Fatalf("store.Init() = %+v, %v", result, err)
+	}
+
+	return dir
+}
+
+func TestWhereCommentFields(t *testing.T) {
+	dir := commentsDir(t)
+	users := []filter.User{{Name: "Bob", Email: "bob@example.com"}}
+	env := filter.Env{Users: users, Now: time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		// The description is searched too.
+		{"{@comments.text ~ 'parser'}", "X"},
+		{"{@comments.text ~ 'TODO'}", "X"},
+		{"{@comments.text ~ '(?i)feature'}", "Y"},
+		{"{@comments.text = 'Add a feature.'}", "Y"},
+		{"{@comments.text = 42}", "X"},
+
+		// Any comment's author, stored as an email.
+		{"{@comments.author = 'carol@example.com'}", "X"},
+		{"{@comments.author = 'bob@example.com'}", "X Y"},
+		{"{@comments.author = ('Bob' :user)}", "X Y"},
+		{"{@comments.author = (['alice@example.com', 'nobody@example.com'])}", "X"},
+
+		// != matches issues where no comment matches, including those
+		// without comments.
+		{"{@comments.author != 'bob@example.com'}", "Z"},
+
+		// Dates, as UTC RFC 3339 text.
+		{"{@comments.dateCreated > '2026-10-06'}", "X"},
+		{"{@comments.dateCreated > ('-2d' :fromnow)}", "X"},
+		{"{@comments.dateCreated < ('-7d' :fromnow)}", "X Y"},
+
+		// null tests whether there are any comments.
+		{"{@comments.text = null}", "Z"},
+		{"{@comments.text != null}", "X Y"},
+
+		// Conditions on comments can match different comments.
+		{"{@comments.author = 'bob@example.com'} and {@comments.text ~ 'parser'}", "X"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatalf("Parse(%q) error = %v", tt.text, err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, env)
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}

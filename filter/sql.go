@@ -188,6 +188,13 @@ func sqlRegexp(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, er
 // hasAttribute is true if the issue has the attribute given as its parameter.
 const hasAttribute = `EXISTS (SELECT 1 FROM attribute WHERE attribute.issueId = issue.id AND attribute.key = ?)`
 
+// hasComment is true if the issue has any comments.
+const hasComment = `EXISTS (SELECT 1 FROM comment WHERE comment.issueId = issue.id)`
+
+// anyComment is true if any of the issue's comments satisfies the condition
+// that's appended to it, which refers to the comment as comment.
+const anyComment = `EXISTS (SELECT 1 FROM comment WHERE comment.issueId = issue.id AND `
+
 // anyValue is true if any of the issue's values for the attribute given as
 // its first parameter satisfy the condition that's appended to it, which
 // refers to the value as attributeValue.value.
@@ -218,6 +225,10 @@ func (e *AttributeExpression) Where() (string, []any) {
 
 	case *Expression:
 		return e.expressionWhere(data)
+	}
+
+	if commentFields[e.Attribute] {
+		return e.commentWhere(fields[e.Attribute])
 	}
 
 	if column, ok := fields[e.Attribute]; ok {
@@ -264,7 +275,10 @@ func (e *AttributeExpression) expressionWhere(expr *Expression) (string, []any) 
 	var clause string
 	var args []any
 
-	if column, ok := fields[e.Attribute]; ok {
+	if column, ok := fields[e.Attribute]; ok && commentFields[e.Attribute] {
+		clause = anyComment + compare(column) + ")"
+		args = append([]any{string(op)}, valueArgs...)
+	} else if ok {
 		clause = "coalesce(" + compare(column) + ", 0)"
 		args = append([]any{string(op)}, valueArgs...)
 	} else {
@@ -312,6 +326,32 @@ func (e *AttributeExpression) listWhere(values valueList) (string, []any) {
 	}
 
 	return matches, args
+}
+
+// commentWhere returns an SQL condition for an expression that compares a
+// field of the issue's comments, in column: true if any comment's value
+// compares, or for !=, if none does. = null matches issues without
+// comments, and != null those with them.
+func (e *AttributeExpression) commentWhere(column string) (string, []any) {
+	if e.Value.Data == nil {
+		if e.Operator == NotEqual {
+			return hasComment, nil
+		}
+
+		return "NOT " + hasComment, nil
+	}
+
+	if e.Operator == NotEqual {
+		equal := *e
+		equal.Operator = Equal
+		clause, args := equal.commentWhere(column)
+
+		return "NOT " + clause, args
+	}
+
+	condition, arg := e.compare(column)
+
+	return anyComment + condition + ")", []any{arg}
 }
 
 // fieldWhere returns an SQL condition for an expression that compares the

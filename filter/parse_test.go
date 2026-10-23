@@ -177,9 +177,9 @@ func TestParseErrors(t *testing.T) {
 		{"{st ate = 1}", 4, 7, "expected an operator"},
 		{"{a$ = 1}", 2, 3, "may only contain letters"},
 		{"{ = 1}", 2, 3, "expected an attribute name"},
-		{"{@ = 1}", 1, 2, "expected a field name: @title, @author, and @dateCreated"},
+		{"{@ = 1}", 1, 2, "expected a field name: @title, @author, @dateCreated, @comments.text, @comments.author, and @comments.dateCreated"},
 		{"{@@title = 1}", 1, 2, "expected a field name"},
-		{"{@state = 'open'}", 1, 7, "unknown field @state; the fields are @title, @author, and @dateCreated"},
+		{"{@state = 'open'}", 1, 7, "unknown field @state; the fields are @title, @author, @dateCreated, @comments.text, @comments.author, and @comments.dateCreated"},
 		{"{@Title = 'x'}", 1, 7, "unknown field @Title"},
 		{"{@title@ = 'x'}", 7, 8, "may only contain letters"},
 		{"{a@b = 1}", 2, 3, "may only contain letters"},
@@ -290,5 +290,22 @@ func TestSyntaxErrorMessage(t *testing.T) {
 
 	if got := err.Error(); !strings.HasPrefix(got, "column 10: expected a value") {
 		t.Errorf("Error() = %q, want the 1-based column and the message", got)
+	}
+}
+
+func TestParseCommentFields(t *testing.T) {
+	for _, text := range []string{
+		"{@comments.text ~ /TODO/}",
+		"{@comments.author = ('Bob' :user)}",
+		"{@comments.dateCreated > ('-1w' :fromnow)}",
+		"{@comments.text = null}",
+	} {
+		if got := mustParse(t, text).String(); got != text {
+			t.Errorf("String() = %q, want %q", got, text)
+		}
+	}
+
+	if _, err := Parse("{@comments.body ~ 'x'}"); err == nil || !strings.Contains(err.Error(), "unknown field @comments.body") {
+		t.Errorf("Parse() of an unknown comment field error = %v, want one naming it", err)
 	}
 }
