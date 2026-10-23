@@ -3,6 +3,7 @@ package filter
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,6 +23,26 @@ const (
 	// regexpFunction returns 1 if its second argument matches the Go regular
 	// expression in its first, and 0 otherwise.
 	regexpFunction = "ish_regexp"
+
+	// These evaluate expressions. Their values are JSON text, so they keep
+	// their types: listFunction makes a list of its arguments,
+	// unaryFunction and binaryFunction apply the operator in their first
+	// argument, and each function in an expression is functionPrefix
+	// followed by its name.
+	listFunction = "ish_list"
+
+	// interpolateFunction joins the parts of an interpolated string.
+	interpolateFunction = "ish_interpolate"
+
+	unaryFunction  = "ish_unary"
+	binaryFunction = "ish_binary"
+	functionPrefix = "ish_"
+
+	// compareFunction returns 1 if an attribute's value, its second
+	// argument, compares with an expression's value, its third, by the
+	// operator in its first, 0 if it doesn't, and NULL if the expression's
+	// value is null. See compareWith.
+	compareFunction = "ish_compare"
 )
 
 func init() {
@@ -32,6 +53,88 @@ func init() {
 	if err := sqlite.RegisterDeterministicScalarFunction(regexpFunction, 2, sqlRegexp); err != nil {
 		panic(err)
 	}
+
+	register := func(name string, n int32, f func(args []any) (any, error)) {
+		err := sqlite.RegisterDeterministicScalarFunction(name, n, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			values := make([]any, len(args))
+
+			for i, a := range args {
+				v, err := sqlValue(a)
+				if err != nil {
+					return nil, err
+				}
+
+				values[i] = v
+			}
+
+			v, err := f(values)
+			if err != nil {
+				return nil, err
+			}
+
+			return encodeValue(v), nil
+		})
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	register(listFunction, -1, func(args []any) (any, error) { return args, nil })
+	register(interpolateFunction, -1, interpolate)
+	register(unaryFunction, 2, func(args []any) (any, error) { return evalUnary(args[0].(string), args[1]) })
+	register(binaryFunction, 3, func(args []any) (any, error) { return evalBinary(args[0].(string), args[1], args[2]) })
+
+	for name := range functions {
+		register(sqlFunctionName(name), -1, func(args []any) (any, error) { return applyFunction(name, args) })
+	}
+
+	if err := sqlite.RegisterDeterministicScalarFunction(compareFunction, 3, sqlCompare); err != nil {
+		panic(err)
+	}
+}
+
+// sqlValue decodes an argument of an expression function: JSON text, or an
+// operator's name, which is passed as a string.
+func sqlValue(arg driver.Value) (any, error) {
+	text, ok := arg.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected an expression's value, not %T", arg)
+	}
+
+	if v, err := decodeValue(text); err == nil {
+		return v, nil
+	}
+
+	return text, nil
+}
+
+func sqlCompare(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	op, _ := args[0].(string)
+
+	text, ok := args[1].(string)
+	if !ok {
+		return int64(0), nil
+	}
+
+	value, _ := args[2].(string)
+
+	v, err := decodeValue(value)
+	if err != nil {
+		return nil, err
+	}
+
+	ok2, err := compareWith(Operator(op), text, v)
+	switch {
+	case err != nil:
+		return nil, err
+	case ok2 == nil:
+		return nil, nil
+	case ok2 == true:
+		return int64(1), nil
+	}
+
+	return int64(0), nil
 }
 
 func sqlNumber(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
@@ -112,6 +215,9 @@ func (e *AttributeExpression) Where() (string, []any) {
 
 	case valueList:
 		return e.listWhere(data)
+
+	case *Expression:
+		return e.expressionWhere(data)
 	}
 
 	if column, ok := fields[e.Attribute]; ok {
@@ -137,6 +243,40 @@ func (e *AttributeExpression) Where() (string, []any) {
 	condition, arg := e.compare("attributeValue.value")
 
 	return anyValue + condition + ")", []any{e.Attribute, arg}
+}
+
+// expressionWhere returns an SQL condition comparing with an expression's
+// value, which SQL functions evaluate: true if the comparison holds for any
+// of the attribute's values, as for a literal, or for !=, if = holds for
+// none of them. Resolve has already checked the expression, and found its
+// value isn't null.
+func (e *AttributeExpression) expressionWhere(expr *Expression) (string, []any) {
+	op := e.Operator
+	if op == NotEqual {
+		op = Equal
+	}
+
+	value, valueArgs := expr.SQL()
+	compare := func(column string) string {
+		return compareFunction + "(?, " + column + ", " + value + ")"
+	}
+
+	var clause string
+	var args []any
+
+	if column, ok := fields[e.Attribute]; ok {
+		clause = "coalesce(" + compare(column) + ", 0)"
+		args = append([]any{string(op)}, valueArgs...)
+	} else {
+		clause = anyValue + compare("attributeValue.value") + ")"
+		args = append([]any{e.Attribute, string(op)}, valueArgs...)
+	}
+
+	if e.Operator == NotEqual {
+		return "NOT " + clause, args
+	}
+
+	return clause, args
 }
 
 // listWhere returns an SQL condition comparing with each of values, a

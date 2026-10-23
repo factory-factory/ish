@@ -43,7 +43,21 @@ var numberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[
 //	attribute  = "{" ( name | field ) operator value "}"
 //	field      = "@title" | "@author" | "@dateCreated"
 //	operator   = "=" | "!=" | "<" | ">" | "<=" | ">=" | "~"
-//	value      = "null" | "true" | "false" | number | string | regexp
+//	value      = "null" | "true" | "false" | number | string | regexp | lookup
+//	           | "(" comparison ")"
+//	lookup     = "." key { "." key }
+//
+// Expressions, in parentheses, compute a value:
+//
+//	comparison = sum [ ( "=" | "!=" | "<" | "<=" | ">" | ">=" ) sum ]
+//	sum        = product { ( "+" | "-" ) product }
+//	product    = power { ( "*" | "/" | "%" ) power }
+//	power      = chain [ "**" power ]
+//	chain      = unary { ":" name [ "(" comparison { "," comparison } ")" ] }
+//	unary      = ( "-" | "!" ) unary | operand
+//	operand    = "null" | "true" | "false" | number | string | lookup | list
+//	           | "(" comparison ")"
+//	list       = "[" [ comparison { "," comparison } ] "]"
 //
 // Names use letters, digits, and - _ . / , and refer to metadata
 // attributes. Fields, which start with @, refer to the issue's title, the
@@ -352,6 +366,9 @@ func (p *parser) parseValue() (Value, error) {
 	case r == '.':
 		return p.parseLookup()
 
+	case r == '(':
+		return p.parseExpression()
+
 	case r == '-' || (r >= '0' && r <= '9'):
 		match := numberPattern.FindString(string(p.input[p.pos:]))
 
@@ -404,8 +421,9 @@ func (p *parser) parseLookup() (Value, error) {
 		}
 	}
 
-	// A lookup ends where its last key does.
-	if !p.done() && !unicode.IsSpace(p.peek()) && p.peek() != '}' {
+	// A lookup ends where its last key does, before space, the end of the
+	// attribute expression, or punctuation in an expression.
+	if !p.done() && !unicode.IsSpace(p.peek()) && !strings.ContainsRune("}),]:+*/%<>=!", p.peek()) {
 		return Value{}, p.errorAt(p.pos, p.pos+1, "keys may only contain letters, digits, _, and -")
 	}
 
@@ -421,12 +439,27 @@ var escapes = map[rune]rune{
 	'b': '\b', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t',
 }
 
+// parseString parses a quoted string. A string with expressions inserted
+// in it, each written \( expression ), is an interpolated string: its value
+// is an *Expression whose root is an *InterpExpr.
 func (p *parser) parseString() (Value, error) {
 	start := p.pos
 	quote := p.peek()
 	p.pos++
 
 	var b strings.Builder
+
+	interp := &InterpExpr{Quote: quote}
+	segment := p.pos
+
+	// endText adds the text since the last expression to the parts.
+	endText := func(end int) {
+		if end > segment {
+			interp.Parts = append(interp.Parts, InterpPart{Raw: string(p.input[segment:end]), Text: b.String()})
+		}
+
+		b.Reset()
+	}
 
 	for {
 		if p.done() {
@@ -437,8 +470,16 @@ func (p *parser) parseString() (Value, error) {
 
 		switch {
 		case r == quote:
+			end := p.pos
 			p.pos++
-			return Value{Raw: string(p.input[start:p.pos]), Data: b.String()}, nil
+
+			if len(interp.Parts) == 0 {
+				return Value{Raw: string(p.input[start:p.pos]), Data: b.String()}, nil
+			}
+
+			endText(end)
+
+			return Value{Data: &Expression{Root: interp}}, nil
 
 		case r == '\\':
 			escapeStart := p.pos
@@ -450,6 +491,25 @@ func (p *parser) parseString() (Value, error) {
 
 			e := p.peek()
 			p.pos++
+
+			// An inserted expression, parsed as a parenthesized one is.
+			if e == '(' {
+				endText(escapeStart)
+
+				x, err := p.parseComparison()
+				if err != nil {
+					return Value{}, err
+				}
+
+				if err := p.closeParen(escapeStart + 1); err != nil {
+					return Value{}, err
+				}
+
+				interp.Parts = append(interp.Parts, InterpPart{X: x})
+				segment = p.pos
+
+				continue
+			}
 
 			if e == 'u' {
 				if p.pos+4 > len(p.input) {
@@ -530,8 +590,9 @@ func (p *parser) parseRegexp() (Value, error) {
 // from start to end in the input.
 func checkOperand(op Operator, value Value, start, end int) error {
 	switch data := value.Data.(type) {
-	// A lookup's value is checked once it's looked up. See Resolve.
-	case Lookup:
+	// A lookup's or an expression's value is checked once it's known. See
+	// Resolve.
+	case Lookup, *Expression:
 		return nil
 
 	case string:

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // LookupFunc returns the value at an object lookup's path, such as
@@ -40,14 +41,69 @@ func (e *TypeError) Error() string {
 // a literal is when it's parsed: for example, ~ needs a string or a regular
 // expression, and true and false can only be compared with = and !=.
 func Resolve(node Node, lookup LookupFunc) (Node, error) {
+	return ResolveEnv(node, Env{Lookup: lookup})
+}
+
+// Env is what Resolve resolves expressions with: Lookup reads a single
+// snapshot of the application's state, and Users is the user directory,
+// which the :user function looks names up in.
+type Env struct {
+	Lookup LookupFunc
+	Users  []User
+
+	// Now is the moment :fromnow counts from, in the time zone it counts
+	// calendar days in. If it's zero, it's the current time, in the local
+	// time zone.
+	Now time.Time
+}
+
+// now returns the moment :fromnow counts from.
+func (env Env) now() time.Time {
+	if env.Now.IsZero() {
+		return time.Now()
+	}
+
+	return env.Now
+}
+
+// User is a user in the directory: their display name and email.
+type User struct {
+	Name  string
+	Email string
+}
+
+// ResolveEnv is Resolve with the user directory and the clock too. See
+// Resolve. The clock is read once, so every :fromnow in a query counts from
+// the same moment.
+func ResolveEnv(node Node, env Env) (Node, error) {
+	if env.Now.IsZero() {
+		env.Now = time.Now()
+	}
+
+	return resolveEnv(node, env)
+}
+
+func resolveEnv(node Node, env Env) (Node, error) {
 	switch n := node.(type) {
 	case *AttributeExpression:
+		if expr, ok := n.Value.Data.(*Expression); ok {
+			data, err := resolveExpression(n.Operator, expr, env)
+			if err != nil {
+				return nil, err
+			}
+
+			resolved := *n
+			resolved.Value = Value{Data: data}
+
+			return &resolved, nil
+		}
+
 		path, ok := n.Value.Data.(Lookup)
 		if !ok {
 			return n, nil
 		}
 
-		data, err := resolveValue(n.Operator, path, lookup)
+		data, err := resolveValue(n.Operator, path, env)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +114,7 @@ func Resolve(node Node, lookup LookupFunc) (Node, error) {
 		return &resolved, nil
 
 	case *AndExpression:
-		left, right, err := resolveBoth(n.LeftExpression, n.RightExpression, lookup)
+		left, right, err := resolveBoth(n.LeftExpression, n.RightExpression, env)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +122,7 @@ func Resolve(node Node, lookup LookupFunc) (Node, error) {
 		return &AndExpression{LeftExpression: left, RightExpression: right, Parentheses: n.Parentheses}, nil
 
 	case *OrExpression:
-		left, right, err := resolveBoth(n.LeftExpression, n.RightExpression, lookup)
+		left, right, err := resolveBoth(n.LeftExpression, n.RightExpression, env)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +130,7 @@ func Resolve(node Node, lookup LookupFunc) (Node, error) {
 		return &OrExpression{LeftExpression: left, RightExpression: right, Parentheses: n.Parentheses}, nil
 
 	case *NotExpression:
-		expr, err := Resolve(n.Expression, lookup)
+		expr, err := resolveEnv(n.Expression, env)
 		if err != nil {
 			return nil, err
 		}
@@ -85,13 +141,13 @@ func Resolve(node Node, lookup LookupFunc) (Node, error) {
 	return node, nil
 }
 
-func resolveBoth(left, right Node, lookup LookupFunc) (Node, Node, error) {
-	l, err := Resolve(left, lookup)
+func resolveBoth(left, right Node, env Env) (Node, Node, error) {
+	l, err := resolveEnv(left, env)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	r, err := Resolve(right, lookup)
+	r, err := resolveEnv(right, env)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,13 +155,46 @@ func resolveBoth(left, right Node, lookup LookupFunc) (Node, Node, error) {
 	return l, r, nil
 }
 
-// resolveValue returns the data for the value at path, compared with op.
-func resolveValue(op Operator, path Lookup, lookup LookupFunc) (any, error) {
-	if lookup == nil {
+// resolveExpression returns the data for an expression compared with op: the
+// expression with its lookups resolved, or unknown if its value is null, as
+// it is when it uses a lookup that found nothing. The expression is evaluated
+// here, to report errors such as a function applied to a value of the wrong
+// type, and its value is checked as a literal is.
+func resolveExpression(op Operator, expr *Expression, env Env) (any, error) {
+	root, err := expr.Root.resolve(env)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := &Expression{Root: root}
+
+	v, err := resolved.Root.eval(env)
+	if err != nil {
+		return nil, &ExprError{Expression: expr.format(plain), Err: err}
+	}
+
+	if v == nil {
 		return unknown{}, nil
 	}
 
-	v, ok := lookup(string(path))
+	if op == NotEqual {
+		op = Equal
+	}
+
+	if _, err := compareWith(op, "", v); err != nil {
+		return nil, &ExprError{Expression: expr.format(plain), Err: err}
+	}
+
+	return resolved, nil
+}
+
+// resolveValue returns the data for the value at path, compared with op.
+func resolveValue(op Operator, path Lookup, env Env) (any, error) {
+	if env.Lookup == nil {
+		return unknown{}, nil
+	}
+
+	v, ok := env.Lookup(string(path))
 	if !ok {
 		return unknown{}, nil
 	}

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/store"
@@ -351,5 +352,169 @@ func TestLookupValuesAreParameters(t *testing.T) {
 
 	if strings.Contains(clause, "OR 1=1") || len(args) != 2 || args[1] != "x' OR 1=1 --" {
 		t.Errorf("Where() = %q, %v, want the value as a parameter", clause, args)
+	}
+}
+
+func TestWhereExpressions(t *testing.T) {
+	dir := indexedDir(t)
+	vals := map[string]any{
+		".user.email": "ALICE@EXAMPLE.COM",
+		".states":     []any{"open", "closed", "open"},
+		".two":        int64(2),
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{estimate = (2 + 3)}", "A"},
+		{"{estimate > (.two * 1)}", "A C"},
+		{"{estimate = (10 / 4)}", "C"},
+		{"{state = ('OPEN' :lower)}", "A"},
+		{"{state ~ ('^IN ' :lower)}", "C"},
+		{"{@author = (.user.email :lower)}", "A C E"},
+		{"{done = (1 < 2)}", "A"},
+
+		// A list matches if any value does, and != if none does.
+		{"{state = (.states :distinct)}", "A B"},
+		{"{state != (.states :distinct)}", "C D E"},
+		{"{state = ([] :distinct)}", ""},
+
+		// A null value is UNKNOWN, like a missing lookup.
+		{"{state = (.missing :lower)}", ""},
+		{"{state != (1 / 0)}", ""},
+		{"{state = (.missing :lower)} or {state = 'closed'}", "B"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, vals); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestExpressionValuesAreParameters(t *testing.T) {
+	node, _ := filter.Parse(`{state = ("x' OR 1=1 --" :lower)}`)
+	resolved, err := filter.Resolve(node, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clause, args := resolved.Where()
+
+	if strings.Contains(clause, "OR 1=1") || !strings.Contains(clause, "ish_lower(?)") {
+		t.Errorf("Where() = %q, %v, want the value as a parameter of an SQL function", clause, args)
+	}
+}
+
+func TestWhereInterpolation(t *testing.T) {
+	dir := indexedDir(t)
+	vals := map[string]any{
+		".state":  "open",
+		".prefix": "in",
+		".user":   "alice",
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{`{state = '\(.state)'}`, "A"},
+		{`{@author = '\(.user)@example.com'}`, "A C E"},
+		// Inserted values are pattern characters with ~.
+		{`{state ~ '^\(.prefix) '}`, "C"},
+		{`{state ~ '^\('[oc]')'}`, "A B"},
+		// null is inserted as nothing.
+		{`{state = 'open\(.missing)'}`, "A"},
+		// A string in an expression.
+		{`{state = ('\(.state)' :upper :lower)}`, "A"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, vals); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestWhereUser(t *testing.T) {
+	dir := indexedDir(t)
+	users := []filter.User{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+		{Name: "Carol", Email: "carol@example.com"},
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{@author = ('Alice' :user)}", "A C E"},
+		{"{@author = ('@bob' :user)}", "B"},
+		{"{@author = (['Bob', 'CAROL'] :user)}", "B D"},
+		{"{@author != ('Bob' :user)}", "A C D E"},
+		{"{@author = ('Nobody' :user)}", ""},
+		{"{@author = ('Nobody' :user)} or {state = 'open'}", "A"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, filter.Env{Users: users})
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestWhereFromNow(t *testing.T) {
+	dir := indexedDir(t)
+
+	// The issues were created between 2026-09-30T23:00:00Z (C) and
+	// 2026-10-14T03:30:00Z (B).
+	env := filter.Env{Now: time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{@dateCreated > ('-1d' :fromnow)}", "B D"},
+		{"{@dateCreated > ('-12h' :fromnow)}", "B"},
+		{"{@dateCreated > ('-2d' :fromnow)}", "A B D E"},
+		{"{@dateCreated < ('-1w' :fromnow)}", "C"},
+		{"{@dateCreated > ('-1mo' :fromnow)}", "A B C D E"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, env)
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestWhereEncodingFunctions(t *testing.T) {
+	dir := indexedDir(t)
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{state = ('b3Blbg==' :base64.decode)}", "A"},
+		{`{state = ('["open", "closed"]' :json.decode)}`, "A B"},
+		{"{state = ('not json' :json.decode)} or {state = 'closed'}", "B"},
+		{"{state = ('open' :base64.encode :base64.decode)}", "A"},
+	} {
+		if got := resolvedMatch(t, dir, tt.text, nil); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
 	}
 }

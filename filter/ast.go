@@ -137,8 +137,13 @@ func (e *OrExpression) Render() string        { return e.format(highlight) }
 func (e *NotExpression) Render() string       { return e.format(highlight) }
 
 func (e *AttributeExpression) format(p printer) string {
+	value := p.value(e.Value)
+	if expr, ok := e.Value.Data.(*Expression); ok {
+		value = expr.format(p)
+	}
+
 	return parenthesize(p,
-		p.brace("{")+p.attribute(e.Attribute)+" "+p.operator(string(e.Operator))+" "+p.value(e.Value)+p.brace("}"),
+		p.brace("{")+p.attribute(e.Attribute)+" "+p.operator(string(e.Operator))+" "+value+p.brace("}"),
 		e.Parentheses,
 	)
 }
@@ -176,6 +181,10 @@ func (v Value) String() string {
 
 	if lookup, ok := v.Data.(Lookup); ok {
 		return string(lookup)
+	}
+
+	if expr, ok := v.Data.(*Expression); ok {
+		return expr.format(plain)
 	}
 
 	data, err := json.Marshal(v.Data)
