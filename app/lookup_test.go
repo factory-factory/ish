@@ -6,6 +6,7 @@ import (
 
 	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/state"
+	"github.com/factory-factory/ish/store"
 )
 
 func TestFilterWithLookup(t *testing.T) {
@@ -92,5 +93,15 @@ func TestFilterWithExpression(t *testing.T) {
 
 	if !m.filter.editing || m.filter.err == nil || !strings.Contains(m.filter.err.Error(), "+ needs two numbers") {
 		t.Errorf("editing, err = %v, %v, want the expression's error", m.filter.editing, m.filter.err)
+	}
+}
+
+func TestFilterWithUser(t *testing.T) {
+	m := menuModel(t)
+	m = addUsers(t, m, store.User{Name: "Alice Liddell", Email: "alice@example.com"})
+	m = applyFilter(t, m, "{assignees = ('@alice liddell' :user)} and {state != 'closed'}")
+
+	if m.filter.err != nil || ids(m) != "AAA BBB EEE" {
+		t.Errorf("err, listed = %v, %q, want alice's unclosed issues", m.filter.err, ids(m))
 	}
 }

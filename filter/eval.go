@@ -284,6 +284,72 @@ var functions = map[string]function{
 	"round":    {0, 1, round},
 	"max":      {0, 0, extreme(1)},
 	"min":      {0, 0, extreme(-1)},
+
+	// :user is resolved before a query is made, from the user directory;
+	// see CallExpr.resolve. Unresolved, it finds no one.
+	userFunction: {0, 0, func([]any) (any, error) { return nil, nil }},
+}
+
+// userFunction looks up users' emails by their display names.
+const userFunction = "user"
+
+// lookUpUsers returns the email of the user in users with the display name v,
+// or a list of emails for a list of names. A leading @, as names are shown
+// with, is ignored. A name matches exactly, or else regardless of case, if
+// only one user's does. A name that matches no one gives null, as does one
+// matching several users regardless of case.
+func lookUpUsers(v any, users []User) (any, error) {
+	switch v := v.(type) {
+	case nil:
+		return nil, nil
+
+	case string:
+		return lookUpUser(v, users), nil
+
+	case []any:
+		emails := make([]any, len(v))
+
+		for i, e := range v {
+			name, ok := e.(string)
+			if !ok && e != nil {
+				return nil, fmt.Errorf("needs names, not a list with %s", typeName(e))
+			}
+
+			if ok {
+				emails[i] = lookUpUser(name, users)
+			}
+		}
+
+		return emails, nil
+	}
+
+	return nil, fmt.Errorf("needs a name or a list of names, not %s", typeName(v))
+}
+
+// lookUpUser returns the email of the user with the display name name, or
+// nil if there isn't exactly one.
+func lookUpUser(name string, users []User) any {
+	name = strings.TrimPrefix(name, "@")
+
+	var match any
+	matches := 0
+
+	for _, u := range users {
+		if u.Name == name {
+			return u.Email
+		}
+
+		if strings.EqualFold(u.Name, name) {
+			match = u.Email
+			matches++
+		}
+	}
+
+	if matches != 1 {
+		return nil
+	}
+
+	return match
 }
 
 // applyFunction applies the named function to args: the value, then the

@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/filter"
 	"github.com/factory-factory/ish/state"
+	"github.com/factory-factory/ish/store"
 	"github.com/factory-factory/ish/styles"
 	dropdown "github.com/madicen/bubble-dropdown/v2"
 )
@@ -61,13 +62,33 @@ const filterArrow = "▼"
 
 // resolveFilter returns node with its object lookups replaced by their values
 // from one snapshot of the application state, so every lookup in a query
-// sees the same state. See filter.Resolve.
-func resolveFilter(node filter.Node, st *state.State) (filter.Node, error) {
+// sees the same state, and its :user functions replaced by the emails of the
+// users in dir's metadata database. See filter.ResolveEnv.
+func resolveFilter(node filter.Node, st *state.State, dir string) (filter.Node, error) {
 	if node == nil {
 		return nil, nil
 	}
 
-	return filter.Resolve(node, st.Snapshot().Lookup)
+	return filter.ResolveEnv(node, filter.Env{
+		Lookup: st.Snapshot().Lookup,
+		Users:  filterUsers(dir),
+	})
+}
+
+// filterUsers returns the users in dir's metadata database, for :user, or
+// none if they can't be read.
+func filterUsers(dir string) []filter.User {
+	users, err := store.Users(dir)
+	if err != nil {
+		return nil
+	}
+
+	out := make([]filter.User, len(users))
+	for i, u := range users {
+		out[i] = filter.User{Name: u.Name, Email: u.Email}
+	}
+
+	return out
 }
 
 // filterIndent returns the width of the heading before the filter label: the
@@ -265,7 +286,7 @@ func (m *Model) applyFilter() {
 
 		// A looked-up value that can't be compared is shown like a syntax
 		// error, and the filter isn't applied.
-		if _, err = resolveFilter(node, m.State()); err != nil {
+		if _, err = resolveFilter(node, m.State(), m.dir); err != nil {
 			m.filter.err = err
 			m.resize()
 			return

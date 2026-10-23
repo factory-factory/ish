@@ -25,8 +25,8 @@ func TestInterpolatedStringsPrintAsWritten(t *testing.T) {
 	// A string without \( is a literal, and \\( is a backslash and a
 	// parenthesis.
 	for text, want := range map[string]string{
-		`{a = 'plain'}`:    "plain",
-		`{a = 'a\\(b)'}`:   `a\(b)`,
+		`{a = 'plain'}`:   "plain",
+		`{a = 'a\\(b)'}`:  `a\(b)`,
 		`{a = "q\"\\(x"}`: `q"\(x`,
 	} {
 		if got := mustParse(t, text).(*AttributeExpression).Value.Data; got != want {

@@ -21,7 +21,7 @@ type Expr interface {
 	format(p printer) string
 
 	// eval returns the expression's value, with lookups found by lookup.
-	eval(lookup LookupFunc) (any, error)
+	eval(env Env) (any, error)
 
 	// sql returns SQL that evaluates the expression, as JSON text, with ?
 	// placeholders for the values in args. Lookups must be resolved.
@@ -29,7 +29,7 @@ type Expr interface {
 
 	// resolve returns a copy of the expression with its lookups' values
 	// from lookup.
-	resolve(lookup LookupFunc) (Expr, error)
+	resolve(env Env) (Expr, error)
 }
 
 // LiteralExpr is a literal string, number, boolean, or null.
@@ -121,7 +121,7 @@ func (e *InterpExpr) format(p printer) string {
 	return s + text(quote)
 }
 
-func (e *InterpExpr) eval(lookup LookupFunc) (any, error) {
+func (e *InterpExpr) eval(env Env) (any, error) {
 	values := make([]any, len(e.Parts))
 
 	for i, part := range e.Parts {
@@ -130,7 +130,7 @@ func (e *InterpExpr) eval(lookup LookupFunc) (any, error) {
 			continue
 		}
 
-		v, err := part.X.eval(lookup)
+		v, err := part.X.eval(env)
 		if err != nil {
 			return nil, err
 		}
@@ -155,14 +155,14 @@ func (e *InterpExpr) sql() (string, []any) {
 	return call(interpolateFunction, nil, exprs)
 }
 
-func (e *InterpExpr) resolve(lookup LookupFunc) (Expr, error) {
+func (e *InterpExpr) resolve(env Env) (Expr, error) {
 	resolved := &InterpExpr{Quote: e.Quote, Parts: make([]InterpPart, len(e.Parts))}
 
 	for i, part := range e.Parts {
 		resolved.Parts[i] = part
 
 		if part.X != nil {
-			x, err := part.X.resolve(lookup)
+			x, err := part.X.resolve(env)
 			if err != nil {
 				return nil, err
 			}
@@ -217,10 +217,10 @@ func (e *GroupExpr) format(p printer) string { return p.paren("(") + e.X.format(
 // Eval returns the expression's value, with lookups found by lookup, which
 // should read one snapshot of the application's state.
 func (e *Expression) Eval(lookup LookupFunc) (any, error) {
-	return e.Root.eval(lookup)
+	return e.Root.eval(Env{Lookup: lookup})
 }
 
-func (e *LiteralExpr) eval(LookupFunc) (any, error) {
+func (e *LiteralExpr) eval(Env) (any, error) {
 	if n, ok := e.Value.Data.(json.Number); ok {
 		f, err := n.Float64()
 		return f, err
@@ -229,12 +229,12 @@ func (e *LiteralExpr) eval(LookupFunc) (any, error) {
 	return e.Value.Data, nil
 }
 
-func (e *LookupExpr) eval(lookup LookupFunc) (any, error) {
+func (e *LookupExpr) eval(env Env) (any, error) {
 	if e.Resolved {
 		return e.Data, nil
 	}
 
-	resolved, err := e.resolve(lookup)
+	resolved, err := e.resolve(env)
 	if err != nil {
 		return nil, err
 	}
@@ -242,11 +242,11 @@ func (e *LookupExpr) eval(lookup LookupFunc) (any, error) {
 	return resolved.(*LookupExpr).Data, nil
 }
 
-func (e *ListExpr) eval(lookup LookupFunc) (any, error) {
+func (e *ListExpr) eval(env Env) (any, error) {
 	list := make([]any, len(e.Elements))
 
 	for i, el := range e.Elements {
-		v, err := el.eval(lookup)
+		v, err := el.eval(env)
 		if err != nil {
 			return nil, err
 		}
@@ -257,8 +257,8 @@ func (e *ListExpr) eval(lookup LookupFunc) (any, error) {
 	return list, nil
 }
 
-func (e *UnaryExpr) eval(lookup LookupFunc) (any, error) {
-	x, err := e.X.eval(lookup)
+func (e *UnaryExpr) eval(env Env) (any, error) {
+	x, err := e.X.eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -266,13 +266,13 @@ func (e *UnaryExpr) eval(lookup LookupFunc) (any, error) {
 	return evalUnary(e.Operator, x)
 }
 
-func (e *BinaryExpr) eval(lookup LookupFunc) (any, error) {
-	a, err := e.Left.eval(lookup)
+func (e *BinaryExpr) eval(env Env) (any, error) {
+	a, err := e.Left.eval(env)
 	if err != nil {
 		return nil, err
 	}
 
-	b, err := e.Right.eval(lookup)
+	b, err := e.Right.eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -280,11 +280,11 @@ func (e *BinaryExpr) eval(lookup LookupFunc) (any, error) {
 	return evalBinary(e.Operator, a, b)
 }
 
-func (e *CallExpr) eval(lookup LookupFunc) (any, error) {
+func (e *CallExpr) eval(env Env) (any, error) {
 	args := make([]any, len(e.Args))
 
 	for i, a := range e.Args {
-		v, err := a.eval(lookup)
+		v, err := a.eval(env)
 		if err != nil {
 			return nil, err
 		}
@@ -292,10 +292,19 @@ func (e *CallExpr) eval(lookup LookupFunc) (any, error) {
 		args[i] = v
 	}
 
+	if e.Name == userFunction {
+		v, err := lookUpUsers(args[0], env.Users)
+		if err != nil {
+			return nil, fmt.Errorf(":%s %w", userFunction, err)
+		}
+
+		return v, nil
+	}
+
 	return applyFunction(e.Name, args)
 }
 
-func (e *GroupExpr) eval(lookup LookupFunc) (any, error) { return e.X.eval(lookup) }
+func (e *GroupExpr) eval(env Env) (any, error) { return e.X.eval(env) }
 
 // Compiling to SQL. Each value is passed as a parameter of JSON text, and
 // each operator and function is an SQL function written in Go.
@@ -307,7 +316,7 @@ func (e *Expression) SQL() (string, []any) {
 }
 
 func (e *LiteralExpr) sql() (string, []any) {
-	v, _ := e.eval(nil)
+	v, _ := e.eval(Env{})
 	return "?", []any{encodeValue(v)}
 }
 
@@ -356,16 +365,16 @@ func call(name string, params []any, exprs []Expr) (string, []any) {
 
 // Resolving lookups.
 
-func (e *LiteralExpr) resolve(LookupFunc) (Expr, error) { return e, nil }
+func (e *LiteralExpr) resolve(Env) (Expr, error) { return e, nil }
 
-func (e *LookupExpr) resolve(lookup LookupFunc) (Expr, error) {
+func (e *LookupExpr) resolve(env Env) (Expr, error) {
 	resolved := &LookupExpr{Path: e.Path, Resolved: true}
 
-	if lookup == nil {
+	if env.Lookup == nil {
 		return resolved, nil
 	}
 
-	v, ok := lookup(string(e.Path))
+	v, ok := env.Lookup(string(e.Path))
 	if !ok {
 		return resolved, nil
 	}
@@ -381,8 +390,8 @@ func (e *LookupExpr) resolve(lookup LookupFunc) (Expr, error) {
 	return resolved, nil
 }
 
-func (e *ListExpr) resolve(lookup LookupFunc) (Expr, error) {
-	els, err := resolveAll(e.Elements, lookup)
+func (e *ListExpr) resolve(env Env) (Expr, error) {
+	els, err := resolveAll(e.Elements, env)
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +399,8 @@ func (e *ListExpr) resolve(lookup LookupFunc) (Expr, error) {
 	return &ListExpr{Elements: els}, nil
 }
 
-func (e *UnaryExpr) resolve(lookup LookupFunc) (Expr, error) {
-	x, err := e.X.resolve(lookup)
+func (e *UnaryExpr) resolve(env Env) (Expr, error) {
+	x, err := e.X.resolve(env)
 	if err != nil {
 		return nil, err
 	}
@@ -399,8 +408,8 @@ func (e *UnaryExpr) resolve(lookup LookupFunc) (Expr, error) {
 	return &UnaryExpr{Operator: e.Operator, X: x}, nil
 }
 
-func (e *BinaryExpr) resolve(lookup LookupFunc) (Expr, error) {
-	both, err := resolveAll([]Expr{e.Left, e.Right}, lookup)
+func (e *BinaryExpr) resolve(env Env) (Expr, error) {
+	both, err := resolveAll([]Expr{e.Left, e.Right}, env)
 	if err != nil {
 		return nil, err
 	}
@@ -408,17 +417,45 @@ func (e *BinaryExpr) resolve(lookup LookupFunc) (Expr, error) {
 	return &BinaryExpr{Operator: e.Operator, Left: both[0], Right: both[1]}, nil
 }
 
-func (e *CallExpr) resolve(lookup LookupFunc) (Expr, error) {
-	args, err := resolveAll(e.Args, lookup)
+func (e *CallExpr) resolve(env Env) (Expr, error) {
+	args, err := resolveAll(e.Args, env)
 	if err != nil {
 		return nil, err
 	}
 
-	return &CallExpr{Name: e.Name, Args: args}, nil
+	resolved := &CallExpr{Name: e.Name, Args: args}
+
+	// :user looks names up in the user directory, which the SQL functions
+	// can't read, so it's replaced by the emails it finds.
+	if e.Name == userFunction {
+		v, err := resolved.eval(env)
+		if err != nil {
+			return nil, err
+		}
+
+		return valueExpr(v), nil
+	}
+
+	return resolved, nil
 }
 
-func (e *GroupExpr) resolve(lookup LookupFunc) (Expr, error) {
-	x, err := e.X.resolve(lookup)
+// valueExpr returns an expression whose value is v: a literal, or a list of
+// literals.
+func valueExpr(v any) Expr {
+	if list, ok := v.([]any); ok {
+		elements := make([]Expr, len(list))
+		for i, e := range list {
+			elements[i] = valueExpr(e)
+		}
+
+		return &ListExpr{Elements: elements}
+	}
+
+	return &LiteralExpr{Value: Value{Data: v}}
+}
+
+func (e *GroupExpr) resolve(env Env) (Expr, error) {
+	x, err := e.X.resolve(env)
 	if err != nil {
 		return nil, err
 	}
@@ -426,11 +463,11 @@ func (e *GroupExpr) resolve(lookup LookupFunc) (Expr, error) {
 	return &GroupExpr{X: x}, nil
 }
 
-func resolveAll(exprs []Expr, lookup LookupFunc) ([]Expr, error) {
+func resolveAll(exprs []Expr, env Env) ([]Expr, error) {
 	out := make([]Expr, len(exprs))
 
 	for i, x := range exprs {
-		r, err := x.resolve(lookup)
+		r, err := x.resolve(env)
 		if err != nil {
 			return nil, err
 		}

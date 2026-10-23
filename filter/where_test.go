@@ -431,3 +431,38 @@ func TestWhereInterpolation(t *testing.T) {
 		}
 	}
 }
+
+func TestWhereUser(t *testing.T) {
+	dir := indexedDir(t)
+	users := []filter.User{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+		{Name: "Carol", Email: "carol@example.com"},
+	}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		{"{@author = ('Alice' :user)}", "A C E"},
+		{"{@author = ('@bob' :user)}", "B"},
+		{"{@author = (['Bob', 'CAROL'] :user)}", "B D"},
+		{"{@author != ('Bob' :user)}", "A C D E"},
+		{"{@author = ('Nobody' :user)}", ""},
+		{"{@author = ('Nobody' :user)} or {state = 'open'}", "A"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, filter.Env{Users: users})
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}
