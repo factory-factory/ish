@@ -235,7 +235,7 @@ func TestMenuSeparatesCustomFilter(t *testing.T) {
 	m := openMenu(t, menuModel(t))
 	view := plainView(m)
 
-	mine := strings.Index(view, presetLabels[presetCreatedByMe])
+	mine := strings.Index(view, presetLabels[presetRecentlyModified])
 	custom := strings.Index(view, presetLabels[presetCustom])
 
 	if mine < 0 || custom < 0 {
