@@ -604,3 +604,56 @@ func TestWhereCommentFields(t *testing.T) {
 		}
 	}
 }
+
+func TestWhereDateModified(t *testing.T) {
+	dir := indexedDir(t)
+
+	db, err := store.Open(filepath.Join(dir, store.DatabaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i, row := range [][2]string{
+		{"A", "2026-10-01T09:00:00Z"},
+		{"A", "2026-10-10T09:00:00Z"},
+		{"B", "2026-09-01T09:00:00Z"},
+	} {
+		if _, err := db.Exec("INSERT INTO history VALUES (?, ?, ?)", string(rune('a'+i)), row[0], row[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	db.Close()
+
+	env := filter.Env{Now: time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)}
+
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		// Any commit that changed an issue can match.
+		{"{@dateModified > '2026-10-05'}", "A"},
+		{"{@dateModified < '2026-10-05'}", "A B"},
+		{"{@dateModified > ('-1w' :fromnow)}", "A"},
+		// So issues not changed recently are matched with not.
+		{"not {@dateModified > ('-1w' :fromnow)}", "B C D E"},
+		{"{@dateModified != '2026-09-01T09:00:00Z'}", "A C D E"},
+		// Issues without commits have no modifications.
+		{"{@dateModified = null}", "C D E"},
+		{"{@dateModified != null}", "A B"},
+	} {
+		node, err := filter.Parse(tt.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolved, err := filter.ResolveEnv(node, env)
+		if err != nil {
+			t.Fatalf("ResolveEnv(%q) error = %v", tt.text, err)
+		}
+
+		if got := matchNode(t, dir, tt.text, resolved); got != tt.want {
+			t.Errorf("%s matches %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}

@@ -120,21 +120,24 @@ var fields = map[string]string{
 	"@comments.text":        "comment.content",
 	"@comments.author":      "comment.author",
 	"@comments.dateCreated": "comment.dateCreated",
+	"@dateModified":         "history.dateModified",
 }
 
-// commentFields are the fields of an issue's comments, including its
-// description, which is its first. An issue has any number of them, so they
-// compare as an attribute with several values does: a comparison matches if
-// any comment matches, != if none does, and an issue without comments
-// matches only !=.
-var commentFields = map[string]bool{
-	"@comments.text":        true,
-	"@comments.author":      true,
-	"@comments.dateCreated": true,
+// rowFields are the fields an issue has any number of values for, in rows of
+// another table that refer to it by issueId, mapped to that table: the
+// fields of its comments, including its description, which is its first,
+// and the dates of the commits that changed it. They compare as an attribute
+// with several values does: a comparison matches if any row matches, != if
+// none does, and an issue without rows matches only !=.
+var rowFields = map[string]string{
+	"@comments.text":        "comment",
+	"@comments.author":      "comment",
+	"@comments.dateCreated": "comment",
+	"@dateModified":         "history",
 }
 
 // fieldList lists the fields, for error messages.
-const fieldList = "@title, @author, @dateCreated, @comments.text, @comments.author, and @comments.dateCreated"
+const fieldList = "@title, @author, @dateCreated, @dateModified, @comments.text, @comments.author, and @comments.dateCreated"
 
 func (e *AttributeExpression) parentheses() int { return e.Parentheses }
 func (e *AndExpression) parentheses() int       { return e.Parentheses }

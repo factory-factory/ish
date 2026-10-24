@@ -295,7 +295,13 @@ func IndexIssue(dir, id string) (err error) {
 
 	defer tx.Rollback()
 
-	// The issue's attributes and comments are deleted with it.
+	// The issue's attributes and comments are deleted with it. Its history,
+	// which comes from git rather than its file, is kept.
+	history, err := savedHistory(tx, id)
+	if err != nil {
+		return err
+	}
+
 	if _, err := tx.Exec("DELETE FROM issue WHERE id = ?", id); err != nil {
 		return err
 	}
@@ -303,6 +309,10 @@ func IndexIssue(dir, id string) (err error) {
 	// A byline author whose name another email has is skipped, with nowhere
 	// to report it while an issue is being saved.
 	if _, err := indexFile(tx, dir, id+".md"); err != nil {
+		return err
+	}
+
+	if err := restoreHistory(tx, id, history); err != nil {
 		return err
 	}
 

@@ -177,9 +177,9 @@ func TestParseErrors(t *testing.T) {
 		{"{st ate = 1}", 4, 7, "expected an operator"},
 		{"{a$ = 1}", 2, 3, "may only contain letters"},
 		{"{ = 1}", 2, 3, "expected an attribute name"},
-		{"{@ = 1}", 1, 2, "expected a field name: @title, @author, @dateCreated, @comments.text, @comments.author, and @comments.dateCreated"},
+		{"{@ = 1}", 1, 2, "expected a field name: @title, @author, @dateCreated, @dateModified, @comments.text, @comments.author, and @comments.dateCreated"},
 		{"{@@title = 1}", 1, 2, "expected a field name"},
-		{"{@state = 'open'}", 1, 7, "unknown field @state; the fields are @title, @author, @dateCreated, @comments.text, @comments.author, and @comments.dateCreated"},
+		{"{@state = 'open'}", 1, 7, "unknown field @state; the fields are @title, @author, @dateCreated, @dateModified, @comments.text, @comments.author, and @comments.dateCreated"},
 		{"{@Title = 'x'}", 1, 7, "unknown field @Title"},
 		{"{@title@ = 'x'}", 7, 8, "may only contain letters"},
 		{"{a@b = 1}", 2, 3, "may only contain letters"},
@@ -307,5 +307,11 @@ func TestParseCommentFields(t *testing.T) {
 
 	if _, err := Parse("{@comments.body ~ 'x'}"); err == nil || !strings.Contains(err.Error(), "unknown field @comments.body") {
 		t.Errorf("Parse() of an unknown comment field error = %v, want one naming it", err)
+	}
+}
+
+func TestParseDateModified(t *testing.T) {
+	if got := mustParse(t, "{@dateModified > ('-1w' :fromnow)}").String(); got != "{@dateModified > ('-1w' :fromnow)}" {
+		t.Errorf("String() = %q", got)
 	}
 }
