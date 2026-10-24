@@ -2,9 +2,9 @@
 
 [<brendan@berg.industries> 2026-10-15T23:44:19-07:00]
 
-- state: open
+- state: closed
 - assignees: <brendan@berg.industries>
-- relation.depends-on: #3CZWN-EBVEH
+- relation.depends-on: #3CZWN-EBVEH, #3DACD-RNJ3F, #3DADN-MG52G
 
 ---
 
@@ -12,7 +12,7 @@
 
 Possible filters:
 
-- **Assigned to me** `{assignees = get(user.email)}`
-- **Created by me** `{@author = get(user.email)}`
-- **Mentioned** `{@comment = '@{get(user.email)}'}`
-- **Recent activity** `{@updated > date(@today - 1w)}`
+- **Assigned to me** `{assignees = .user.email}`
+- **Created by me** `{@author = .user.email}`
+- **Mentioned** `{@comments ~ .user.email}` or `{@comments ~ (.user.name :user)}`
+- **Recent activity** `{@dateModified > ('-1w' :fromnow)}`

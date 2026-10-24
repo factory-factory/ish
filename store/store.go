@@ -38,16 +38,18 @@ const gitignoreEntry = ".metadata.ish*"
 //
 // Version 2 stopped allowing colons in attribute keys, version 3 added the
 // user table, version 4 gave each name and email one user, with the date
-// they were last seen together, and version 5 stored authors as their emails
-// and emails in attribute values without angle brackets.
-const schemaVersion = 5
+// they were last seen together, version 5 stored authors as their emails and
+// emails in attribute values without angle brackets, and version 6 added the
+// history table.
+const schemaVersion = 6
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Authors
 // are stored as their emails. Attribute values are JSON arrays of strings,
 // with emails stored without angle brackets. Users are the authors of the commits in
 // the git repository the issues are in, and of bylines with display names,
-// each with the name they were last seen with.
+// each with the name they were last seen with. History holds the author
+// dates of the commits on the checked-out branch that changed each issue.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -89,6 +91,14 @@ CREATE TABLE user (
 
 CREATE UNIQUE INDEX userName ON user (name);
 CREATE UNIQUE INDEX userEmail ON user (email);
+
+CREATE TABLE history (
+	uuid         TEXT PRIMARY KEY,
+	issueId      TEXT NOT NULL REFERENCES issue (id) ON DELETE CASCADE,
+	dateModified TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX historyIssueDate ON history (issueId, dateModified);
 `
 
 // keyPattern matches the characters an attribute key may contain.
@@ -119,6 +129,10 @@ type Result struct {
 	// UserConflicts holds the commit and byline authors that weren't added
 	// because another email has their name.
 	UserConflicts []UserConflict
+
+	// Modifications is the number of the issues' modifications added from
+	// the git history.
+	Modifications int
 }
 
 // FileError is an error indexing an issue file.
@@ -224,7 +238,8 @@ func build(dir, path string, result *Result) error {
 }
 
 // populate installs the schema in the empty database at path, and adds the
-// issue files in dir, and the authors of every commit, to it.
+// issue files in dir, the authors of every commit, and the issues' history,
+// to it.
 func populate(path, dir string, result *Result) (err error) {
 	db, err := Open(path)
 	if err != nil {
@@ -249,6 +264,11 @@ func populate(path, dir string, result *Result) (err error) {
 
 	result.Users, conflicts, err = addUsers(db, commitAuthors(dir, 0))
 	result.UserConflicts = append(result.UserConflicts, conflicts...)
+	if err != nil {
+		return err
+	}
+
+	result.Modifications, err = addHistory(db, commitHistory(dir, ""))
 
 	return err
 }

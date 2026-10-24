@@ -117,7 +117,13 @@ func Sync(dir string) (result *SyncResult, err error) {
 			continue
 		}
 
-		// The stale rows are removed even if the file can't be re-indexed.
+		// The stale rows are removed even if the file can't be re-indexed,
+		// but its history, which comes from git, is kept if it can.
+		history, err := savedHistory(tx, ids[path])
+		if err != nil {
+			return nil, err
+		}
+
 		if _, err := tx.Exec("DELETE FROM issue WHERE id = ?", ids[path]); err != nil {
 			return nil, err
 		}
@@ -128,6 +134,10 @@ func Sync(dir string) (result *SyncResult, err error) {
 		if err != nil {
 			result.Failed = append(result.Failed, FileError{Path: filepath.Join(dir, path), Err: err})
 			continue
+		}
+
+		if err := restoreHistory(tx, ids[path], history); err != nil {
+			return nil, err
 		}
 
 		result.Updated = append(result.Updated, ids[path])

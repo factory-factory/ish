@@ -40,8 +40,18 @@ var numberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[
 //	or         = and { "or" and }
 //	and        = not { "and" not }
 //	not        = "not" not | "(" expression ")" | attribute
-//	attribute  = "{" ( name | field ) operator value "}"
+//	attribute  = "{" ( name | field | collection ) conditions "}"
+//	conditions = condition { "and" condition }
+//	condition  = "not" condition | "(" conditions ")" | [ name ] operator value
+//	collection = "@comments"
+//
+// A comparison starts with a name only in collection braces, where it's one
+// of the collection's fields: author, text, or dateCreated, as in
+// {@comments author = 'a' and text ~ /LGTM/}. All of the conditions in a pair of braces must be true of
+// one value, or one row of a collection; see ScopeExpression.
 //	field      = "@title" | "@author" | "@dateCreated"
+//	           | "@dateModified"
+//	           | "@comments.text" | "@comments.author" | "@comments.dateCreated"
 //	operator   = "=" | "!=" | "<" | ">" | "<=" | ">=" | "~"
 //	value      = "null" | "true" | "false" | number | string | regexp | lookup
 //	           | "(" comparison ")"
@@ -61,7 +71,9 @@ var numberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[
 //
 // Names use letters, digits, and - _ . / , and refer to metadata
 // attributes. Fields, which start with @, refer to the issue's title, the
-// author of its first comment, and when it was created. Numbers are JSON numbers, and
+// author of its first comment, when it was created, and when commits changed
+// it, or to the text, authors, and creation times of its comments, including
+// its description. Numbers are JSON numbers, and
 // strings are JSON strings in single or double quotes; \' is accepted as an
 // escape in either. A regexp is a regular expression literal between slashes,
 // such as /^in\s/, which is taken literally except that \/ stands for a
@@ -248,6 +260,8 @@ func addParentheses(n Node) {
 	switch n := n.(type) {
 	case *AttributeExpression:
 		n.Parentheses++
+	case *ScopeExpression:
+		n.Parentheses++
 	case *AndExpression:
 		n.Parentheses++
 	case *OrExpression:
@@ -297,9 +311,141 @@ func (p *parser) parseAttribute() (Node, error) {
 	}
 
 	attribute := string(p.input[start:p.pos])
+	_, collection := collections[attribute]
 
-	if _, ok := fields[attribute]; field && !ok {
+	if _, ok := fields[attribute]; field && !ok && !collection {
 		return nil, p.errorAt(start, p.pos, "unknown field %s; the fields are %s", attribute, fieldList)
+	}
+
+	var spans []comparisonSpan
+
+	condition, err := p.parseConditions(attribute, collection, &spans)
+	if err != nil {
+		return nil, err
+	}
+
+	// != and null keep their meaning, about all of the subject's values,
+	// only on their own. Among other conditions on one row, != would mean
+	// something else, and null nothing.
+	if _, single := condition.(*Comparison); !single {
+		for _, s := range spans {
+			switch {
+			case s.comparison.Operator == NotEqual:
+				return nil, p.errorAt(s.start, s.end, "!= can only be used on its own in braces; use not, as in {%s not = …}", attribute)
+			case s.comparison.Value.Data == nil && s.comparison.Value.Raw == "null":
+				return nil, p.errorAt(s.start, s.end, "null can only be compared on its own in braces")
+			}
+		}
+	}
+
+	p.skipSpace()
+
+	if p.peek() != '}' {
+		if p.done() {
+			return nil, p.errorAt(open, open+1, "this brace is never closed")
+		}
+
+		return nil, p.errorHere("expected a closing brace")
+	}
+
+	p.pos++
+
+	if c, ok := condition.(*Comparison); ok && !collection {
+		return &AttributeExpression{Attribute: attribute, Operator: c.Operator, Value: c.Value}, nil
+	}
+
+	return &ScopeExpression{Subject: attribute, Condition: condition}, nil
+}
+
+// comparisonSpan is where a comparison in a scope was written, for errors.
+type comparisonSpan struct {
+	comparison *Comparison
+	start, end int
+}
+
+// parseConditions parses the conditions on a row of subject in braces:
+// conditions joined by and, each a comparison, not and a condition, or a
+// condition in parentheses. A comparison starts with a field name if subject
+// is a collection, and with an operator otherwise. It records each
+// comparison in spans.
+func (p *parser) parseConditions(subject string, collection bool, spans *[]comparisonSpan) (Condition, error) {
+	left, err := p.parseCondition(subject, collection, spans)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		p.skipSpace()
+		start := p.pos
+
+		if p.keyword("or") {
+			return nil, p.errorAt(start, p.pos, "or can't join conditions in braces, which must all be true of one row; write {…} or {…} instead")
+		}
+
+		if !p.keyword("and") {
+			return left, nil
+		}
+
+		right, err := p.parseCondition(subject, collection, spans)
+		if err != nil {
+			return nil, err
+		}
+
+		left = &ConditionAnd{Left: left, Right: right}
+	}
+}
+
+func (p *parser) parseCondition(subject string, collection bool, spans *[]comparisonSpan) (Condition, error) {
+	if p.keyword("not") {
+		x, err := p.parseCondition(subject, collection, spans)
+		if err != nil {
+			return nil, err
+		}
+
+		return &ConditionNot{X: x}, nil
+	}
+
+	start := p.skipSpaceAndMark()
+
+	if !p.done() && p.peek() == '(' {
+		p.pos++
+
+		x, err := p.parseConditions(subject, collection, spans)
+		if err != nil {
+			return nil, err
+		}
+
+		p.skipSpace()
+
+		if p.done() || p.peek() != ')' {
+			if p.done() {
+				return nil, p.errorAt(start, start+1, "this parenthesis is never closed")
+			}
+
+			return nil, p.errorHere("expected and or a closing parenthesis")
+		}
+
+		p.pos++
+
+		return &ConditionGroup{X: x}, nil
+	}
+
+	c := &Comparison{}
+
+	if collection {
+		for !p.done() && (unicode.IsLetter(p.peek()) || unicode.IsDigit(p.peek())) {
+			p.pos++
+		}
+
+		c.Field = string(p.input[start:p.pos])
+
+		if c.Field == "" {
+			return nil, p.errorHere("expected a field of %s: %s", subject, collectionFieldList[subject])
+		}
+
+		if _, ok := collections[subject][c.Field]; !ok {
+			return nil, p.errorAt(start, p.pos, "unknown field %s of %s; its fields are %s", c.Field, subject, collectionFieldList[subject])
+		}
 	}
 
 	operator, err := p.parseOperator()
@@ -317,19 +463,11 @@ func (p *parser) parseAttribute() (Node, error) {
 		return nil, err
 	}
 
-	p.skipSpace()
+	c.Operator = operator
+	c.Value = value
+	*spans = append(*spans, comparisonSpan{c, start, p.pos})
 
-	if p.peek() != '}' {
-		if p.done() {
-			return nil, p.errorAt(open, open+1, "this brace is never closed")
-		}
-
-		return nil, p.errorHere("expected a closing brace")
-	}
-
-	p.pos++
-
-	return &AttributeExpression{Attribute: attribute, Operator: operator, Value: value}, nil
+	return c, nil
 }
 
 func (p *parser) skipSpaceAndMark() int {

@@ -12,23 +12,29 @@ const (
 	presetUnclosed = iota
 	presetAssignedToMe
 	presetCreatedByMe
+	presetMentionsMe
+	presetRecentlyModified
 	presetCustom
 )
 
 // presetLabels are the filter menu's items, indexed by preset.
 var presetLabels = []string{
-	presetUnclosed:     "All unclosed issues",
-	presetAssignedToMe: "Assigned to me",
-	presetCreatedByMe:  "Created by me",
-	presetCustom:       "Custom...",
+	presetUnclosed:         "All unclosed issues",
+	presetAssignedToMe:     "Assigned to me",
+	presetCreatedByMe:      "Created by me",
+	presetMentionsMe:       "Mentions me",
+	presetRecentlyModified: "Recently modified",
+	presetCustom:           "Custom...",
 }
 
 // presetFilters are the filter menu's filters, indexed by preset. The
 // custom filter has none.
 var presetFilters = []string{
-	presetUnclosed:     DefaultFilter,
-	presetAssignedToMe: "{assignees = .user.email} and " + DefaultFilter,
-	presetCreatedByMe:  "{@author = .user.email} and " + DefaultFilter,
+	presetUnclosed:         DefaultFilter,
+	presetAssignedToMe:     "{assignees = .user.email} and " + DefaultFilter,
+	presetCreatedByMe:      "{@author = .user.email} and " + DefaultFilter,
+	presetMentionsMe:       "{@comments.text ~ '<\\(.user.email)>'} and " + DefaultFilter,
+	presetRecentlyModified: "({@dateCreated > ('-2d' :fromnow)} or {@dateModified > ('-2d' :fromnow)}) and " + DefaultFilter,
 }
 
 // menuAccent is the color of the filter menu's border and highlighted item,

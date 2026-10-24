@@ -188,6 +188,18 @@ func sqlRegexp(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, er
 // hasAttribute is true if the issue has the attribute given as its parameter.
 const hasAttribute = `EXISTS (SELECT 1 FROM attribute WHERE attribute.issueId = issue.id AND attribute.key = ?)`
 
+// hasRow returns a condition that's true if the issue has any rows in table.
+func hasRow(table string) string {
+	return "EXISTS (SELECT 1 FROM " + table + " WHERE " + table + ".issueId = issue.id)"
+}
+
+// anyRow returns the start of a condition that's true if any of the issue's
+// rows in table satisfies the condition that's appended to it, which refers
+// to the row by the table's name.
+func anyRow(table string) string {
+	return "EXISTS (SELECT 1 FROM " + table + " WHERE " + table + ".issueId = issue.id AND "
+}
+
 // anyValue is true if any of the issue's values for the attribute given as
 // its first parameter satisfy the condition that's appended to it, which
 // refers to the value as attributeValue.value.
@@ -218,6 +230,10 @@ func (e *AttributeExpression) Where() (string, []any) {
 
 	case *Expression:
 		return e.expressionWhere(data)
+	}
+
+	if table, ok := rowFields[e.Attribute]; ok {
+		return e.rowWhere(table, fields[e.Attribute])
 	}
 
 	if column, ok := fields[e.Attribute]; ok {
@@ -264,7 +280,10 @@ func (e *AttributeExpression) expressionWhere(expr *Expression) (string, []any) 
 	var clause string
 	var args []any
 
-	if column, ok := fields[e.Attribute]; ok {
+	if table, ok := rowFields[e.Attribute]; ok {
+		clause = anyRow(table) + compare(fields[e.Attribute]) + ")"
+		args = append([]any{string(op)}, valueArgs...)
+	} else if column, ok := fields[e.Attribute]; ok {
 		clause = "coalesce(" + compare(column) + ", 0)"
 		args = append([]any{string(op)}, valueArgs...)
 	} else {
@@ -312,6 +331,32 @@ func (e *AttributeExpression) listWhere(values valueList) (string, []any) {
 	}
 
 	return matches, args
+}
+
+// rowWhere returns an SQL condition for an expression that compares a field
+// in column of the issue's rows in table, such as its comments: true if any
+// row's value compares, or for !=, if none does. = null matches issues
+// without rows, and != null those with them.
+func (e *AttributeExpression) rowWhere(table, column string) (string, []any) {
+	if e.Value.Data == nil {
+		if e.Operator == NotEqual {
+			return hasRow(table), nil
+		}
+
+		return "NOT " + hasRow(table), nil
+	}
+
+	if e.Operator == NotEqual {
+		equal := *e
+		equal.Operator = Equal
+		clause, args := equal.rowWhere(table, column)
+
+		return "NOT " + clause, args
+	}
+
+	condition, arg := e.compare(column)
+
+	return anyRow(table) + condition + ")", []any{arg}
 }
 
 // fieldWhere returns an SQL condition for an expression that compares the

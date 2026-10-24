@@ -111,15 +111,33 @@ type NotExpression struct {
 }
 
 // fields maps the names of the issue fields that filters can compare, which
-// start with @, to their columns in the issue table.
+// start with @, to their columns in the issue table, or, for the comment
+// fields, the comment table.
 var fields = map[string]string{
-	"@title":       "issue.title",
-	"@author":      "issue.author",
-	"@dateCreated": "issue.dateCreated",
+	"@title":                "issue.title",
+	"@author":               "issue.author",
+	"@dateCreated":          "issue.dateCreated",
+	"@comments.text":        "comment.content",
+	"@comments.author":      "comment.author",
+	"@comments.dateCreated": "comment.dateCreated",
+	"@dateModified":         "history.dateModified",
+}
+
+// rowFields are the fields an issue has any number of values for, in rows of
+// another table that refer to it by issueId, mapped to that table: the
+// fields of its comments, including its description, which is its first,
+// and the dates of the commits that changed it. They compare as an attribute
+// with several values does: a comparison matches if any row matches, != if
+// none does, and an issue without rows matches only !=.
+var rowFields = map[string]string{
+	"@comments.text":        "comment",
+	"@comments.author":      "comment",
+	"@comments.dateCreated": "comment",
+	"@dateModified":         "history",
 }
 
 // fieldList lists the fields, for error messages.
-const fieldList = "@title, @author, and @dateCreated"
+const fieldList = "@title, @author, @dateCreated, @dateModified, @comments.text, @comments.author, and @comments.dateCreated"
 
 func (e *AttributeExpression) parentheses() int { return e.Parentheses }
 func (e *AndExpression) parentheses() int       { return e.Parentheses }

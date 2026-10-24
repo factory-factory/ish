@@ -242,6 +242,11 @@ func TestUsersFromGitHistory(t *testing.T) {
 		t.Errorf("stdout = %q, want the users reported", stdout.String())
 	}
 
+	// The commits change no issue files, so there's no history to report.
+	if strings.Contains(stdout.String(), "change") {
+		t.Errorf("stdout = %q, want no changes reported", stdout.String())
+	}
+
 	// Starting ish adds new authors quietly.
 	carol := store.User{Name: "Carol", Email: "carol@example.com"}
 	commit(t, root, carol)

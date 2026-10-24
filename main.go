@@ -123,6 +123,10 @@ func runInit(dir string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Indexed %d %s from the git history\n", result.Users, plural(result.Users, "user"))
 	}
 
+	if result.Modifications > 0 {
+		fmt.Fprintf(stdout, "Indexed %d %s from the git history\n", result.Modifications, plural(result.Modifications, "change"))
+	}
+
 	for _, failure := range result.Failed {
 		fmt.Fprintf(stderr, "Couldn't index %v\n", failure)
 	}
@@ -216,6 +220,11 @@ func syncDatabase(dir string, stdout, stderr io.Writer) bool {
 	}
 
 	reportConflicts(stderr, conflicts)
+
+	// So are the commits made since the last start, for @dateModified.
+	if _, err := store.IndexHistory(dir); err != nil {
+		fmt.Fprintf(stderr, "Couldn't index the git history's changes: %v\n", err)
+	}
 
 	return true
 }

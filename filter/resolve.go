@@ -113,6 +113,17 @@ func resolveEnv(node Node, env Env) (Node, error) {
 
 		return &resolved, nil
 
+	case *ScopeExpression:
+		condition, err := resolveCondition(n.Condition, env)
+		if err != nil {
+			return nil, err
+		}
+
+		resolved := *n
+		resolved.Condition = condition
+
+		return &resolved, nil
+
 	case *AndExpression:
 		left, right, err := resolveBoth(n.LeftExpression, n.RightExpression, env)
 		if err != nil {
@@ -246,4 +257,64 @@ func scalarData(op Operator, path Lookup, v any) (any, error) {
 	}
 
 	return data, nil
+}
+
+// resolveCondition resolves the lookups and expressions in a scope's
+// condition, as resolveEnv does an attribute expression's.
+func resolveCondition(c Condition, env Env) (Condition, error) {
+	switch c := c.(type) {
+	case *Comparison:
+		resolved := *c
+
+		switch data := c.Value.Data.(type) {
+		case *Expression:
+			v, err := resolveExpression(c.Operator, data, env)
+			if err != nil {
+				return nil, err
+			}
+
+			resolved.Value = Value{Data: v}
+
+		case Lookup:
+			v, err := resolveValue(c.Operator, data, env)
+			if err != nil {
+				return nil, err
+			}
+
+			resolved.Value = Value{Raw: c.Value.Raw, Data: v}
+		}
+
+		return &resolved, nil
+
+	case *ConditionAnd:
+		left, err := resolveCondition(c.Left, env)
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := resolveCondition(c.Right, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return &ConditionAnd{Left: left, Right: right}, nil
+
+	case *ConditionNot:
+		x, err := resolveCondition(c.X, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return &ConditionNot{X: x}, nil
+
+	case *ConditionGroup:
+		x, err := resolveCondition(c.X, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return &ConditionGroup{X: x}, nil
+	}
+
+	return c, nil
 }
