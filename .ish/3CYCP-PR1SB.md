@@ -2,7 +2,7 @@
 
 [<brendan@berg.industries> 2026-10-14T22:10:13-07:00]
 
-- state: open
+- state: closed
 - assignees: <brendan@berg.industries>
 - relation.previous: #3CSJ4-PEZ1N
 - relation.depends-on: #3CZWN-EBVEH
@@ -34,3 +34,15 @@ Current thinking on match syntax / semantics:
 - **Issues created on a specific day:** `{@dateCreated = ('2026-10-01' :date)}`
 - **Issues created on or after a specific date:** `{@dateCreated >= ('2026-10-01' :date)}`
 - **Issues created in the past week:** `{@dateCreated > ('-7d' :fromnow)}`
+
+---
+
+["Brendan Berg" <brendan@berg.industries> 2026-10-24T10:27:59-07:00]
+
+After #3DAKC-E4PWB, there's now a more expressive way to filter by date range.
+
+To match issues created on a specific day, the following filter could be used:
+
+```
+{@dateCreated >= '2026-10-20' and < '2026-10-21}
+```
