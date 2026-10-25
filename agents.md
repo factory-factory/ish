@@ -30,16 +30,17 @@ editing existing comments.
 
 Only use dependencies from this list. Ask before adding anything new.
 
+- `charm.land/bubbles/v2` v2.2.1
 - `charm.land/bubbletea/v2` v2.1.0
 - `charm.land/glamour/v2` v2.0.1
 - `charm.land/lipgloss/v2` v2.0.6
-- `charm.land/bubbles/v2` v2.2.1
+- `github.com/BurntSushi/toml` v1.6.0
+- `github.com/fsnotify/fsnotify` v1.10.1
 - `github.com/madicen/bubble-dropdown/v2` v2.0.1
 - `github.com/muesli/termenv` v0.16.0
 - `github.com/spf13/cobra` v1.10.2
 - `github.com/yuin/goldmark` v1.8.6
 - `github.com/yuin/goldmark-emoji` v1.0.6
-- `github.com/BurntSushi/toml` v1.6.0
 - `modernc.org/sqlite` v1.60.1
 
 ## Git Behavior

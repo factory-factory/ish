@@ -134,6 +134,13 @@ var ButtonSelected = lipgloss.NewStyle().
 	Background(lipgloss.Color("5")).
 	Bold(true)
 
+// Dialog is a box shown over the view, asking a question that must be
+// answered before going on.
+var Dialog = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder(), true).
+	BorderForeground(lipgloss.Color("3")).
+	Padding(1, 2)
+
 // Mention is a user's display name, shown in place of their email in
 // metadata and comments.
 var Mention = lipgloss.NewStyle().

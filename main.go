@@ -12,6 +12,7 @@ import (
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
+	"github.com/factory-factory/ish/watch"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
@@ -55,6 +56,15 @@ var (
 			}
 
 			model.SetState(st)
+
+			// Without notifications, ish still works, but only shows changes
+			// made outside it once it's restarted.
+			if w, err := watch.New(parse.IssuesDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Couldn't watch %s for changes: %v\n", parse.IssuesDir, err)
+			} else {
+				defer w.Close()
+				model.Watch(w.Changes())
+			}
 
 			p := tea.NewProgram(model)
 			if _, err := p.Run(); err != nil {
