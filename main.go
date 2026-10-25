@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
+	"github.com/factory-factory/ish/watch"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
@@ -55,6 +58,29 @@ var (
 			}
 
 			model.SetState(st)
+
+			// Without notifications, ish still works, but only shows changes
+			// made outside it once it's restarted.
+			if w, err := watch.New(parse.IssuesDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Couldn't watch %s for changes: %v\n", parse.IssuesDir, err)
+			} else {
+				defer w.Close()
+				model.Watch(w.Changes())
+			}
+
+			// Outside a git repository, there's no history to watch, and in
+			// one without commits, there's no reflog yet. Without a reflog
+			// to watch, history is indexed only at start-up.
+			if reflog, err := watch.Reflog(parse.IssuesDir); err == nil {
+				if w, err := watch.NewFile(reflog); errors.Is(err, fs.ErrNotExist) {
+					// Nothing to watch.
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "Couldn't watch the git history for changes: %v\n", err)
+				} else {
+					defer w.Close()
+					model.WatchHistory(w.Changes())
+				}
+			}
 
 			p := tea.NewProgram(model)
 			if _, err := p.Run(); err != nil {

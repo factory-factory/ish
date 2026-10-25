@@ -2,7 +2,7 @@
 
 ["Brendan Berg" <brendan@berg.industries> 2026-10-23T14:32:53-07:00]
 
-- state: in review
+- state: closed
 - assignees: <brendan@berg.industries>
 
 ---

@@ -63,6 +63,16 @@ type Model struct {
 	// filters to read. See SetState.
 	state *state.State
 
+	// changes receives a value when issue files change outside ish, and
+	// conflict is set while the open issue's unsaved edits conflict with
+	// such a change. See Watch.
+	changes  <-chan struct{}
+	conflict *conflict
+
+	// historyChanges receives a value when HEAD moves in the issues' git
+	// repository. See WatchHistory.
+	historyChanges <-chan struct{}
+
 	width  int
 	height int
 }
@@ -209,7 +219,7 @@ func (m Model) State() *state.State {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.RequestBackgroundColor
+	return tea.Batch(tea.RequestBackgroundColor, m.waitForChanges(), m.waitForHistory())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -219,6 +229,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.resize()
+	}
+
+	switch msg.(type) {
+	case changedMsg:
+		m.syncFiles()
+		return m, m.waitForChanges()
+
+	case historyMsg:
+		m.indexHistory()
+		return m, m.waitForHistory()
+	}
+
+	// While the open issue's edits conflict with changes made outside ish,
+	// keys answer the question of which to keep.
+	if msg, ok := msg.(tea.KeyPressMsg); ok && m.conflict != nil {
+		return m.updateConflict(msg)
 	}
 
 	if m.issue != nil {
@@ -521,6 +547,24 @@ func (m Model) create() (tea.Model, tea.Cmd) {
 // when it's closed.
 func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.err = nil
+	m.issue = m.prepare(issue)
+	m.openId = issue.Id
+
+	// The issue view hasn't seen the terminal size, which is only sent when
+	// the program starts or the terminal is resized.
+	var cmd tea.Cmd
+
+	if m.width > 0 && m.height > 0 {
+		m.issue, cmd = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	}
+
+	return m, tea.Batch(m.issue.Init(), cmd)
+}
+
+// prepare readies issue to be shown: it's saved to the list's directory when
+// it's closed, and links to and suggests the other issues and the
+// repository's users.
+func (m *Model) prepare(issue models.Issue) models.Issue {
 	issue.SetClosable(true)
 	issue.SetSave(m.saveIssue)
 	issue.SetAuthor(m.author())
@@ -550,18 +594,7 @@ func (m Model) show(issue models.Issue) (tea.Model, tea.Cmd) {
 	m.people = loadPeople(m.dir)
 	issue.SetDirectory(m.people)
 
-	m.issue = issue
-	m.openId = issue.Id
-
-	// The issue view hasn't seen the terminal size, which is only sent when
-	// the program starts or the terminal is resized.
-	var cmd tea.Cmd
-
-	if m.width > 0 && m.height > 0 {
-		m.issue, cmd = m.issue.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-	}
-
-	return m, tea.Batch(m.issue.Init(), cmd)
+	return issue
 }
 
 // userNames returns the distinct names of users, in order. A user with
@@ -682,7 +715,13 @@ func (m Model) renderFooter() string {
 
 func (m Model) View() tea.View {
 	if m.issue != nil {
-		return m.issue.View()
+		v := m.issue.View()
+
+		if m.conflict != nil {
+			v.Content = m.overlayConflict(v.Content)
+		}
+
+		return v
 	}
 
 	body := m.table.View()

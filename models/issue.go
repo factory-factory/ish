@@ -68,6 +68,9 @@ type Issue struct {
 	// it's set, closing the issue or quitting discards unsaved changes.
 	saveErr error
 
+	// notice is shown above the help footer, if set. See SetNotice.
+	notice string
+
 	// author is the author of new comments. See SetAuthor.
 	author string
 
@@ -387,6 +390,75 @@ func (ish *Issue) exit(cmd tea.Cmd) tea.Cmd {
 	}
 
 	return cmd
+}
+
+// Unsaved reports whether the issue has been edited since it was opened or
+// last saved: it has changes that haven't been saved, or a field is being
+// edited.
+func (ish Issue) Unsaved() bool {
+	return ish.dirty || ish.editing
+}
+
+// Save writes the issue now, whether or not it has unsaved changes, as it
+// is apart from the field being edited, if any, which goes on being edited.
+// If it can't be saved, the error is shown, as it is when the issue is
+// closed.
+func (ish *Issue) Save() error {
+	if ish.save == nil {
+		return nil
+	}
+
+	if err := ish.save(*ish); err != nil {
+		ish.saveErr = err
+		ish.resize()
+
+		return err
+	}
+
+	ish.dirty = false
+	ish.saveErr = nil
+	ish.resize()
+
+	return nil
+}
+
+// SetNotice sets a message to show above the help footer, such as a problem
+// with the issue's file, or clears it if notice is empty.
+func (ish *Issue) SetNotice(notice string) {
+	ish.notice = notice
+	ish.resize()
+}
+
+// Follow shows ish, a newer version of the issue old shows, as old is
+// shown: sized to the same terminal, with the same colors and help, the same
+// part of the issue selected, and scrolled to the same place. A tag or card
+// that's gone is replaced in the selection by the last one left.
+func (ish *Issue) Follow(old Issue) {
+	ish.initComponents()
+
+	ish.width = old.width
+	ish.height = old.height
+	ish.light = old.light
+	ish.shown = old.shown
+	ish.help.Styles = old.help.Styles
+	ish.help.ShowAll = old.help.ShowAll
+
+	cursor := old.cursor
+
+	switch {
+	case old.tagIndex() >= 0 && len(ish.Metadata) > 0:
+		cursor = 2 + min(old.tagIndex(), len(ish.Metadata)-1)
+	case old.tagIndex() >= 0:
+		cursor = 1
+	case old.cardIndex() >= 0 && len(ish.Conversation) > 0:
+		cursor = ish.firstCard() + min(old.cardIndex(), len(ish.Conversation)-1)
+	case old.cardIndex() >= 0:
+		cursor = 1
+	}
+
+	ish.resize()
+	ish.setCursor(cursor)
+	ish.viewport.SetYOffset(old.viewport.YOffset())
 }
 
 // CloseMsg is sent when the user closes an issue with the back key.
@@ -1223,21 +1295,24 @@ func (ish Issue) renderFooter() string {
 		help = ish.help.View(itemKeys)
 	}
 
-	if ish.saveErr == nil {
-		return styles.Footer.Render(help)
-	}
-
 	message := styles.Footer
 	if ish.width > 0 {
 		message = message.Width(ish.width)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		message.Render(styles.Error.Render(fmt.Sprintf(
+	var lines []string
+
+	if ish.notice != "" {
+		lines = append(lines, message.Render(styles.Error.Render(ish.notice)))
+	}
+
+	if ish.saveErr != nil {
+		lines = append(lines, message.Render(styles.Error.Render(fmt.Sprintf(
 			"Couldn't save changes: %v. Leave again to discard them.", ish.saveErr,
-		))),
-		styles.Footer.Render(help),
-	)
+		))))
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, append(lines, styles.Footer.Render(help))...)
 }
 
 func (ish Issue) View() tea.View {

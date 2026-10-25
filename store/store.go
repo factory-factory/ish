@@ -39,9 +39,10 @@ const gitignoreEntry = ".metadata.ish*"
 // Version 2 stopped allowing colons in attribute keys, version 3 added the
 // user table, version 4 gave each name and email one user, with the date
 // they were last seen together, version 5 stored authors as their emails and
-// emails in attribute values without angle brackets, and version 6 added the
-// history table.
-const schemaVersion = 6
+// emails in attribute values without angle brackets, version 6 added the
+// history table, version 7 a table of the commit HEAD was at when the
+// history was indexed, and version 8 named it versionHeadMarker.
+const schemaVersion = 8
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Authors
@@ -49,7 +50,9 @@ const schemaVersion = 6
 // with emails stored without angle brackets. Users are the authors of the commits in
 // the git repository the issues are in, and of bylines with display names,
 // each with the name they were last seen with. History holds the author
-// dates of the commits on the checked-out branch that changed each issue.
+// dates of the commits on the checked-out branch that changed each issue, and
+// versionHeadMarker, in its one row, the commit HEAD was at when it was
+// indexed.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -99,6 +102,11 @@ CREATE TABLE history (
 );
 
 CREATE UNIQUE INDEX historyIssueDate ON history (issueId, dateModified);
+
+CREATE TABLE versionHeadMarker (
+	id       INTEGER PRIMARY KEY CHECK (id = 1),
+	commitId TEXT NOT NULL
+);
 `
 
 // keyPattern matches the characters an attribute key may contain.
@@ -268,7 +276,7 @@ func populate(path, dir string, result *Result) (err error) {
 		return err
 	}
 
-	result.Modifications, err = addHistory(db, commitHistory(dir, ""))
+	result.Modifications, err = addAllHistory(db, dir)
 
 	return err
 }
