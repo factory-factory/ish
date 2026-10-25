@@ -126,7 +126,7 @@ func commitHistory(dir, revs string, paths []string) []modification {
 func indexedHead(db querier) (string, error) {
 	var head string
 
-	err := db.QueryRow(`SELECT commitId FROM historyHead`).Scan(&head)
+	err := db.QueryRow(`SELECT commitId FROM versionHeadMarker`).Scan(&head)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -136,7 +136,7 @@ func indexedHead(db querier) (string, error) {
 
 // setIndexedHead records that the history in db has been indexed up to head.
 func setIndexedHead(db querier, head string) error {
-	_, err := db.Exec(`INSERT OR REPLACE INTO historyHead (id, commitId) VALUES (1, ?)`, head)
+	_, err := db.Exec(`INSERT OR REPLACE INTO versionHeadMarker (id, commitId) VALUES (1, ?)`, head)
 
 	return err
 }

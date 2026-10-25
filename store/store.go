@@ -40,8 +40,9 @@ const gitignoreEntry = ".metadata.ish*"
 // user table, version 4 gave each name and email one user, with the date
 // they were last seen together, version 5 stored authors as their emails and
 // emails in attribute values without angle brackets, version 6 added the
-// history table, and version 7 the historyHead table.
-const schemaVersion = 7
+// history table, version 7 a table of the commit HEAD was at when the
+// history was indexed, and version 8 named it versionHeadMarker.
+const schemaVersion = 8
 
 // schema creates the database's tables. Dates are stored in UTC as RFC 3339
 // strings, with the byline's offset from UTC in minutes alongside. Authors
@@ -50,7 +51,8 @@ const schemaVersion = 7
 // the git repository the issues are in, and of bylines with display names,
 // each with the name they were last seen with. History holds the author
 // dates of the commits on the checked-out branch that changed each issue, and
-// historyHead, in its one row, the commit HEAD was at when it was indexed.
+// versionHeadMarker, in its one row, the commit HEAD was at when it was
+// indexed.
 const schema = `
 CREATE TABLE issue (
 	id                TEXT PRIMARY KEY,
@@ -101,7 +103,7 @@ CREATE TABLE history (
 
 CREATE UNIQUE INDEX historyIssueDate ON history (issueId, dateModified);
 
-CREATE TABLE historyHead (
+CREATE TABLE versionHeadMarker (
 	id       INTEGER PRIMARY KEY CHECK (id = 1),
 	commitId TEXT NOT NULL
 );

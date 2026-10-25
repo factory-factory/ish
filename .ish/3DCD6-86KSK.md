@@ -2,7 +2,7 @@
 
 ["Brendan Berg" <brendan@berg.industries> 2026-10-24T21:22:23-07:00]
 
-- state: in review
+- state: closed
 - assignees: <noreply@anthropic.com>
 - watchers: <brendan@berg.industries>
 
@@ -42,3 +42,15 @@ Tests:
 - `app/history_test.go`: commits, new committers' names, issues brought in by a pull, and the open issue being deleted by one.
 
 The whole suite passes, and `-race` is clean on `watch` and `app`. In a real terminal, I filtered the list on `@dateModified`; a commit made while ish was running added the issue to it, and resetting the commit removed it again.
+
+---
+
+["Brendan Berg" <brendan@berg.industries> 2026-10-24T22:19:32-07:00]
+
+I'm not sure about the table name `historyHead`. Something like `versionHeadMarker` is more descriptive. Please make that change and I think this will be good.
+
+---
+
+[Claude <noreply@anthropic.com> 2026-10-24T22:31:07-07:00]
+
+Renamed the table to `versionHeadMarker`. I also bumped the schema to version 8, so a database already built with the old `historyHead` name is rebuilt at start-up instead of failing to find the table. The full suite passes.
