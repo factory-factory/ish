@@ -13,7 +13,6 @@ import (
 	glamstyles "charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/factory-factory/ish/styles"
-	"github.com/muesli/termenv"
 )
 
 type Card struct {
@@ -40,6 +39,11 @@ type Card struct {
 	// dir maps users' emails to their names, to show and type names in
 	// place of emails. See Issue.SetDirectory.
 	dir *Directory
+
+	// light reports whether the terminal has a light background, as Bubble
+	// Tea reports it to the issue. Until then, it's assumed to be dark. See
+	// Issue.setLight.
+	light bool
 }
 
 type SelectMsg bool
@@ -161,8 +165,10 @@ func (c Card) View() tea.View {
 func (c Card) renderContent() (string, int) {
 	source := c.markItems()
 
+	// The background isn't asked of the terminal here, as each card is
+	// rendered often, and Bubble Tea reads the terminal's answers.
 	var style ansi.StyleConfig
-	dark := termenv.HasDarkBackground()
+	dark := !c.light
 
 	if dark {
 		style = glamstyles.DarkStyleConfig

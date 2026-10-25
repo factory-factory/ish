@@ -325,6 +325,18 @@ func (ish *Issue) updateDelete(msg tea.KeyPressMsg) {
 	ish.Metadata[i].deleting = false
 }
 
+// setLight sets whether the terminal has a light background, as Bubble Tea
+// reports it, for the issue and its cards, whose markdown is styled for it.
+func (ish *Issue) setLight(light bool) {
+	ish.light = light
+
+	for i := range ish.Conversation {
+		ish.Conversation[i].light = light
+	}
+
+	ish.syncViewport()
+}
+
 // now returns the current time. Tests replace it.
 var now = time.Now
 
@@ -345,6 +357,7 @@ func (ish *Issue) addComment() tea.Cmd {
 		Content:     &content,
 		issues:      ish.issues,
 		dir:         ish.dir,
+		light:       ish.light,
 	})
 
 	ish.syncViewport()
@@ -438,7 +451,7 @@ func (ish *Issue) Follow(old Issue) {
 
 	ish.width = old.width
 	ish.height = old.height
-	ish.light = old.light
+	ish.setLight(old.light)
 	ish.shown = old.shown
 	ish.help.Styles = old.help.Styles
 	ish.help.ShowAll = old.help.ShowAll
@@ -714,7 +727,7 @@ func (ish Issue) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.BackgroundColorMsg:
-		ish.light = !msg.IsDark()
+		ish.setLight(!msg.IsDark())
 		ish.help.Styles = help.DefaultStyles(msg.IsDark())
 
 		// An edit may have started before the background color was known.

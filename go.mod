@@ -12,7 +12,6 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/madicen/bubble-dropdown/v2 v2.0.1
-	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.6
 	modernc.org/sqlite v1.60.1
@@ -21,7 +20,6 @@ require (
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4 // indirect
