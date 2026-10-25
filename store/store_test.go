@@ -132,11 +132,11 @@ func TestInitCreatesDirectory(t *testing.T) {
 
 	db := openDB(t, dir)
 
-	if got := query(t, db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"); !slices.Equal(got, []string{"attribute", "comment", "history", "issue", "user"}) {
-		t.Errorf("tables = %v, want attribute, comment, history, issue, user", got)
+	if got := query(t, db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"); !slices.Equal(got, []string{"attribute", "comment", "history", "historyHead", "issue", "user"}) {
+		t.Errorf("tables = %v, want attribute, comment, history, historyHead, issue, user", got)
 	}
-	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"6"}) {
-		t.Errorf("user_version = %v, want 6", got)
+	if got := query(t, db, "PRAGMA user_version"); !slices.Equal(got, []string{"7"}) {
+		t.Errorf("user_version = %v, want 7", got)
 	}
 
 	// No temporary databases are left behind.

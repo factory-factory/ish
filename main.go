@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,6 +66,20 @@ var (
 			} else {
 				defer w.Close()
 				model.Watch(w.Changes())
+			}
+
+			// Outside a git repository, there's no history to watch, and in
+			// one without commits, there's no reflog yet. Without a reflog
+			// to watch, history is indexed only at start-up.
+			if reflog, err := watch.Reflog(parse.IssuesDir); err == nil {
+				if w, err := watch.NewFile(reflog); errors.Is(err, fs.ErrNotExist) {
+					// Nothing to watch.
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "Couldn't watch the git history for changes: %v\n", err)
+				} else {
+					defer w.Close()
+					model.WatchHistory(w.Changes())
+				}
 			}
 
 			p := tea.NewProgram(model)

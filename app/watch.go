@@ -25,14 +25,39 @@ func (m *Model) Watch(changes <-chan struct{}) {
 	m.changes = changes
 }
 
-// changedMsg is sent when the issue files have changed.
-type changedMsg struct{}
+// WatchHistory sets the channel that receives a value when HEAD moves in
+// the git repository the issues are in, as a watch.Watcher for its reflog
+// does: on a commit, pull, merge, rebase, checkout, or reset. Each time, the
+// issues' commit history, for @dateModified, and the repository's users are
+// indexed again, and the list shows the changes. The issue files are synced
+// first, as Watch's changes are, so the history of issues a pull added is
+// indexed with them.
+func (m *Model) WatchHistory(changes <-chan struct{}) {
+	m.historyChanges = changes
+}
+
+// changedMsg is sent when the issue files have changed, and historyMsg when
+// HEAD has moved.
+type (
+	changedMsg struct{}
+	historyMsg struct{}
+)
 
 // waitForChanges returns a command that waits for the issue files to change,
 // or nil if they aren't watched.
 func (m Model) waitForChanges() tea.Cmd {
-	changes := m.changes
+	return waitFor(m.changes, changedMsg{})
+}
 
+// waitForHistory returns a command that waits for HEAD to move, or nil if it
+// isn't watched.
+func (m Model) waitForHistory() tea.Cmd {
+	return waitFor(m.historyChanges, historyMsg{})
+}
+
+// waitFor returns a command that waits for a value from changes, then sends
+// msg, or nil if changes is nil.
+func waitFor(changes <-chan struct{}, msg tea.Msg) tea.Cmd {
 	if changes == nil {
 		return nil
 	}
@@ -42,39 +67,86 @@ func (m Model) waitForChanges() tea.Cmd {
 			return nil
 		}
 
-		return changedMsg{}
+		return msg
 	}
+}
+
+// indexHistory syncs the issue files, then indexes the commit history and
+// the repository's users again, and shows any changes in the list, or the
+// open issue. Problems are shown, but the list and issue go on working with
+// the history and users they had.
+func (m *Model) indexHistory() {
+	m.syncFiles()
+
+	modifications, err := store.IndexHistory(m.dir)
+	users := 0
+
+	if err == nil {
+		// Users whose names another email has are skipped, as they are at
+		// start-up, with nowhere to report them.
+		users, _, err = store.IndexUsers(m.dir)
+	}
+
+	if err != nil {
+		m.showProblem(fmt.Errorf("couldn't update the metadata database with the git history: %w", err))
+		return
+	}
+
+	if modifications+users == 0 {
+		return
+	}
+
+	if issue, ok := m.issue.(models.Issue); ok {
+		// Users' names may have changed, or been added.
+		m.people = loadPeople(m.dir)
+		issue.SetDirectory(m.people)
+		m.issue = issue
+
+		return
+	}
+
+	// The list is shown again with the new history, keeping what syncing the
+	// files had to say, such as that the open issue was deleted.
+	problem := m.err
+	m.reload()
+
+	if m.err == nil && problem != nil {
+		m.err = problem
+		m.resize()
+	}
+}
+
+// showProblem shows err in the open issue, or under the list.
+func (m *Model) showProblem(err error) {
+	if issue, ok := m.issue.(models.Issue); ok {
+		issue.SetNotice(err.Error())
+		m.issue = issue
+
+		return
+	}
+
+	m.err = err
+	m.resize()
 }
 
 // syncFiles brings the metadata database up to date with the issue files,
 // then shows the changes in the list, or in the open issue if they're to its
-// file, and waits for the next change.
-func (m Model) syncFiles() (tea.Model, tea.Cmd) {
-	wait := m.waitForChanges()
-
+// file.
+func (m *Model) syncFiles() {
 	// The database is synced here, rather than in a command, so it's never
 	// written by two goroutines at once.
 	result, err := store.Sync(m.dir)
 
 	if err != nil {
-		err = fmt.Errorf("couldn't update the metadata database with the changes to the issue files: %w", err)
-
-		if issue, ok := m.issue.(models.Issue); ok {
-			issue.SetNotice(err.Error())
-			m.issue = issue
-		} else {
-			m.err = err
-			m.resize()
-		}
-
-		return m, wait
+		m.showProblem(fmt.Errorf("couldn't update the metadata database with the changes to the issue files: %w", err))
+		return
 	}
 
 	issue, ok := m.issue.(models.Issue)
 
 	if !ok {
 		m.reload()
-		return m, wait
+		return
 	}
 
 	id := m.openId
@@ -83,10 +155,10 @@ func (m Model) syncFiles() (tea.Model, tea.Cmd) {
 	case slices.Contains(result.Removed, id):
 		if issue.Unsaved() {
 			m.setConflict(true)
-			return m, wait
+			return
 		}
 
-		return m.closeDeleted(), wait
+		m.closeDeleted()
 
 	case failedFile(result, id) != nil:
 		// The last version that could be read stays open, so a file that's
@@ -98,13 +170,11 @@ func (m Model) syncFiles() (tea.Model, tea.Cmd) {
 	case slices.Contains(result.Updated, id) || slices.Contains(result.Added, id):
 		if issue.Unsaved() {
 			m.setConflict(false)
-			return m, wait
+			return
 		}
 
 		m.reloadOpen()
 	}
-
-	return m, wait
 }
 
 // failedFile returns the error indexing the file of the issue with the given
@@ -141,7 +211,7 @@ func (m *Model) reloadOpen() {
 // closeDeleted closes the open issue, whose file was deleted, and shows the
 // list, saying why. An issue ish was started with is closed too, since it's
 // gone.
-func (m Model) closeDeleted() Model {
+func (m *Model) closeDeleted() {
 	id := m.openId
 
 	m.issue = nil
@@ -150,8 +220,6 @@ func (m Model) closeDeleted() Model {
 	m.reload()
 	m.err = fmt.Errorf("%s was deleted outside ish", id)
 	m.resize()
-
-	return m
 }
 
 // conflict is a change made outside ish to the open issue's file while the
@@ -229,7 +297,8 @@ func (m Model) resolveConflict() (tea.Model, tea.Cmd) {
 	}
 
 	if c.deleted {
-		return m.closeDeleted(), nil
+		m.closeDeleted()
+		return m, nil
 	}
 
 	m.reloadOpen()

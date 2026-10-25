@@ -40,7 +40,8 @@ func (r *SyncResult) Changed() bool {
 // in one transaction. An issue whose file's SHA-256 checksum differs from the
 // one in the database is re-indexed, an issue whose file is gone is removed,
 // and a file with no issue in the database is indexed. Files that haven't
-// changed aren't parsed.
+// changed aren't parsed. A new file's history, up to the commit the history
+// was last indexed at, is added with it; see IndexHistory.
 //
 // A new or changed file that can't be indexed is listed in the result's
 // Failed field, and nothing from it is in the database. An error is returned
@@ -149,6 +150,8 @@ func Sync(dir string) (result *SyncResult, err error) {
 		return nil, err
 	}
 
+	var added []string
+
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -165,6 +168,13 @@ func Sync(dir string) (result *SyncResult, err error) {
 		}
 
 		result.Added = append(result.Added, strings.TrimSuffix(name, ".md"))
+		added = append(added, name)
+	}
+
+	// A new file may have been committed before it was added, as when a
+	// pull brings it in, or it's fixed after failing to be indexed.
+	if err := addFileHistory(tx, dir, added); err != nil {
+		return nil, err
 	}
 
 	return result, tx.Commit()

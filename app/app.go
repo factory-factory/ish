@@ -69,6 +69,10 @@ type Model struct {
 	changes  <-chan struct{}
 	conflict *conflict
 
+	// historyChanges receives a value when HEAD moves in the issues' git
+	// repository. See WatchHistory.
+	historyChanges <-chan struct{}
+
 	width  int
 	height int
 }
@@ -215,7 +219,7 @@ func (m Model) State() *state.State {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tea.RequestBackgroundColor, m.waitForChanges())
+	return tea.Batch(tea.RequestBackgroundColor, m.waitForChanges(), m.waitForHistory())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -227,8 +231,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize()
 	}
 
-	if _, ok := msg.(changedMsg); ok {
-		return m.syncFiles()
+	switch msg.(type) {
+	case changedMsg:
+		m.syncFiles()
+		return m, m.waitForChanges()
+
+	case historyMsg:
+		m.indexHistory()
+		return m, m.waitForHistory()
 	}
 
 	// While the open issue's edits conflict with changes made outside ish,
