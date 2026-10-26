@@ -16,9 +16,9 @@ Issues are stored in a directory within the repository as Markdown files. (The
 command line utility maintains a SQLite database for fast queries and project
 analytics, but the filesystem is always ground truth.) The Markdown conventions
 **ish** uses are straightforward and intuitive, so you could even use `vim` to
-keep your work up-to-date in a pinch.
+keep your work up to date in a pinch.
 
-## Familiar Concepts, New
+## Familiar Concepts, New Possibilities
 
 The idea of an issue in a bug tracker or task planning tool is fairly
 ubiquitous. In **ish**, issues are constructed around conversations that happen
@@ -46,7 +46,7 @@ go build .
 
 ## Why **ish**?
 
-**Works offline.** Off-grid doesn't mean out-of-the-loop. You can still view and
+**Works offline.** Off-grid doesn't mean out of the loop. You can still view and
 edit issues when you're in airplane mode and changes sync when you're back
 online. There's no excuse for losing time to a sluggish web app in 2026!
 
