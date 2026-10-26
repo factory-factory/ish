@@ -4,24 +4,6 @@ A distributed issue tracker in your terminal
 
 ![how to ish][demo_reel]
 
-## Simple and Robust
-
-Issues sync alongside your code, managed by the same version control you use for
-everything else (currently `git`, but additional integrations are in the works).
-Contributors can create new issues, edit metadata, participate in conversations
-about development tasks, and move issues through project management workflows.
-Updates are pushed to the entire team through the same version control process
-they're already used to.
-
-Issues are stored in a directory within the repository as Markdown files. (The
-command line utility maintains a SQLite database for fast queries and project
-analytics, but the filesystem is always ground truth.) The Markdown conventions
-**ish** uses are straightforward and intuitive, so you could even use `vim` to
-keep your work up to date in a pinch.
-
-**ish** is still in the early stages of development, but it's being used to
-develop **ish** itself.
-
 ## Why **ish**?
 
 **Works offline.** Off-grid doesn't mean out of the loop. You can still view and
@@ -40,6 +22,24 @@ text.
 (but we think our terminal app provides delightful editing and collaboration
 features). Building on standard version control tools lets you view an issue's
 history and see who's responsible for which edits with `git log` and `git blame`.
+
+## Simple and Robust
+
+Issues sync alongside your code, managed by the same version control you use for
+everything else (currently `git`, but additional integrations are in the works).
+Contributors can create new issues, edit metadata, participate in conversations
+about development tasks, and move issues through project management workflows.
+Updates are pushed to the entire team through the same version control process
+they're already used to.
+
+Issues are stored in a directory within the repository as Markdown files. (The
+command line utility maintains a SQLite database for fast queries and project
+analytics, but the filesystem is always ground truth.) The Markdown conventions
+**ish** uses are straightforward and intuitive, so you could even use `vim` to
+keep your work up to date in a pinch.
+
+**ish** is still in the early stages of development, but it's being used to
+develop **ish** itself.
 
 ## Familiar Concepts, New Possibilities
 
