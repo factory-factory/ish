@@ -41,9 +41,9 @@ text.
 features). Building on standard version control tools lets you view an issue's
 history and see who's responsible for which edits with `git log` and `git blame`.
 
-![ish flavored markdown and CLI rendering][ish_flavored_markdown]
-
 ## Familiar Concepts, New Possibilities
+
+![ish flavored markdown and CLI rendering][ish_flavored_markdown]
 
 In **ish**, issues are constructed around conversations that happen
 in comments appended to the issue. Each comment has a byline that records the
@@ -65,7 +65,7 @@ integration and customization.
 
 ## Get Started with **ish**
 
-After making sure you have `go` version 1.27 or greater instealled, clone the
+After making sure you have `go` version 1.27 or greater installed, clone the
 repository and build from source:
 
 ```bash
