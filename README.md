@@ -41,6 +41,8 @@ text.
 features). Building on standard version control tools lets you view an issue's
 history and see who's responsible for which edits with `git log` and `git blame`.
 
+![ish flavored markdown and CLI rendering][ish_flavored_markdown]
+
 ## Familiar Concepts, New Possibilities
 
 In **ish**, issues are constructed around conversations that happen
@@ -80,3 +82,4 @@ hands-on demo in a real project!
 ```
 
 [demo_reel]: https://github.com/user-attachments/assets/04f83b9a-a344-46cd-95c8-8e9405691579
+[ish_flavored_markdown]: https://github.com/user-attachments/assets/1dae6c4d-2067-446d-893c-965a17ca1298
