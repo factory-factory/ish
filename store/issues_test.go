@@ -125,6 +125,28 @@ func TestAttributes(t *testing.T) {
 	}
 }
 
+func TestIndexBlanksTabsAndNewlines(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("A\ttabbed title", []string{"- greeting: hello  \nworld"}),
+	})
+	initDir(t, dir)
+
+	summaries := listIssues(t, dir)
+	if len(summaries) != 1 || summaries[0].Title != "A tabbed title" {
+		t.Errorf("ListIssues() = %+v, want the title with its tab replaced", summaries)
+	}
+
+	values, err := Attributes(dir, []string{"greeting"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := values["AAAAA-11111"]["greeting"]; !slices.Equal(got, []string{"hello world"}) {
+		t.Errorf("greeting = %q, want [hello world]", got)
+	}
+}
+
 func TestListIssuesWithoutDatabase(t *testing.T) {
 	dir := t.TempDir()
 

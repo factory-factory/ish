@@ -3,6 +3,7 @@ package parse
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -297,6 +298,63 @@ func TestParseBylineForms(t *testing.T) {
 	for _, byline := range []string{"[Claude 2026-10-01T09:00:00Z]", "[Alice alice@example.com 2026-10-01T09:00:00Z]", "[alice@example.com]"} {
 		if _, err := ParseIssue(strings.NewReader("# Title\n\n" + byline + "\n")); err == nil {
 			t.Errorf("%s: ParseIssue() error = nil, want an error", byline)
+		}
+	}
+}
+
+func TestParseIssueBlanksTabsAndNewlines(t *testing.T) {
+	source := "# A\ttabbed  title\n\n[author@example.com 2023-05-26T23:35:36-0400]\n\n" +
+		"- greeting: hello  \nworld\n" +
+		"- farewell: goodbye\n  \t moon\n" +
+		"- label: tab\tseparated, two\t\ttabs\n" +
+		"- assignees: alice,\n  bob\n"
+
+	issue, err := ParseIssue(strings.NewReader(source))
+	if err != nil {
+		t.Fatalf("ParseIssue() error = %v", err)
+	}
+
+	if want := "A tabbed  title"; issue.Title != want {
+		t.Errorf("Title = %q, want %q", issue.Title, want)
+	}
+
+	// A line break, with the space around it, becomes one space. Each tab
+	// becomes a space, and values continued on the next line are split as
+	// though they were on one.
+	want := map[string][]string{
+		"greeting":  {"hello world"},
+		"farewell":  {"goodbye moon"},
+		"label":     {"tab separated", "two  tabs"},
+		"assignees": {"alice", "bob"},
+	}
+
+	if len(issue.Metadata) != len(want) {
+		t.Fatalf("Metadata = %+v, want %d tags", issue.Metadata, len(want))
+	}
+
+	for _, tag := range issue.Metadata {
+		if got := models.Canonical(tag.Values); !slices.Equal(got, want[tag.Key]) {
+			t.Errorf("%s = %q, want %q", tag.Key, got, want[tag.Key])
+		}
+	}
+}
+
+func TestSingleLine(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"plain", "plain"},
+		{"a\tb", "a b"},
+		{"a  \nb", "a b"},
+		{"a \t\r\n\t b", "a b"},
+		{"a\n\nb", "a b"},
+		{"a\rb", "a b"},
+		{"two  spaces", "two  spaces"},
+	}
+
+	for _, tt := range tests {
+		if got := singleLine(tt.in); got != tt.want {
+			t.Errorf("singleLine(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
