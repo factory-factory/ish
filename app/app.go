@@ -447,7 +447,7 @@ func (m *Model) reload() {
 	// The filter's lookups are resolved from the state as it is now. If
 	// they can't be, the error is shown under the filter, and the list is
 	// left as it was.
-	node, err := resolveFilter(m.filter.node, m.State(), m.dir)
+	node, err := ResolveFilter(m.filter.node, m.State(), m.dir)
 	if err != nil {
 		m.filter.err = err
 		m.resize()
