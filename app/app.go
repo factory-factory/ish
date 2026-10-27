@@ -146,7 +146,7 @@ func New(dir string) (Model, error) {
 	// Columns must be set before rows, which are rendered as they're added.
 	m.table = table.New(
 		table.WithColumns(m.columns(0)),
-		table.WithRows(rows(issues, m.people)),
+		table.WithRows(rows(issues, m.people, 0)),
 		table.WithStyles(tableStyles(true)),
 		table.WithFocused(true),
 	)
@@ -322,9 +322,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.New):
 			return m.create()
 
+		// The filter row is selected as it is, so a preset filter can be
+		// chosen from the menu without replacing it with the custom field.
 		case key.Matches(msg, keys.Filter):
-			cmd := m.editCustomFilter()
-			return m, cmd
+			m.selectFilter()
+			return m, nil
 		}
 
 		if m.filter.selected {
@@ -369,7 +371,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	cursor := m.table.Cursor()
 	m.table, cmd = m.table.Update(msg)
+
+	// The rows are rendered again, so the newly selected row is shown
+	// without its column colors.
+	if m.table.Cursor() != cursor {
+		m.table.SetRows(rows(m.issues, m.people, m.table.Cursor()))
+	}
 
 	return m, cmd
 }
@@ -386,11 +395,19 @@ func anyIssues(dir string, listed []store.Summary) (bool, error) {
 	return count > 0, err
 }
 
-// rows returns a table row for each issue.
-func rows(issues []store.Summary, people *models.Directory) []table.Row {
+// rows returns a table row for each issue. The ID and assignees are colored,
+// except in the row at cursor, which the table renders as selected: a cell's
+// colors would end the selected row's own colors partway through it.
+func rows(issues []store.Summary, people *models.Directory, cursor int) []table.Row {
 	r := make([]table.Row, len(issues))
 	for i, issue := range issues {
-		r[i] = table.Row{issue.ID, issue.Title, assigneesText(issue, people), opened(issue, now()), stateText(issue)}
+		id, assignees := issue.ID, assigneesText(issue, people)
+
+		if i != cursor {
+			id, assignees = styles.IssueID.Render(id), styles.Assignees.Render(assignees)
+		}
+
+		r[i] = table.Row{id, issue.Title, assignees, opened(issue, now()), stateText(issue)}
 	}
 	return r
 }
@@ -486,8 +503,9 @@ func (m *Model) reload() {
 	// Columns must be set before rows, which are rendered as they're added.
 	m.table.SetColumns(m.columns(0))
 	m.people = loadPeople(m.dir)
-	m.table.SetRows(rows(issues, m.people))
-	m.table.SetCursor(min(cursor, len(issues)-1))
+	cursor = min(cursor, len(issues)-1)
+	m.table.SetRows(rows(issues, m.people, cursor))
+	m.table.SetCursor(cursor)
 
 	m.resize()
 }
@@ -645,7 +663,7 @@ func (m *Model) resize() {
 	m.table.SetHeight(max(m.height-chrome, 0))
 }
 
-// maxAssigneeWidth limits the width of the assignee column, so long lists of
+// maxAssigneeWidth limits the width of the assignees column, so long lists of
 // assignees don't crowd out titles. Wider values are truncated.
 const maxAssigneeWidth = 30
 
@@ -653,7 +671,7 @@ const maxAssigneeWidth = 30
 // other columns leave over. If width is zero, the title column is as wide as
 // the longest title.
 func (m Model) columns(width int) []table.Column {
-	id, title, assignee, date, state := len("ID"), len("Title"), len("Assignee"), len("Opened"), len("State")
+	id, title, assignee, date, state := len("ID"), len("Title"), len("Assignees"), len("Opened"), len("State")
 	today := now()
 
 	for _, issue := range m.issues {
@@ -675,7 +693,7 @@ func (m Model) columns(width int) []table.Column {
 	return []table.Column{
 		{Title: "ID", Width: id},
 		{Title: "Title", Width: title},
-		{Title: "Assignee", Width: assignee},
+		{Title: "Assignees", Width: assignee},
 		{Title: "Opened", Width: date},
 		{Title: "State", Width: state},
 	}

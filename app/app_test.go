@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"github.com/factory-factory/ish/config"
 	"github.com/factory-factory/ish/models"
 	"github.com/factory-factory/ish/parse"
 	"github.com/factory-factory/ish/state"
 	"github.com/factory-factory/ish/store"
+	"github.com/factory-factory/ish/styles"
 )
 
 func issueSource(title, state string) string {
@@ -324,7 +326,7 @@ func removeIssue(t *testing.T, m Model, id string) {
 func ids(m Model) string {
 	var ids []string
 	for _, row := range m.table.Rows() {
-		ids = append(ids, row[0])
+		ids = append(ids, escapes.ReplaceAllString(row[0], ""))
 	}
 	return strings.Join(ids, " ")
 }
@@ -645,10 +647,10 @@ func TestAssigneeColumn(t *testing.T) {
 		}
 	}
 
-	title, assignee, state := strings.Index(header, "Title"), strings.Index(header, "Assignee"), strings.Index(header, "State")
+	title, assignee, state := strings.Index(header, "Title"), strings.Index(header, "Assignees"), strings.Index(header, "State")
 
 	if !(title >= 0 && title < assignee && assignee < state) {
-		t.Errorf("header %q, want Title, Assignee, and State in that order", header)
+		t.Errorf("header %q, want Title, Assignees, and State in that order", header)
 	}
 
 	for _, want := range []struct{ id, title, assignee, state string }{
@@ -685,8 +687,8 @@ func TestLongAssigneesAreTruncated(t *testing.T) {
 
 	columns := m.table.Columns()
 
-	if columns[2].Title != "Assignee" || columns[2].Width != maxAssigneeWidth {
-		t.Errorf("column 2 = %q width %d, want Assignee width %d", columns[2].Title, columns[2].Width, maxAssigneeWidth)
+	if columns[2].Title != "Assignees" || columns[2].Width != maxAssigneeWidth {
+		t.Errorf("column 2 = %q width %d, want Assignees width %d", columns[2].Title, columns[2].Width, maxAssigneeWidth)
 	}
 
 	line := row(t, m, "AAA")
@@ -720,4 +722,35 @@ func TestState(t *testing.T) {
 	if got, _ := m.State().Snapshot().LookupString(".user.email"); got != "alice@example.com" {
 		t.Errorf("email = %q, want the state's", got)
 	}
+}
+
+func TestRowColors(t *testing.T) {
+	m := newTestModel(t, map[string]string{
+		"AAA": issueWithMetadata("First", "- state: open", "- assignees: alice"),
+		"BBB": issueWithMetadata("Second", "- state: open", "- assignees: bob"),
+	})
+
+	// The selected row is plain, so the selection's colors cover it, and
+	// the other rows' IDs and assignees are colored.
+	check := func(plain, colored, assignee string) {
+		t.Helper()
+
+		rows := map[string]table.Row{}
+		for _, row := range m.table.Rows() {
+			rows[escapes.ReplaceAllString(row[0], "")] = row
+		}
+
+		if row := rows[plain]; row[0] != plain || escapes.MatchString(row[2]) {
+			t.Errorf("selected row %q, want it plain", row)
+		}
+		if row := rows[colored]; row[0] != styles.IssueID.Render(colored) || row[2] != styles.Assignees.Render(assignee) {
+			t.Errorf("row %q, want its ID and assignees colored", row)
+		}
+	}
+
+	check("AAA", "BBB", "bob")
+
+	// Moving the selection moves which row is plain.
+	m = update(t, m, down)
+	check("BBB", "AAA", "alice")
 }

@@ -68,10 +68,10 @@ func TestOpenedColumn(t *testing.T) {
 		}
 	}
 
-	assignee, opened, state := strings.Index(header, "Assignee"), strings.Index(header, "Opened"), strings.Index(header, "State")
+	assignee, opened, state := strings.Index(header, "Assignees"), strings.Index(header, "Opened"), strings.Index(header, "State")
 
 	if !(assignee >= 0 && assignee < opened && opened < state) {
-		t.Errorf("header %q, want Assignee, Opened, and State in that order", header)
+		t.Errorf("header %q, want Assignees, Opened, and State in that order", header)
 	}
 
 	for _, want := range []struct{ id, date string }{
