@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"errors"
@@ -25,8 +25,8 @@ var listCmd = &cobra.Command{
 has the issue's ID, the date it was created in RFC 3339 format, its author's
 email, and its title, separated by tabs, followed by a tab-separated column
 for each attribute named with -c. An attribute with several values is
-printed with its values separated by commas, and one the issue doesn't have
-is printed as an empty column.
+printed with its values separated by commas, and attributes missing from
+a particular issue are printed as empty columns.
 
 Each -q query is a filter expression, like the ones in the issue list's
 custom filter. If there's more than one, an issue is printed only if it
