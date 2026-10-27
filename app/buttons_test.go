@@ -17,7 +17,8 @@ func customModel(t *testing.T, width int) Model {
 	t.Helper()
 
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
-	m = update(t, m, tea.WindowSizeMsg{Width: width, Height: 30}, slash, enter)
+	m = update(t, m, tea.WindowSizeMsg{Width: width, Height: 30})
+	m = update(t, editCustom(t, m), enter)
 
 	if !m.filter.custom || m.filter.editing || !m.filter.selected {
 		t.Fatalf("custom, editing, selected = %v, %v, %v, want the custom field selected at rest",

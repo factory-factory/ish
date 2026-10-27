@@ -223,10 +223,23 @@ func trimContent(content string) string {
 	return strings.TrimRightFunc(content, unicode.IsSpace)
 }
 
+// lineBreak matches a line break and the spaces and tabs around it, including
+// the two trailing spaces of a markdown hard line break, and any line breaks
+// after it.
+var lineBreak = regexp.MustCompile(`[ \t]*[\r\n][ \t\r\n]*`)
+
+// singleLine returns s with each line break, and the space around it, replaced
+// with a space, and each tab replaced with a space, so a title or attribute
+// value can be shown on one line and in a tab-separated column. The issue file
+// itself is left as it's written.
+func singleLine(s string) string {
+	return strings.ReplaceAll(lineBreak.ReplaceAllString(s, " "), "\t", " ")
+}
+
 func matchTitle(n ast.Node, b []byte) (*string, error) {
 	switch n.(type) {
 	case *ast.Heading:
-		str := string(n.Text(b))
+		str := singleLine(string(n.Text(b)))
 		return &str, nil
 	default:
 		return nil, errors.New("Expected a heading")
@@ -273,7 +286,9 @@ func matchMetadata(n ast.Node, b []byte) ([]models.Tag, error) {
 		result := make([]models.Tag, 0)
 
 		for item := n.FirstChild(); item != nil; item = item.NextSibling() {
-			str := string(item.Text(b))
+			// Values continued on the next line are split as though they
+			// were on one.
+			str := singleLine(string(item.Text(b)))
 			key := first.FindStringSubmatch(str)
 
 			if key == nil {

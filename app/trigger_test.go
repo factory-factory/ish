@@ -112,7 +112,7 @@ func TestCustomFieldMatchesTrigger(t *testing.T) {
 	m = update(t, m, tea.WindowSizeMsg{Width: 200, Height: 30})
 	trigger := m.renderTrigger()
 
-	m = update(t, m, slash, enter)
+	m = update(t, editCustom(t, m), enter)
 
 	if m.filter.editing || !m.filter.custom {
 		t.Fatalf("editing, custom = %v, %v, want a custom filter at rest", m.filter.editing, m.filter.custom)

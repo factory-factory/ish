@@ -62,7 +62,7 @@ func TestBadgeBesideFilter(t *testing.T) {
 
 func TestCustomFilterBesideBadge(t *testing.T) {
 	m := newTestModel(t, map[string]string{"AAA": issueSource("First", "open")})
-	m = update(t, m, slash)
+	m = editCustom(t, m)
 	lines := strings.Split(escapes.ReplaceAllString(m.View().Content, ""), "\n")
 	top := styles.Header.GetPaddingTop()
 

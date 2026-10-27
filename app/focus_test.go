@@ -78,15 +78,15 @@ func TestSlashKeepsSelectedIssue(t *testing.T) {
 	})
 	m = update(t, m, down, down, slash)
 
-	if !m.filter.editing || selected(m) != "CCC" {
-		t.Fatalf("editing, selected issue = %v, %q, want the filter edited, with CCC still selected", m.filter.editing, selected(m))
+	if !m.filter.selected || selected(m) != "CCC" {
+		t.Fatalf("filter selected, selected issue = %v, %q, want the filter selected, with CCC still selected", m.filter.selected, selected(m))
 	}
 	if line := rowLine(t, m, "CCC"); !strings.HasPrefix(strings.TrimLeft(line, " "), selectedPrefix(false)) {
 		t.Errorf("row %q, want the unfocused selection", line)
 	}
 
-	// Applying the same filter and returning to the table keeps it.
-	m = update(t, m, enter, down)
+	// Returning to the table keeps it.
+	m = update(t, m, down)
 
 	if selected(m) != "CCC" {
 		t.Errorf("selected %q after returning to the table, want CCC", selected(m))

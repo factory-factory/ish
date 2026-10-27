@@ -28,7 +28,7 @@ func menuModel(t *testing.T) Model {
 func openMenu(t *testing.T, m Model) Model {
 	t.Helper()
 
-	m = update(t, m, up, enter)
+	m = update(t, m, slash, enter)
 
 	if !m.filter.menu.Open() {
 		t.Fatal("filter menu didn't open")
@@ -182,12 +182,31 @@ func TestChooseCustomFilter(t *testing.T) {
 	}
 }
 
-func TestSlashEditsCustomFilter(t *testing.T) {
+func TestSlashSelectsFilterMenu(t *testing.T) {
 	m := update(t, menuModel(t), slash)
 
-	if !m.filter.custom || !m.filter.editing || m.filter.input.Value() != DefaultFilter {
-		t.Errorf("custom, editing, text = %v, %v, %q, want to edit the default filter",
-			m.filter.custom, m.filter.editing, m.filter.input.Value())
+	// The menu is selected as it is, rather than replaced with the custom
+	// filter field.
+	if !m.filter.selected || m.filter.custom || m.filter.editing || m.filter.menu.Open() {
+		t.Errorf("selected, custom, editing, open = %v, %v, %v, %v, want only the menu selected",
+			m.filter.selected, m.filter.custom, m.filter.editing, m.filter.menu.Open())
+	}
+	if m.filter.menu.SelectedIndex() != presetUnclosed || m.filter.text != DefaultFilter {
+		t.Errorf("selection, filter = %d, %q, want them unchanged", m.filter.menu.SelectedIndex(), m.filter.text)
+	}
+
+	// Pressing it again changes nothing.
+	if again := update(t, m, slash); !again.filter.selected || again.filter.custom || again.filter.editing {
+		t.Error("a second / changed the filter row")
+	}
+
+	// Once the custom filter has replaced the menu, / selects the field
+	// without editing it.
+	m = update(t, editCustom(t, m), enter, down, slash)
+
+	if !m.filter.selected || !m.filter.custom || m.filter.editing || m.filter.part != partField {
+		t.Errorf("selected, custom, editing, part = %v, %v, %v, %d, want the custom field selected at rest",
+			m.filter.selected, m.filter.custom, m.filter.editing, m.filter.part)
 	}
 }
 

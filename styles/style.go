@@ -88,6 +88,10 @@ var LinkSelected = Link.Bold(true)
 var Value = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("7"))
 
+// IssueID and Assignees color the ID and assignees columns of the issue list.
+var IssueID = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+var Assignees = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+
 var Green = Value.Copy().Background(lipgloss.Color("2")).Padding(0, 1)
 var Yellow = Value.Copy().Background(lipgloss.Color("3")).Padding(0, 1)
 var Blue = Value.Copy().Background(lipgloss.Color("4")).Padding(0, 1)

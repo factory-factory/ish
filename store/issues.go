@@ -21,6 +21,9 @@ type Summary struct {
 	Assignees []string
 	State     []string
 
+	// Author is the email of the issue's author.
+	Author string
+
 	// Opened is when the issue was opened, in its byline's time zone.
 	Opened time.Time
 }
@@ -29,7 +32,7 @@ type Summary struct {
 // unique (issueId, key) constraint means each join matches at most one
 // attribute. A filter's condition is added after it, then the order.
 const listQuery = `
-SELECT issue.id, issue.title, issue.dateCreated, issue.dateCreatedOffset,
+SELECT issue.id, issue.title, issue.author, issue.dateCreated, issue.dateCreatedOffset,
        assignees.value, state.value
 FROM issue
 LEFT JOIN attribute AS assignees
@@ -218,7 +221,7 @@ func ListIssues(dir string, where filter.Node) (summaries []Summary, err error) 
 		var offset int
 		var assignees, state sql.NullString
 
-		if err := rows.Scan(&s.ID, &s.Title, &date, &offset, &assignees, &state); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &date, &offset, &assignees, &state); err != nil {
 			return nil, err
 		}
 
@@ -253,6 +256,63 @@ func decodeValues(value sql.NullString) ([]string, error) {
 	var values []string
 
 	return values, json.Unmarshal([]byte(value.String), &values)
+}
+
+// Attributes returns the values of the attributes named by keys for each
+// issue in the metadata database in dir that has any of them, by issue ID and
+// then key. Issues without one of the attributes have no entry for its key.
+func Attributes(dir string, keys []string) (values map[string]map[string][]string, err error) {
+	db, err := openExisting(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if closeErr := db.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	values = map[string]map[string][]string{}
+
+	if len(keys) == 0 {
+		return values, nil
+	}
+
+	encoded, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(`SELECT issueId, key, value FROM attribute
+WHERE key IN (SELECT value FROM json_each(?))`, string(encoded))
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, key, value string
+
+		if err := rows.Scan(&id, &key, &value); err != nil {
+			return nil, err
+		}
+
+		var decoded []string
+
+		if err := json.Unmarshal([]byte(value), &decoded); err != nil {
+			return nil, fmt.Errorf("issue %s %s: %w", id, key, err)
+		}
+
+		if values[id] == nil {
+			values[id] = map[string][]string{}
+		}
+
+		values[id][key] = decoded
+	}
+
+	return values, rows.Err()
 }
 
 // SaveIssue writes issue to its file in the base directory dir, and replaces

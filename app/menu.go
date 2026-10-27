@@ -94,7 +94,7 @@ var menuKeys = struct {
 type selectedMenuKeys struct{}
 
 func (selectedMenuKeys) ShortHelp() []key.Binding {
-	return []key.Binding{menuKeys.Open, focusKeys.Next, filterKeys.Table, filterKeys.Start, keys.New, keys.Quit}
+	return []key.Binding{menuKeys.Open, focusKeys.Next, filterKeys.Table, keys.New, keys.Quit}
 }
 
 func (k selectedMenuKeys) FullHelp() [][]key.Binding {

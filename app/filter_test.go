@@ -15,11 +15,29 @@ var (
 	ctrlU = tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
 )
 
+// editCustom starts editing the custom filter: it's chosen from the filter
+// menu, or edited if it's already replaced the menu.
+func editCustom(t *testing.T, m Model) Model {
+	t.Helper()
+
+	if m.filter.custom {
+		m = update(t, m, slash, enter)
+	} else {
+		m = choose(t, m, presetCustom)
+	}
+
+	if !m.filter.editing {
+		t.Fatal("not editing the custom filter")
+	}
+
+	return m
+}
+
 // editEmptyFilter starts editing the filter and clears its text.
 func editEmptyFilter(t *testing.T, m Model) Model {
 	t.Helper()
 
-	return update(t, m, slash, ctrlU)
+	return update(t, editCustom(t, m), ctrlU)
 }
 
 // filterModel returns a model listing three issues in different states.
@@ -74,7 +92,7 @@ func TestApplyFilter(t *testing.T) {
 	m = typeText(t, m, "{state!='closed'}")
 
 	if !m.filter.editing || !strings.Contains(plainView(m), "┏") {
-		t.Fatal("not editing in a selected field after /")
+		t.Fatal("not editing in a selected field after choosing the custom filter")
 	}
 	if view := plainView(m); !strings.Contains(view, "{state!='closed'}") {
 		t.Errorf("View() = %q, want the raw filter text", view)
@@ -317,7 +335,7 @@ func TestFilterFieldShowsHighlightedFilter(t *testing.T) {
 	m := filterModel(t)
 
 	// While the custom filter is being edited, the raw text is shown.
-	m = update(t, m, slash)
+	m = editCustom(t, m)
 
 	if view := m.View().Content; strings.Contains(view, m.filter.node.Render()) {
 		t.Error("View() shows the highlighted filter while editing")

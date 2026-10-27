@@ -60,11 +60,11 @@ const (
 // filterArrow marks the filter menu's trigger as a menu.
 const filterArrow = "▼"
 
-// resolveFilter returns node with its object lookups replaced by their values
+// ResolveFilter returns node with its object lookups replaced by their values
 // from one snapshot of the application state, so every lookup in a query
 // sees the same state, and its :user functions replaced by the emails of the
 // users in dir's metadata database. See filter.ResolveEnv.
-func resolveFilter(node filter.Node, st *state.State, dir string) (filter.Node, error) {
+func ResolveFilter(node filter.Node, st *state.State, dir string) (filter.Node, error) {
 	if node == nil {
 		return nil, nil
 	}
@@ -286,7 +286,7 @@ func (m *Model) applyFilter() {
 
 		// A looked-up value that can't be compared is shown like a syntax
 		// error, and the filter isn't applied.
-		if _, err = resolveFilter(node, m.State(), m.dir); err != nil {
+		if _, err = ResolveFilter(node, m.State(), m.dir); err != nil {
 			m.filter.err = err
 			m.resize()
 			return

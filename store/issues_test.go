@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -57,6 +58,11 @@ func TestListIssues(t *testing.T) {
 		t.Errorf("third assignees, state = %v, %v, want none", third.Assignees, third.State)
 	}
 
+	// The author is their email.
+	if got := summaries[0].Author; got != "alice@example.com" {
+		t.Errorf("author = %q, want alice@example.com", got)
+	}
+
 	// The opening date is in the byline's time zone.
 	if got := summaries[0].Opened.Format(time.RFC3339); got != "2026-10-11T08:59:23-07:00" {
 		t.Errorf("opened = %s, want 2026-10-11T08:59:23-07:00", got)
@@ -85,6 +91,59 @@ func TestListIssuesWithFilter(t *testing.T) {
 	}
 	if len(summaries) != 1 || summaries[0].ID != "CCCCC-33333" {
 		t.Errorf("ListIssues() = %+v, want only CCCCC-33333", summaries)
+	}
+}
+
+func TestAttributes(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("First", []string{"- assignees: alice, bob", "- state: open", "- priority: high"}),
+		"BBBBB-22222": issueSource("Second", []string{"- state: closed"}),
+		"CCCCC-33333": issueSource("Third", nil),
+	})
+	initDir(t, dir)
+
+	values, err := Attributes(dir, []string{"assignees", "state", "missing"})
+	if err != nil {
+		t.Fatalf("Attributes() error = %v", err)
+	}
+
+	// Only the requested keys are included, and several values keep their
+	// order. Issues without any of them have no entry.
+	want := map[string]map[string][]string{
+		"AAAAA-11111": {"assignees": {"alice", "bob"}, "state": {"open"}},
+		"BBBBB-22222": {"state": {"closed"}},
+	}
+
+	if !reflect.DeepEqual(values, want) {
+		t.Errorf("Attributes() = %v, want %v", values, want)
+	}
+
+	// No keys select nothing.
+	if values, err := Attributes(dir, nil); err != nil || len(values) != 0 {
+		t.Errorf("Attributes(nil) = %v, %v, want none", values, err)
+	}
+}
+
+func TestIndexBlanksTabsAndNewlines(t *testing.T) {
+	dir := t.TempDir()
+	writeIssues(t, dir, map[string]string{
+		"AAAAA-11111": issueSource("A\ttabbed title", []string{"- greeting: hello  \nworld"}),
+	})
+	initDir(t, dir)
+
+	summaries := listIssues(t, dir)
+	if len(summaries) != 1 || summaries[0].Title != "A tabbed title" {
+		t.Errorf("ListIssues() = %+v, want the title with its tab replaced", summaries)
+	}
+
+	values, err := Attributes(dir, []string{"greeting"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := values["AAAAA-11111"]["greeting"]; !slices.Equal(got, []string{"hello world"}) {
+		t.Errorf("greeting = %q, want [hello world]", got)
 	}
 }
 
