@@ -23,7 +23,7 @@ func writeListIssues(t *testing.T) (dir, home string) {
 
 	for name, source := range map[string]string{
 		"BBBBB-22222.md": "# Second issue\n\n[\"Bob\" <bob@example.com> 2026-10-12T10:00:00+02:00]\n\n- state: closed\n",
-		"AAAAA-11111.md": "# First issue\n\n[alice@example.com 2026-10-11T08:59:23-07:00]\n\n- state: open\n- assignees: <alice@example.com>, <bob@example.com>\n",
+		"AAAAA-11111.md": "# First issue\n\n[alice@example.com 2026-10-11T08:59:23-07:00]\n\n- state: open\n- assignees: <alice@example.com>, <bob@example.com>\n- label: tab\tseparated\n",
 		"CCCCC-33333.md": "# Third issue\n\n[alice@example.com 2026-10-13T09:00:00Z]\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o644); err != nil {
@@ -62,9 +62,21 @@ func TestRunList(t *testing.T) {
 		{
 			name:    "columns",
 			columns: []string{"assignees", "state"},
-			want: "AAAAA-11111\t2026-10-11T08:59:23-07:00\talice@example.com\tFirst issue\talice@example.com,bob@example.com\topen\n" +
-				"BBBBB-22222\t2026-10-12T10:00:00+02:00\tbob@example.com\tSecond issue\t\tclosed\n" +
-				"CCCCC-33333\t2026-10-13T09:00:00Z\talice@example.com\tThird issue\t\t\n",
+			want: "AAAAA-11111\t2026-10-11T08:59:23-07:00\talice@example.com\talice@example.com,bob@example.com\topen\tFirst issue\n" +
+				"BBBBB-22222\t2026-10-12T10:00:00+02:00\tbob@example.com\t\tclosed\tSecond issue\n" +
+				"CCCCC-33333\t2026-10-13T09:00:00Z\talice@example.com\t\t\tThird issue\n",
+		},
+		{
+			name:    "a column only some issues have",
+			queries: []string{`{state = "closed"}`},
+			columns: []string{"assignees"},
+			want:    "BBBBB-22222\t2026-10-12T10:00:00+02:00\tbob@example.com\t\tSecond issue\n",
+		},
+		{
+			name:    "tabs in values",
+			queries: []string{`{state = "open"}`},
+			columns: []string{"label"},
+			want:    "AAAAA-11111\t2026-10-11T08:59:23-07:00\talice@example.com\ttab separated\tFirst issue\n",
 		},
 	}
 
@@ -119,16 +131,19 @@ func TestRunListErrors(t *testing.T) {
 		name    string
 		dir     string
 		queries []string
+		columns []string
 		want    string
 	}{
-		{"bad query", dir, []string{`{state != "closed"}`, "{state"}, `Couldn't parse the query "{state"`},
-		{"no issue directory", missing, nil, missing + " doesn't exist"},
+		{"bad query", dir, []string{`{state != "closed"}`, "{state"}, nil, `Couldn't parse the query "{state"`},
+		{"no issue directory", missing, nil, nil, missing + " doesn't exist"},
+		{"a column no issue has", dir, nil, []string{"state", "asignees"}, "No issue has the attribute asignees\n"},
+		{"columns no issue has", dir, nil, []string{"x", "state", "@title", "x"}, "No issue has the attributes x, @title\n"},
 	}
 
 	for _, tt := range tests {
 		var stdout, stderr bytes.Buffer
 
-		if code := runList(tt.dir, home, tt.queries, nil, &stdout, &stderr); code != 1 {
+		if code := runList(tt.dir, home, tt.queries, tt.columns, &stdout, &stderr); code != 1 {
 			t.Errorf("%s: runList() = %d, want 1", tt.name, code)
 		}
 		if stdout.Len() != 0 || !strings.Contains(stderr.String(), tt.want) {
@@ -157,5 +172,11 @@ func TestParseQueries(t *testing.T) {
 	clause, _ := node.Where()
 	if !strings.HasPrefix(clause, "((") || !strings.Contains(clause, ") AND (") {
 		t.Errorf("parseQueries() clause = %s, want the queries grouped and joined with AND", clause)
+	}
+}
+
+func TestBlankControls(t *testing.T) {
+	if got, want := blankControls.Replace("a\tb\nc\r\nd\re"), "a b c d e"; got != want {
+		t.Errorf("blankControls.Replace() = %q, want %q", got, want)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,10 +24,12 @@ var listCmd = &cobra.Command{
 	Short: "Print the issues in the project",
 	Long: `Print the issues in the project, one per line, ordered by ID. Each line
 has the issue's ID, the date it was created in RFC 3339 format, its author's
-email, and its title, separated by tabs, followed by a tab-separated column
-for each attribute named with -c. An attribute with several values is
-printed with its values separated by commas, and attributes missing from
-a particular issue are printed as empty columns.
+email, a column for each attribute named with -c, in the order they're
+named, and the issue's title, separated by tabs. An attribute with several
+values is printed with its values separated by commas, and attributes
+missing from a particular issue are printed as empty columns. Naming an
+attribute that no issue has is an error. Tabs and newlines in values are
+printed as spaces.
 
 Each -q query is a filter expression, like the ones in the issue list's
 custom filter. If there's more than one, an issue is printed only if it
@@ -95,17 +98,55 @@ func runList(dir, home string, queries, columns []string, stdout, stderr io.Writ
 		return 1
 	}
 
+	if missing := missingColumns(columns, attributes); len(missing) > 0 {
+		fmt.Fprintf(stderr, "No issue has the %s %s\n", plural(len(missing), "attribute"), strings.Join(missing, ", "))
+		return 1
+	}
+
 	for _, s := range summaries {
-		fields := []string{s.ID, s.Opened.Format(time.RFC3339), s.Author, s.Title}
+		fields := []string{s.ID, s.Opened.Format(time.RFC3339), s.Author}
 
 		for _, key := range columns {
 			fields = append(fields, strings.Join(attributes[s.ID][key], ","))
+		}
+
+		fields = append(fields, s.Title)
+
+		for i, field := range fields {
+			fields[i] = blankControls.Replace(field)
 		}
 
 		fmt.Fprintln(stdout, strings.Join(fields, "\t"))
 	}
 
 	return 0
+}
+
+// blankControls replaces the tabs and newlines in a value with spaces, so
+// each value stays in its own column and each issue on its own line.
+var blankControls = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ", "\t", " ")
+
+// missingColumns returns the attribute keys in columns that no issue in
+// attributes, by issue ID and then key, has, in the order they're named.
+func missingColumns(columns []string, attributes map[string]map[string][]string) []string {
+	var missing []string
+
+	for _, key := range columns {
+		found := false
+
+		for _, values := range attributes {
+			if _, ok := values[key]; ok {
+				found = true
+				break
+			}
+		}
+
+		if !found && !slices.Contains(missing, key) {
+			missing = append(missing, key)
+		}
+	}
+
+	return missing
 }
 
 // parseQueries parses each of the filter expressions in queries, and returns
